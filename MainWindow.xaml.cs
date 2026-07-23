@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -27,6 +28,13 @@ namespace WinBatLens
         public MainWindow()
         {
             InitializeComponent();
+
+            try
+            {
+                this.Icon = BitmapFrame.Create(new Uri("pack://application:,,,/app_icon.ico"));
+            }
+            catch { }
+
             TxtSystemModel.Text = $"{Environment.MachineName} ({Environment.OSVersion}) - C# WPF";
             Loaded += MainWindow_Loaded;
             Unloaded += MainWindow_Unloaded;
@@ -85,11 +93,24 @@ namespace WinBatLens
             try
             {
                 _notifyIcon = new NotifyIcon();
-                string pngPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.png");
-                string icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.ico");
 
-                IconHelper.EnsureIcoFile(pngPath, icoPath);
-                _notifyIcon.Icon = IconHelper.GetAppIcon(System.IO.File.Exists(icoPath) ? icoPath : pngPath);
+                try
+                {
+                    var streamInfo = Application.GetResourceStream(new Uri("pack://application:,,,/app_icon.ico"));
+                    if (streamInfo != null && streamInfo.Stream != null)
+                    {
+                        _notifyIcon.Icon = new System.Drawing.Icon(streamInfo.Stream);
+                    }
+                }
+                catch { }
+
+                if (_notifyIcon.Icon == null)
+                {
+                    string pngPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.png");
+                    string icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.ico");
+                    IconHelper.EnsureIcoFile(pngPath, icoPath);
+                    _notifyIcon.Icon = IconHelper.GetAppIcon(System.IO.File.Exists(icoPath) ? icoPath : pngPath);
+                }
 
                 _notifyIcon.Text = "WinBat Lens - 電池健康度與即時耗電監測";
                 _notifyIcon.Visible = true;

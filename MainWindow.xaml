@@ -6,7 +6,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgDark}"
         Foreground="{StaticResource TextMain}"
-        Icon="app_icon.png">
+        Icon="app_icon.ico">
 
     <Grid Margin="20">
         <Grid.RowDefinitions>
