@@ -30,7 +30,7 @@ namespace WinBatLens.Models
         public double WearPercent { get; set; }
         public int CapacityLoss { get; set; }
         public string StatusLabel { get; set; } = "良好";
-        public string StatusClass { get; set; } = "Good"; // Good, Warning, Danger
+        public string StatusClass { get; set; } = "Good";
         public string SummaryText { get; set; } = string.Empty;
     }
 
@@ -68,9 +68,24 @@ namespace WinBatLens.Models
 
     public class DiagnosticItem
     {
-        public string Type { get; set; } = "info"; // success, warning, danger, info, tip
+        public string Type { get; set; } = "info";
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+    }
+
+    public class RealTimePowerState
+    {
+        public bool IsAcOnline { get; set; }
+        public string PowerStatusText { get; set; } = "讀取中...";
+        public int BatteryPercent { get; set; }
+        public double DischargeRateW { get; set; }
+        public string DischargeRateText { get; set; } = "-- W";
+        public string EstimatedTimeRemainingText { get; set; } = "--";
+        public double CpuUsagePercent { get; set; }
+        public double RamUsageGB { get; set; }
+        public double TotalRamGB { get; set; }
+        public double RamUsagePercent { get; set; }
+        public string SystemPowerLoadStatus { get; set; } = "一般";
     }
 
     public class BatteryReportData
