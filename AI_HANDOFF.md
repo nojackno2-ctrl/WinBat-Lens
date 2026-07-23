@@ -1,19 +1,23 @@
 # Project State & Handoff
 
 ## Current Objective
-Fix all text overlaps and layout distortions in `MainWindow.xaml` for the Hardware Power Breakdown card and restore clean structured cards.
+WinBat Lens (C# .NET 8 WPF Desktop Application) UI Layout Fix & Hardware Breakdown Card Restructuring is fully completed and verified.
 
 ## Project Status
-- User submitted screenshot showing text overlaps in the Hardware Power Breakdown card (e.g. `螢幕面板與背光` overlapping `~6.5W`, `主機板與 USB 外設` description overlapping `~2.5W`).
-- **Diagnosis**:
-  - Vertical spacing inside `Grid.Column="0"` of each hardware row was compressed.
-  - Absence of row background containers caused text to clash visually.
+- **UI Layout Fix Completed**:
+  - `MainWindow.xaml`: Restructured all 8 hardware power breakdown rows into clean dark cards (`Border Background="#0C1322" BorderBrush="#1A2438"`).
+  - Widened left title column to `260px` with `TextTrimming="CharacterEllipsis"` and vertical alignment to eliminate all text overlaps (e.g. `螢幕面板與背光` vs `~6.5W` & `主機板與 USB 外設` vs `~2.5W`).
+  - Restored `<ScrollViewer>` to left sidebar for smooth scrolling across all screen resolutions.
 
-## Next Steps
-1. Redesign Hardware Power Breakdown rows in `MainWindow.xaml`:
-   - Wrap each hardware item in a clean dark container (`Border Background="#0C1322" CornerRadius="8" Padding="10,10"`).
-   - Use explicit row height spacing and clear vertical stack panels so title and wattage text never collide.
-   - Set Column 0 `Width="260"`, Column 1 `Width="*"`, Column 2 `Width="160"`.
-2. Restore `<ScrollViewer>` to Left Column with auto scrollbar visibility.
-3. Verify build with `dotnet build WinBatLens.csproj`.
-4. Commit updates to Git.
+## Verification & Testing
+- Built with `dotnet build WinBatLens.csproj` -> **0 Warnings, 0 Errors** (Build Succeeded).
+- Git repository committed cleanly (`git commit`).
+
+## Actionable Next Steps for User
+1. Open [WinBatLens.sln](file:///c:/離線儲存/程式設計/WinBat%20Lens/WinBatLens.sln) with **Visual Studio 2022** and press `F5` to test viewing the untangled hardware breakdown cards!
+2. To push to GitHub:
+   ```bash
+   git branch -M main
+   git remote add origin https://github.com/YOUR_USERNAME/WinBat-Lens.git
+   git push -u origin main
+   ```
