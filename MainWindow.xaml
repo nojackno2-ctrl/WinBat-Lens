@@ -371,7 +371,42 @@
                             </ScrollViewer>
                         </TabItem>
 
-                        <!-- TAB 2: Smart Diagnostics -->
+                        <!-- TAB 2: Live Power & Charge/Discharge History -->
+                        <TabItem Header=" 📉 即時功耗與充放電歷史紀錄 ">
+                            <Grid Margin="0,12,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Action Buttons Header -->
+                                <Grid Grid.Row="0" Margin="0,0,0,10">
+                                    <TextBlock Text="📋 即時動態功耗與充放電事件歷史日誌 (Live Power &amp; Event Logs)" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                        <Button Content="📥 匯出 CSV 紀錄" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0" Padding="12,6" Click="BtnExportPowerCsv_Click"/>
+                                        <Button Content="🗑️ 清除紀錄" Style="{StaticResource SecondaryButtonStyle}" Padding="12,6" Click="BtnClearPowerHistory_Click"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- History Event Log ListView -->
+                                <ListView x:Name="LvPowerHistory" Grid.Row="1" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="時間戳記" Width="170" DisplayMemberBinding="{Binding TimestampText}"/>
+                                            <GridViewColumn Header="事件類型" Width="130" DisplayMemberBinding="{Binding EventType}"/>
+                                            <GridViewColumn Header="放電功率" Width="120" DisplayMemberBinding="{Binding DischargeRateText}"/>
+                                            <GridViewColumn Header="電量 (%)" Width="100" DisplayMemberBinding="{Binding BatteryPercentText}"/>
+                                            <GridViewColumn Header="CPU 負載" Width="110" DisplayMemberBinding="{Binding CpuUsageText}"/>
+                                            <GridViewColumn Header="獨顯負載" Width="110" DisplayMemberBinding="{Binding DgpuUsageText}"/>
+                                            <GridViewColumn Header="螢幕功耗" Width="110" DisplayMemberBinding="{Binding ScreenPowerText}"/>
+                                            <GridViewColumn Header="詳細狀態記錄" Width="300" DisplayMemberBinding="{Binding SummaryText}"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                            </Grid>
+                        </TabItem>
+
+                        <!-- TAB 3: Smart Diagnostics -->
                         <TabItem Header=" 💡 智慧診斷與維護建議 ">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
                                 <ItemsControl x:Name="IcDiagnostics">
@@ -389,7 +424,7 @@
                             </ScrollViewer>
                         </TabItem>
 
-                        <!-- TAB 3: Life Estimates -->
+                        <!-- TAB 4: Life Estimates -->
                         <TabItem Header=" ⏱️ 續航估算表 ">
                             <ListView x:Name="LvLifeEstimates" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}" Margin="0,12,0,0">
                                 <ListView.View>
@@ -402,7 +437,7 @@
                             </ListView>
                         </TabItem>
 
-                        <!-- TAB 4: Recent Usage -->
+                        <!-- TAB 5: Recent Usage -->
                         <TabItem Header=" 📊 最近使用紀錄 ">
                             <ListView x:Name="LvRecentUsage" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}" Margin="0,12,0,0">
                                 <ListView.View>

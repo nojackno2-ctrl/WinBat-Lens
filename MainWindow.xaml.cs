@@ -44,6 +44,9 @@ namespace WinBatLens
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            // Bind Power History List
+            LvPowerHistory.ItemsSource = RealTimePowerHistoryService.Records;
+
             // Initialize System Tray Icon & AutoStart State
             InitSystemTrayIcon();
             InitAutoStartState();
@@ -240,6 +243,9 @@ namespace WinBatLens
             {
                 var state = RealTimePowerService.GetCurrentPowerState();
 
+                // Add to Power & Battery Event History Service
+                RealTimePowerHistoryService.AddRecordFromPowerState(state);
+
                 // Discharge Rate & Status
                 TxtLiveDischargeRate.Text = state.DischargeRateText;
                 TxtLiveAcState.Text = state.PowerStatusText;
@@ -331,6 +337,38 @@ namespace WinBatLens
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Live monitor tick error: {ex.Message}");
+            }
+        }
+
+        private void BtnExportPowerCsv_Click(object sender, RoutedEventArgs e)
+        {
+            var saveDialog = new SaveFileDialog
+            {
+                Title = "匯出即時功耗與充放電歷史日誌",
+                FileName = $"WinBat_Power_Log_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
+                Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
+            };
+
+            if (saveDialog.ShowDialog() == true)
+            {
+                bool success = RealTimePowerHistoryService.ExportToCsv(saveDialog.FileName);
+                if (success)
+                {
+                    MessageBox.Show($"已成功匯出歷史日誌至:\n{saveDialog.FileName}", "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show("匯出失敗，請確認檔案寫入權限。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void BtnClearPowerHistory_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show("確定要清除所有即時功耗與充放電事件紀錄嗎？", "確認清除", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (result == MessageBoxResult.Yes)
+            {
+                RealTimePowerHistoryService.ClearHistory();
             }
         }
 

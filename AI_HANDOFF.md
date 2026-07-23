@@ -1,18 +1,20 @@
 # Project State & Handoff
 
 ## Current Objective
-Fix the `XamlParseException` / `FileFormatException` (0x88982F60 image decoder failed) when WPF loads `Icon="app_icon.ico"`.
+Implement continuous real-time hardware power and battery charge/discharge event history logging (即時功耗與電池充放電歷史紀錄) in WinBat Lens C# WPF app.
 
 ## Project Status
-- **Root Cause**: GDI+ `Icon.Save()` generated an outdated ICO handle structure that WPF WIC (Windows Imaging Component) rejected with `0x88982F60` COMException.
-- **Fix Plan**:
-  1. Generate a 100% valid WIC-compliant `.ico` file containing PNG payload headers.
-  2. In `MainWindow.xaml`, use `Icon="app_icon.png"` (which WPF decodes natively without COM Exception).
-  3. Update `MainWindow.xaml.cs` to load `BitmapFrame.Create(new Uri("pack://application:,,,/app_icon.png"))`.
+- System tray, app icon, full hardware power breakdown, and discrete GPU detection completed.
+- Adding `RealTimePowerHistoryService.cs` to automatically sample, record, and persist:
+  1. Live power consumption snapshots (Discharge rate W, CPU %, dGPU %, Screen W, Battery %).
+  2. Battery charge/discharge state transition events (AC plug-in, battery discharge, high drain warnings).
+  3. Exporting history to CSV/JSON format.
+- Adding UI tab/panel for **「📉 即時功耗與充放電歷史紀錄」**.
 
 ## Next Steps
-1. Create `app_icon.ico` with valid PNG-in-ICO header structure.
-2. Update `MainWindow.xaml` to use `app_icon.png`.
-3. Update `MainWindow.xaml.cs` to load `app_icon.png`.
-4. Verify build and execution.
-5. Commit fixes to Git.
+1. Create `Models/PowerHistoryRecord.cs`.
+2. Create `Services/RealTimePowerHistoryService.cs` for automated sampling, event detection, and CSV export.
+3. Update `MainWindow.xaml` with historical power & battery event list view and controls.
+4. Update `MainWindow.xaml.cs` to record history on 1s timer ticks and bind to UI.
+5. Verify build with `dotnet build WinBatLens.csproj`.
+6. Commit updates to Git.
