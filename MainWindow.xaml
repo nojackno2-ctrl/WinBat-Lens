@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WinBat Lens - Windows 電池健康度與即時硬體耗電監測" 
-        Height="860" Width="1240" MinHeight="740" MinWidth="980"
+        Height="880" Width="1260" MinHeight="740" MinWidth="980"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgDark}"
         Foreground="{StaticResource TextMain}">
@@ -171,8 +171,8 @@
                         BorderThickness="1" CornerRadius="14" Padding="20">
                     <TabControl Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}">
                         
-                        <!-- TAB 1: Real-Time Power Monitor (CPU, GPU, RAM, Disk) -->
-                        <TabItem Header=" ⚡ 即時硬體耗電與系統監測 ">
+                        <!-- TAB 1: Real-Time Power & GPU Specs -->
+                        <TabItem Header=" ⚡ 即時硬體耗電與顯卡監測 ">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
                                 <StackPanel>
                                     <!-- Power Discharge & Time Cards -->
@@ -203,10 +203,54 @@
                                         </Border>
                                     </Grid>
 
-                                    <!-- Hardware Resource Load Card (CPU, GPU, RAM, Disk) -->
+                                    <!-- Discrete GPU & Graphics Hardware Specs Card -->
                                     <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,14">
                                         <StackPanel>
-                                            <TextBlock Text="💻 硬體元件即時負載與耗電 (Hardware Power Breakdown)" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,14"/>
+                                            <TextBlock Text="🎮 系統顯示卡與獨立顯卡規格 (GPU Specifications)" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,12"/>
+
+                                            <ItemsControl x:Name="IcGpuList">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <StackPanel Grid.Column="0">
+                                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="14" Foreground="{StaticResource TextMain}"/>
+                                                                        <Border Margin="10,0,0,0" Padding="8,2" CornerRadius="10" Background="#20F59E0B" BorderBrush="{StaticResource AccentAmber}" BorderThickness="1">
+                                                                            <TextBlock Text="{Binding GpuTypeTag}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentAmber}"/>
+                                                                        </Border>
+                                                                    </StackPanel>
+
+                                                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                                        <TextBlock Text="專屬視訊記憶體: " Foreground="{StaticResource TextMuted}" FontSize="12"/>
+                                                                        <TextBlock Text="{Binding VramText}" Foreground="{StaticResource AccentCyan}" FontWeight="SemiBold" FontSize="12" Margin="4,0,16,0"/>
+
+                                                                        <TextBlock Text="驅動版本: " Foreground="{StaticResource TextMuted}" FontSize="12"/>
+                                                                        <TextBlock Text="{Binding DriverVersion}" Foreground="{StaticResource TextMain}" FontSize="12" Margin="4,0,16,0"/>
+
+                                                                        <TextBlock Text="發布日期: " Foreground="{StaticResource TextMuted}" FontSize="12"/>
+                                                                        <TextBlock Text="{Binding DriverDate}" Foreground="{StaticResource TextMuted}" FontSize="12" Margin="4,0,0,0"/>
+                                                                    </StackPanel>
+                                                                </StackPanel>
+
+                                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource AccentEmerald}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center"/>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Hardware Resource Load Breakdown Card (CPU, GPU, RAM, Disk) -->
+                                    <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,14">
+                                        <StackPanel>
+                                            <TextBlock Text="💻 硬體元件即時負載與動態功耗 (Real-Time Hardware Load &amp; Power)" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,14"/>
 
                                             <!-- CPU Usage & Power -->
                                             <Grid Margin="0,0,0,12">
@@ -279,7 +323,7 @@
 
                                     <!-- Live Power Tip Box -->
                                     <Border Background="#1038BDF8" BorderBrush="{StaticResource AccentCyan}" BorderThickness="1" CornerRadius="8" Padding="12">
-                                        <TextBlock x:Name="TxtLivePowerTip" Text="💡 即時監測每 1 秒自動更新一次 CPU、GPU、磁碟 SSD 與記憶體耗電分佈。" FontSize="12" Foreground="{StaticResource TextMain}" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="TxtLivePowerTip" Text="💡 即時監測每 1 秒自動更新一次 CPU、GPU 獨顯、磁碟 SSD 與記憶體耗電分佈。" FontSize="12" Foreground="{StaticResource TextMain}" TextWrapping="Wrap"/>
                                     </Border>
                                 </StackPanel>
                             </ScrollViewer>

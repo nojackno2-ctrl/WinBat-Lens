@@ -1,19 +1,19 @@
 # Project State & Handoff
 
 ## Current Objective
-Expand real-time hardware monitoring in WinBat Lens to include **GPU Utilization & Power** and **Disk (SSD/HDD) Activity & Power**.
+Add Discrete GPU (獨立顯示卡) detailed hardware information, VRAM capacity, driver version, and dual GPU (iGPU + dGPU) status detection to WinBat Lens C# WPF app.
 
 ## Project Status
-- C# .NET 8 WPF application is fully functional.
-- Adding GPU monitoring (via Windows `GPU Engine` / `GPU Adapter` PerformanceCounters and GPU power estimation) and Disk monitoring (via `PhysicalDisk` PerformanceCounters `% Disk Time` and Read/Write MB/s throughput).
-- Updating `RealTimePowerService.cs`, `BatteryReportData.cs`, and `MainWindow.xaml` UI cards.
+- Full system real-time hardware power monitoring (CPU, GPU, RAM, Disk) completed.
+- Adding `GpuInfo` model & `GpuInfoService.cs` to query WMI `Win32_VideoController` for discrete GPU details (e.g., NVIDIA GeForce / AMD Radeon), VRAM size in GB, driver version, and active/standby state.
+- Updating `MainWindow.xaml` UI to display a dedicated **「🎮 顯示卡與獨立顯卡規格」** card.
 
 ## Active Problems / Needs Clarification
 - None.
 
 ## Next Steps
-1. Update `Models/BatteryReportData.cs` to add GPU & Disk metrics.
-2. Implement GPU & Disk metrics collection in `Services/RealTimePowerService.cs`.
-3. Update `MainWindow.xaml` to add GPU & Disk cards and progress bars.
+1. Create `Models/GpuInfo.cs` data model.
+2. Create `Services/GpuInfoService.cs` to query WMI for discrete GPU & integrated GPU details.
+3. Update `MainWindow.xaml` and `MainWindow.xaml.cs` to bind dGPU specs.
 4. Verify build with `dotnet build WinBatLens.csproj`.
 5. Commit updates to Git.

@@ -26,8 +26,27 @@ namespace WinBatLens
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            // Bind GPU Specs
+            LoadGpuSpecs();
+
+            // Start live power monitoring timer (1s interval)
             StartLivePowerMonitoring();
+
+            // Run initial battery report scan
             await RunBatteryCheckAsync();
+        }
+
+        private void LoadGpuSpecs()
+        {
+            try
+            {
+                var gpus = GpuInfoService.GetInstalledGpus();
+                IcGpuList.ItemsSource = gpus;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"LoadGpuSpecs error: {ex.Message}");
+            }
         }
 
         private void MainWindow_Unloaded(object sender, RoutedEventArgs e)
@@ -107,17 +126,17 @@ namespace WinBatLens
                 // Live Dynamic Tips
                 if (state.IsAcOnline)
                 {
-                    TxtLivePowerTip.Text = "💡 目前連接 AC 市電供電中。電池未處於放電磨耗狀態，系統效能已發揮至極限。";
+                    TxtLivePowerTip.Text = "💡 目前連接 AC 市電供電中。獨立顯卡與 CPU 效能已完全解鎖，電池無放電損耗。";
                 }
                 else
                 {
                     if (state.DischargeRateW > 20.0 || state.GpuUsagePercent > 50.0)
                     {
-                        TxtLivePowerTip.Text = $"⚠️ 注意：目前放電速率偏高 ({state.DischargeRateW:F1} W)，GPU/CPU 負載較高，建議調低螢幕亮度或關閉高效能軟體。";
+                        TxtLivePowerTip.Text = $"⚠️ 注意：目前放電速率高達 {state.DischargeRateW:F1} W。獨立顯卡或 CPU 正進行高負載渲染，離線續航時間將顯著縮短。";
                     }
                     else
                     {
-                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，系統放電功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | GPU ~{state.GpuPowerW:F1}W)，省電控制良好。";
+                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，放電功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | GPU ~{state.GpuPowerW:F1}W)，顯示晶片功耗控制良好。";
                     }
                 }
             }
