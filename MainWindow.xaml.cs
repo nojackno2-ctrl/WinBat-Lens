@@ -31,7 +31,7 @@ namespace WinBatLens
 
             try
             {
-                this.Icon = BitmapFrame.Create(new Uri("pack://application:,,,/app_icon.ico"));
+                this.Icon = BitmapFrame.Create(new Uri("pack://application:,,,/app_icon.png"));
             }
             catch { }
 
