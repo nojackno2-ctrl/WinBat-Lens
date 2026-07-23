@@ -1,18 +1,19 @@
 # Project State & Handoff
 
 ## Current Objective
-Add real-time hardware power consumption monitoring (即時耗電與放電功率監測) to WinBat Lens C# WPF application.
+Expand real-time hardware monitoring in WinBat Lens to include **GPU Utilization & Power** and **Disk (SSD/HDD) Activity & Power**.
 
 ## Project Status
-- UI contrast fixes and C# .NET 8 WPF architecture completed.
-- Adding `RealTimePowerService.cs` (P/Invoke `GetSystemPowerStatus`, WMI `Win32_Battery`, and `PerformanceCounter` for live CPU / RAM / Battery Discharge Rate in mW).
-- Updating `MainWindow.xaml` to include a new **「⚡ 即時耗電與系統監測」** live dashboard card with auto-refresh timer (`DispatcherTimer` 1s tick).
+- C# .NET 8 WPF application is fully functional.
+- Adding GPU monitoring (via Windows `GPU Engine` / `GPU Adapter` PerformanceCounters and GPU power estimation) and Disk monitoring (via `PhysicalDisk` PerformanceCounters `% Disk Time` and Read/Write MB/s throughput).
+- Updating `RealTimePowerService.cs`, `BatteryReportData.cs`, and `MainWindow.xaml` UI cards.
 
 ## Active Problems / Needs Clarification
 - None.
 
 ## Next Steps
-1. Create `Services/RealTimePowerService.cs` with P/Invoke & WMI hardware metrics.
-2. Update `MainWindow.xaml` and `MainWindow.xaml.cs` to bind live power metrics.
-3. Verify compilation with `dotnet build WinBatLens.csproj`.
-4. Commit updates to Git repository.
+1. Update `Models/BatteryReportData.cs` to add GPU & Disk metrics.
+2. Implement GPU & Disk metrics collection in `Services/RealTimePowerService.cs`.
+3. Update `MainWindow.xaml` to add GPU & Disk cards and progress bars.
+4. Verify build with `dotnet build WinBatLens.csproj`.
+5. Commit updates to Git.

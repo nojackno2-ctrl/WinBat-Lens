@@ -26,10 +26,7 @@ namespace WinBatLens
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // Start live power monitoring timer (1s interval)
             StartLivePowerMonitoring();
-
-            // Run initial battery report scan
             await RunBatteryCheckAsync();
         }
 
@@ -47,7 +44,6 @@ namespace WinBatLens
             _livePowerTimer.Tick += LivePowerTimer_Tick;
             _livePowerTimer.Start();
 
-            // Initial immediate update
             UpdateLivePowerUI();
         }
 
@@ -84,10 +80,24 @@ namespace WinBatLens
                 TxtLiveRemainingTime.Text = state.EstimatedTimeRemainingText;
                 TxtLiveBatteryPercent.Text = $"目前電池剩餘電量: {state.BatteryPercent}%";
 
-                // CPU & RAM Load
+                // CPU Load & Power
                 PbCpuUsage.Value = state.CpuUsagePercent;
                 TxtCpuUsageVal.Text = $"{state.CpuUsagePercent:F1}%";
+                TxtCpuPowerW.Text = $"~{state.CpuPowerW:F1} W";
 
+                // GPU Load & Power
+                TxtGpuName.Text = $"🎮 {state.GpuName}";
+                PbGpuUsage.Value = state.GpuUsagePercent;
+                TxtGpuUsageVal.Text = $"{state.GpuUsagePercent:F1}%";
+                TxtGpuPowerW.Text = $"~{state.GpuPowerW:F1} W";
+
+                // Disk Load & Power
+                PbDiskUsage.Value = state.DiskUsagePercent;
+                TxtDiskUsageVal.Text = $"{state.DiskUsagePercent:F1}%";
+                TxtDiskStatusText.Text = $"{state.DiskReadWriteMbps:F1} MB/s";
+                TxtDiskPowerW.Text = $"~{state.DiskPowerW:F1} W";
+
+                // RAM Usage
                 PbRamUsage.Value = state.RamUsagePercent;
                 TxtRamUsageVal.Text = $"{state.RamUsageGB:F1} GB / {state.TotalRamGB:F1} GB ({state.RamUsagePercent:F1}%)";
 
@@ -97,17 +107,17 @@ namespace WinBatLens
                 // Live Dynamic Tips
                 if (state.IsAcOnline)
                 {
-                    TxtLivePowerTip.Text = "💡 目前連接 AC 市電供電中。電池未處於放電磨耗狀態，效能已發揮至極限。";
+                    TxtLivePowerTip.Text = "💡 目前連接 AC 市電供電中。電池未處於放電磨耗狀態，系統效能已發揮至極限。";
                 }
                 else
                 {
-                    if (state.DischargeRateW > 20.0)
+                    if (state.DischargeRateW > 20.0 || state.GpuUsagePercent > 50.0)
                     {
-                        TxtLivePowerTip.Text = $"⚠️ 注意：目前電池放電速率高達 {state.DischargeRateW:F1} W (高耗電)，建議調低螢幕亮度或暫停高 CPU 占用軟體。";
+                        TxtLivePowerTip.Text = $"⚠️ 注意：目前放電速率偏高 ({state.DischargeRateW:F1} W)，GPU/CPU 負載較高，建議調低螢幕亮度或關閉高效能軟體。";
                     }
                     else
                     {
-                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，放電功率約 {state.DischargeRateW:F1} W，耗電控制良好。";
+                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，系統放電功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | GPU ~{state.GpuPowerW:F1}W)，省電控制良好。";
                     }
                 }
             }

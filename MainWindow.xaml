@@ -1,8 +1,8 @@
 <Window x:Class="WinBatLens.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="WinBat Lens - Windows 電池健康度與即時耗電監測" 
-        Height="840" Width="1240" MinHeight="720" MinWidth="980"
+        Title="WinBat Lens - Windows 電池健康度與即時硬體耗電監測" 
+        Height="860" Width="1240" MinHeight="740" MinWidth="980"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgDark}"
         Foreground="{StaticResource TextMain}">
@@ -30,7 +30,7 @@
                     </Border>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="WinBat Lens" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>
-                        <TextBlock x:Name="TxtSystemModel" Text="Windows 電池健康診斷與即時耗電監測" FontSize="12" Foreground="{StaticResource TextMuted}"/>
+                        <TextBlock x:Name="TxtSystemModel" Text="Windows 電池健康診斷與全系統耗電監測" FontSize="12" Foreground="{StaticResource TextMuted}"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -135,7 +135,7 @@
             <!-- Right Panel -->
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="330"/>
+                    <RowDefinition Height="310"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -171,10 +171,11 @@
                         BorderThickness="1" CornerRadius="14" Padding="20">
                     <TabControl Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}">
                         
-                        <!-- TAB 1: Real-Time Power Monitor -->
-                        <TabItem Header=" ⚡ 即時耗電與系統監測 ">
+                        <!-- TAB 1: Real-Time Power Monitor (CPU, GPU, RAM, Disk) -->
+                        <TabItem Header=" ⚡ 即時硬體耗電與系統監測 ">
                             <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
                                 <StackPanel>
+                                    <!-- Power Discharge & Time Cards -->
                                     <Grid Margin="0,0,0,16">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -184,8 +185,8 @@
                                         <!-- Live Discharge Rate Card -->
                                         <Border Grid.Column="0" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,8,0">
                                             <StackPanel>
-                                                <TextBlock Text="⚡ 即時放電 / 充電功率" FontSize="13" Foreground="{StaticResource TextMuted}"/>
-                                                <TextBlock x:Name="TxtLiveDischargeRate" Text="-- W" FontSize="32" FontWeight="ExtraBold" Foreground="{StaticResource AccentCyan}" Margin="0,8"/>
+                                                <TextBlock Text="⚡ 電池總放電 / 充電功率" FontSize="13" Foreground="{StaticResource TextMuted}"/>
+                                                <TextBlock x:Name="TxtLiveDischargeRate" Text="-- W" FontSize="30" FontWeight="ExtraBold" Foreground="{StaticResource AccentCyan}" Margin="0,6"/>
                                                 <Border x:Name="BadgeLiveAcState" Background="#2038BDF8" BorderBrush="{StaticResource AccentCyan}" BorderThickness="1" CornerRadius="12" Padding="10,3" HorizontalAlignment="Left">
                                                     <TextBlock x:Name="TxtLiveAcState" Text="電源狀態讀取中..." FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentCyan}"/>
                                                 </Border>
@@ -196,45 +197,81 @@
                                         <Border Grid.Column="1" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="8,0,0,0">
                                             <StackPanel>
                                                 <TextBlock Text="⏱️ 電腦估算剩餘續航時間" FontSize="13" Foreground="{StaticResource TextMuted}"/>
-                                                <TextBlock x:Name="TxtLiveRemainingTime" Text="--" FontSize="28" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}" Margin="0,10"/>
+                                                <TextBlock x:Name="TxtLiveRemainingTime" Text="--" FontSize="26" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}" Margin="0,8"/>
                                                 <TextBlock x:Name="TxtLiveBatteryPercent" Text="目前電量: --%" FontSize="13" Foreground="{StaticResource TextMuted}"/>
                                             </StackPanel>
                                         </Border>
                                     </Grid>
 
-                                    <!-- Hardware Resource Load Card -->
+                                    <!-- Hardware Resource Load Card (CPU, GPU, RAM, Disk) -->
                                     <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,14">
                                         <StackPanel>
-                                            <TextBlock Text="💻 系統負載與動態功耗等級" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,12"/>
+                                            <TextBlock Text="💻 硬體元件即時負載與耗電 (Hardware Power Breakdown)" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,14"/>
 
-                                            <!-- CPU Load Progress -->
+                                            <!-- CPU Usage & Power -->
                                             <Grid Margin="0,0,0,12">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="140"/>
+                                                    <ColumnDefinition Width="150"/>
                                                     <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="130"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="CPU 即時使用率" Foreground="{StaticResource TextMuted}" FontSize="13" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <TextBlock Text="🔲 CPU 處理器" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                    <TextBlock x:Name="TxtCpuPowerW" Text="~0.0 W" Foreground="{StaticResource AccentCyan}" FontSize="11"/>
+                                                </StackPanel>
                                                 <ProgressBar x:Name="PbCpuUsage" Grid.Column="1" Height="14" Value="0" Maximum="100" Foreground="{StaticResource AccentCyan}" Background="#090D16" BorderThickness="0" Margin="10,0"/>
                                                 <TextBlock x:Name="TxtCpuUsageVal" Grid.Column="2" Text="0%" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
 
-                                            <!-- RAM Usage Progress -->
-                                            <Grid Margin="0,0,0,8">
+                                            <!-- GPU Usage & Power -->
+                                            <Grid Margin="0,0,0,12">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="140"/>
+                                                    <ColumnDefinition Width="150"/>
                                                     <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="120"/>
+                                                    <ColumnDefinition Width="130"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="記憶體 (RAM) 使用量" Foreground="{StaticResource TextMuted}" FontSize="13" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="TxtGpuName" Text="🎮 GPU 顯示卡" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock x:Name="TxtGpuPowerW" Text="~0.0 W" Foreground="{StaticResource AccentAmber}" FontSize="11"/>
+                                                </StackPanel>
+                                                <ProgressBar x:Name="PbGpuUsage" Grid.Column="1" Height="14" Value="0" Maximum="100" Foreground="{StaticResource AccentAmber}" Background="#090D16" BorderThickness="0" Margin="10,0"/>
+                                                <TextBlock x:Name="TxtGpuUsageVal" Grid.Column="2" Text="0%" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                            </Grid>
+
+                                            <!-- Disk (SSD/HDD) Usage & Power -->
+                                            <Grid Margin="0,0,0,12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="150"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="130"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <TextBlock Text="💾 硬碟 (SSD/HDD)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                    <TextBlock x:Name="TxtDiskPowerW" Text="~0.0 W" Foreground="{StaticResource AccentEmerald}" FontSize="11"/>
+                                                </StackPanel>
+                                                <ProgressBar x:Name="PbDiskUsage" Grid.Column="1" Height="14" Value="0" Maximum="100" Foreground="{StaticResource AccentEmerald}" Background="#090D16" BorderThickness="0" Margin="10,0"/>
+                                                <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="TxtDiskUsageVal" Text="0%" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Right"/>
+                                                    <TextBlock x:Name="TxtDiskStatusText" Text="0 MB/s" Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right"/>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- RAM Usage -->
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="150"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="130"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="🧠 記憶體 (RAM)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
                                                 <ProgressBar x:Name="PbRamUsage" Grid.Column="1" Height="14" Value="0" Maximum="100" Foreground="{StaticResource AccentPurple}" Background="#090D16" BorderThickness="0" Margin="10,0"/>
                                                 <TextBlock x:Name="TxtRamUsageVal" Grid.Column="2" Text="0 GB / 0 GB" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
 
-                                            <Separator Background="#10FFFFFF" Margin="0,8"/>
+                                            <Separator Background="#10FFFFFF" Margin="0,10"/>
 
                                             <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                <TextBlock Text="動態功耗評級: " Foreground="{StaticResource TextMuted}" FontSize="13"/>
+                                                <TextBlock Text="系統總功耗評級: " Foreground="{StaticResource TextMuted}" FontSize="13"/>
                                                 <TextBlock x:Name="TxtPowerLoadStatus" Text="輕度省電" Foreground="{StaticResource AccentEmerald}" FontWeight="Bold" FontSize="13" Margin="4,0,0,0"/>
                                             </StackPanel>
                                         </StackPanel>
@@ -242,7 +279,7 @@
 
                                     <!-- Live Power Tip Box -->
                                     <Border Background="#1038BDF8" BorderBrush="{StaticResource AccentCyan}" BorderThickness="1" CornerRadius="8" Padding="12">
-                                        <TextBlock x:Name="TxtLivePowerTip" Text="💡 即時監測每 1 秒自動更新一次。當離線使用電池時，建議控制 CPU 高負載行程以減少放電速率。" FontSize="12" Foreground="{StaticResource TextMain}" TextWrapping="Wrap"/>
+                                        <TextBlock x:Name="TxtLivePowerTip" Text="💡 即時監測每 1 秒自動更新一次 CPU、GPU、磁碟 SSD 與記憶體耗電分佈。" FontSize="12" Foreground="{StaticResource TextMain}" TextWrapping="Wrap"/>
                                     </Border>
                                 </StackPanel>
                             </ScrollViewer>

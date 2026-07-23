@@ -81,10 +81,27 @@ namespace WinBatLens.Models
         public double DischargeRateW { get; set; }
         public string DischargeRateText { get; set; } = "-- W";
         public string EstimatedTimeRemainingText { get; set; } = "--";
+        
+        // CPU
         public double CpuUsagePercent { get; set; }
+        public double CpuPowerW { get; set; }
+
+        // RAM
         public double RamUsageGB { get; set; }
         public double TotalRamGB { get; set; }
         public double RamUsagePercent { get; set; }
+
+        // GPU
+        public double GpuUsagePercent { get; set; }
+        public double GpuPowerW { get; set; }
+        public string GpuName { get; set; } = "顯示晶片";
+
+        // Disk (SSD / HDD)
+        public double DiskUsagePercent { get; set; }
+        public double DiskReadWriteMbps { get; set; }
+        public double DiskPowerW { get; set; }
+        public string DiskStatusText { get; set; } = "讀寫 0 MB/s";
+
         public string SystemPowerLoadStatus { get; set; } = "一般";
     }
 
