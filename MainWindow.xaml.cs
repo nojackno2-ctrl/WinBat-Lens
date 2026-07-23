@@ -5,9 +5,15 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Windows.Forms;
 using Microsoft.Win32;
 using WinBatLens.Models;
 using WinBatLens.Services;
+using Application = System.Windows.Application;
+using MessageBox = System.Windows.MessageBox;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
+using MediaColor = System.Windows.Media.Color;
 
 namespace WinBatLens
 {
@@ -15,6 +21,8 @@ namespace WinBatLens
     {
         private BatteryReportData? _currentReport;
         private DispatcherTimer? _livePowerTimer;
+        private NotifyIcon? _notifyIcon;
+        private bool _isExitRequested = false;
 
         public MainWindow()
         {
@@ -22,10 +30,16 @@ namespace WinBatLens
             TxtSystemModel.Text = $"{Environment.MachineName} ({Environment.OSVersion}) - C# WPF";
             Loaded += MainWindow_Loaded;
             Unloaded += MainWindow_Unloaded;
+            Closing += MainWindow_Closing;
+            StateChanged += MainWindow_StateChanged;
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            // Initialize System Tray Icon & AutoStart State
+            InitSystemTrayIcon();
+            InitAutoStartState();
+
             // Bind GPU Specs List
             LoadGpuSpecs();
 
@@ -34,6 +48,129 @@ namespace WinBatLens
 
             // Run initial battery report scan
             await RunBatteryCheckAsync();
+        }
+
+        private void InitAutoStartState()
+        {
+            try
+            {
+                bool isEnabled = StartupService.IsAutoStartEnabled();
+                ChkAutoStart.IsChecked = isEnabled;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"InitAutoStartState error: {ex.Message}");
+            }
+        }
+
+        private void ChkAutoStart_Click(object sender, RoutedEventArgs e)
+        {
+            bool enable = ChkAutoStart.IsChecked == true;
+            bool success = StartupService.SetAutoStart(enable);
+
+            if (success)
+            {
+                string statusMsg = enable ? "已設定開機自動啟動。" : "已取消開機自動啟動。";
+                MessageBox.Show(statusMsg, "開機啟動設定", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                ChkAutoStart.IsChecked = !enable; // Revert
+                MessageBox.Show("無法修改系統開機啟動登錄碼，請確認權限。", "設定失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void InitSystemTrayIcon()
+        {
+            try
+            {
+                _notifyIcon = new NotifyIcon();
+                string pngPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.png");
+                string icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.ico");
+
+                IconHelper.EnsureIcoFile(pngPath, icoPath);
+                _notifyIcon.Icon = IconHelper.GetAppIcon(System.IO.File.Exists(icoPath) ? icoPath : pngPath);
+
+                _notifyIcon.Text = "WinBat Lens - 電池健康度與即時耗電監測";
+                _notifyIcon.Visible = true;
+
+                _notifyIcon.DoubleClick += (s, args) => RestoreFromTray();
+
+                // Context Menu for System Tray
+                var contextMenu = new ContextMenuStrip();
+                
+                var itemShow = new ToolStripMenuItem("⚡ 開啟 WinBat Lens 主畫面", null, (s, args) => RestoreFromTray());
+                itemShow.Font = new System.Drawing.Font(itemShow.Font, System.Drawing.FontStyle.Bold);
+
+                var itemCheck = new ToolStripMenuItem("🔄 執行電池健康檢測", null, async (s, args) => {
+                    RestoreFromTray();
+                    await RunBatteryCheckAsync();
+                });
+
+                var itemAutoStart = new ToolStripMenuItem("🚀 開機自動啟動");
+                itemAutoStart.Checked = StartupService.IsAutoStartEnabled();
+                itemAutoStart.Click += (s, args) => {
+                    bool newState = !itemAutoStart.Checked;
+                    if (StartupService.SetAutoStart(newState))
+                    {
+                        itemAutoStart.Checked = newState;
+                        ChkAutoStart.IsChecked = newState;
+                    }
+                };
+
+                var itemExit = new ToolStripMenuItem("❌ 結束程式", null, (s, args) => {
+                    _isExitRequested = true;
+                    _notifyIcon.Visible = false;
+                    _notifyIcon.Dispose();
+                    Application.Current.Shutdown();
+                });
+
+                contextMenu.Items.Add(itemShow);
+                contextMenu.Items.Add(itemCheck);
+                contextMenu.Items.Add(new ToolStripSeparator());
+                contextMenu.Items.Add(itemAutoStart);
+                contextMenu.Items.Add(new ToolStripSeparator());
+                contextMenu.Items.Add(itemExit);
+
+                _notifyIcon.ContextMenuStrip = contextMenu;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"InitSystemTrayIcon error: {ex.Message}");
+            }
+        }
+
+        private void MainWindow_StateChanged(object? sender, EventArgs e)
+        {
+            if (WindowState == WindowState.Minimized)
+            {
+                HideToTray();
+            }
+        }
+
+        private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            if (!_isExitRequested)
+            {
+                e.Cancel = true;
+                HideToTray();
+            }
+        }
+
+        private void HideToTray()
+        {
+            this.Hide();
+            if (_notifyIcon != null)
+            {
+                _notifyIcon.ShowBalloonTip(2000, "WinBat Lens 已縮小至托盤", "程式將在背景持續為您進行即時耗電與電池狀態監測。", ToolTipIcon.Info);
+            }
+        }
+
+        private void RestoreFromTray()
+        {
+            this.Show();
+            this.WindowState = WindowState.Normal;
+            this.Activate();
         }
 
         private void LoadGpuSpecs()
@@ -52,6 +189,11 @@ namespace WinBatLens
         private void MainWindow_Unloaded(object sender, RoutedEventArgs e)
         {
             _livePowerTimer?.Stop();
+            if (_notifyIcon != null)
+            {
+                _notifyIcon.Visible = false;
+                _notifyIcon.Dispose();
+            }
         }
 
         private void StartLivePowerMonitoring()
@@ -84,20 +226,26 @@ namespace WinBatLens
                 // Status Badge Color
                 if (state.IsAcOnline)
                 {
-                    BadgeLiveAcState.Background = new SolidColorBrush(Color.FromArgb(0x20, 0x38, 0xBD, 0xF8));
-                    BadgeLiveAcState.BorderBrush = new SolidColorBrush(Color.FromRgb(0x38, 0xBD, 0xF8));
-                    TxtLiveAcState.Foreground = new SolidColorBrush(Color.FromRgb(0x38, 0xBD, 0xF8));
+                    BadgeLiveAcState.Background = new SolidColorBrush(MediaColor.FromArgb(0x20, 0x38, 0xBD, 0xF8));
+                    BadgeLiveAcState.BorderBrush = new SolidColorBrush(MediaColor.FromRgb(0x38, 0xBD, 0xF8));
+                    TxtLiveAcState.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x38, 0xBD, 0xF8));
                 }
                 else
                 {
-                    BadgeLiveAcState.Background = new SolidColorBrush(Color.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
-                    BadgeLiveAcState.BorderBrush = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
-                    TxtLiveAcState.Foreground = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
+                    BadgeLiveAcState.Background = new SolidColorBrush(MediaColor.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
+                    BadgeLiveAcState.BorderBrush = new SolidColorBrush(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
+                    TxtLiveAcState.Foreground = new SolidColorBrush(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
                 }
 
                 // Battery Remaining Time & Level
                 TxtLiveRemainingTime.Text = state.EstimatedTimeRemainingText;
                 TxtLiveBatteryPercent.Text = $"目前電池剩餘電量: {state.BatteryPercent}%";
+
+                // Update System Tray Tooltip
+                if (_notifyIcon != null)
+                {
+                    _notifyIcon.Text = $"WinBat Lens - {state.PowerStatusText}\n電量: {state.BatteryPercent}% | 放電: {state.DischargeRateW}W";
+                }
 
                 // CPU Load & Power
                 PbCpuUsage.Value = state.CpuUsagePercent;

@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>app_icon.ico</ApplicationIcon>
     <Title>WinBat Lens - Windows 電池健康度分析診斷工具</Title>
     <Authors>WinBat Lens Team</Authors>
     <Company>WinBat Lens</Company>
@@ -18,6 +20,10 @@
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="app_icon.png" />
   </ItemGroup>
 
 </Project>
