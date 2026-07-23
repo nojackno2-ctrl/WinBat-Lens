@@ -76,10 +76,14 @@ namespace WinBatLens.Models
     public class RealTimePowerState
     {
         public bool IsAcOnline { get; set; }
+        public bool IsCharging { get; set; }
         public string PowerStatusText { get; set; } = "讀取中...";
         public int BatteryPercent { get; set; }
+
         public double DischargeRateW { get; set; }
+        public double ChargingRateW { get; set; }
         public string DischargeRateText { get; set; } = "-- W";
+        public string ChargingStatusText { get; set; } = "讀取中...";
         public string EstimatedTimeRemainingText { get; set; } = "--";
         
         // CPU

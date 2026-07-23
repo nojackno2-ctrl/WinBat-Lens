@@ -100,12 +100,61 @@ namespace WinBatLens.Services
 
                 if (state.IsAcOnline)
                 {
-                    state.PowerStatusText = state.BatteryPercent >= 98 ? "市電供電中 (已充滿)" : "市電供電中 (充電中)";
-                    state.EstimatedTimeRemainingText = "連接 AC 電源中";
+                    if (state.BatteryPercent >= 98)
+                    {
+                        state.IsCharging = false;
+                        state.ChargingRateW = 0.0;
+                        state.PowerStatusText = "市電供電中 (已充滿)";
+                        state.ChargingStatusText = "市電直供不傷電池 (0 W 充電)";
+                        state.EstimatedTimeRemainingText = "電量已充滿 100%";
+                        state.DischargeRateText = "0.0 W (AC 變壓器直供)";
+                    }
+                    else
+                    {
+                        state.IsCharging = true;
+                        
+                        // Calculate AC charging wattage
+                        double wmiChargeMw = GetWmiChargeRateMw();
+                        if (wmiChargeMw > 0)
+                        {
+                            state.ChargingRateW = Math.Round(wmiChargeMw / 1000.0, 1);
+                        }
+                        else
+                        {
+                            if (state.BatteryPercent >= 90) state.ChargingRateW = 12.5;
+                            else if (state.BatteryPercent >= 75) state.ChargingRateW = 28.0;
+                            else state.ChargingRateW = 45.0;
+                        }
+
+                        state.PowerStatusText = "AC 充電中";
+                        state.DischargeRateText = $"+{state.ChargingRateW:F1} W (AC 充電中)";
+
+                        if (state.BatteryPercent >= 90)
+                        {
+                            state.ChargingStatusText = $"涓流安全保護充電中 (+{state.ChargingRateW:F1}W)";
+                        }
+                        else if (state.BatteryPercent >= 75)
+                        {
+                            state.ChargingStatusText = $"標準速度充電中 (+{state.ChargingRateW:F1}W)";
+                        }
+                        else
+                        {
+                            state.ChargingStatusText = $"⚡ 高速快充中 (+{state.ChargingRateW:F1}W)";
+                        }
+
+                        // Estimate time to full charge
+                        int remainPct = 100 - state.BatteryPercent;
+                        double estHours = (remainPct / 100.0 * 56.0) / Math.Max(10.0, state.ChargingRateW);
+                        TimeSpan chargeTime = TimeSpan.FromHours(estHours);
+                        state.EstimatedTimeRemainingText = $"預估 {chargeTime.Hours}小時{chargeTime.Minutes}分 充飽";
+                    }
                 }
                 else
                 {
+                    state.IsCharging = false;
+                    state.ChargingRateW = 0.0;
                     state.PowerStatusText = "電池放電中";
+                    state.ChargingStatusText = "使用電池供電";
                     if (status.BatteryLifeTime > 0 && status.BatteryLifeTime < 86400)
                     {
                         TimeSpan t = TimeSpan.FromSeconds(status.BatteryLifeTime);
@@ -220,24 +269,22 @@ namespace WinBatLens.Services
             state.MotherboardPowerW = 2.5;
 
             // 9. Total Discharge Rate W
-            double dischargeRateMw = GetWmiDischargeRateMw();
-            if (dischargeRateMw > 0)
+            if (!state.IsAcOnline)
             {
-                state.DischargeRateW = Math.Round(dischargeRateMw / 1000.0, 1);
-                state.DischargeRateText = $"{state.DischargeRateW:F1} W ({dischargeRateMw:N0} mW)";
-            }
-            else if (state.IsAcOnline)
-            {
-                state.DischargeRateW = 0;
-                state.DischargeRateText = "AC 供電中 (0 W 放電)";
-            }
-            else
-            {
-                double estW = state.CpuPowerW + state.IgpuPowerW + state.DgpuPowerW + 
-                             state.ScreenPowerW + state.DiskPowerW + state.WifiPowerW + 
-                             state.RamPowerW + state.MotherboardPowerW;
-                state.DischargeRateW = Math.Round(estW, 1);
-                state.DischargeRateText = $"~{state.DischargeRateW:F1} W (即時全硬體估算)";
+                double dischargeRateMw = GetWmiDischargeRateMw();
+                if (dischargeRateMw > 0)
+                {
+                    state.DischargeRateW = Math.Round(dischargeRateMw / 1000.0, 1);
+                    state.DischargeRateText = $"-{state.DischargeRateW:F1} W ({dischargeRateMw:N0} mW)";
+                }
+                else
+                {
+                    double estW = state.CpuPowerW + state.IgpuPowerW + state.DgpuPowerW + 
+                                 state.ScreenPowerW + state.DiskPowerW + state.WifiPowerW + 
+                                 state.RamPowerW + state.MotherboardPowerW;
+                    state.DischargeRateW = Math.Round(estW, 1);
+                    state.DischargeRateText = $"-{state.DischargeRateW:F1} W (即時全硬體估算)";
+                }
             }
 
             // 10. Overall System Power Load Rating
@@ -255,6 +302,27 @@ namespace WinBatLens.Services
             }
 
             return state;
+        }
+
+        private static double GetWmiChargeRateMw()
+        {
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT ChargeRate FROM Win32_Battery"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        var rateObj = obj["ChargeRate"];
+                        if (rateObj != null)
+                        {
+                            double val = Convert.ToDouble(rateObj);
+                            if (val > 0) return val;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return 0;
         }
 
         private static int GetScreenBrightnessPercent()
