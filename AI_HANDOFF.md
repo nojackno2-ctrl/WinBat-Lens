@@ -1,18 +1,16 @@
 # Project State & Handoff
 
 ## Current Objective
-Add AC charging wattage (+W), charging speed mode (Fast Charging, Trickle Charging, Fully Charged Pass-through), and AC charger status to `RealTimePowerService.cs` and WPF UI in WinBat Lens.
+Fix all text cut-offs and truncations in `MainWindow.xaml` (especially GPU names, RAM usage text, and hardware component labels in the Full System Hardware Power Breakdown card).
 
 ## Project Status
-- Task manager style waveform graph, system tray, app icon, full system hardware breakdown, and event history completed.
-- User requested: display AC charging wattage (充電瓦數) and charging status details when AC adapter is connected.
-
-## Active Problems / Needs Clarification
-- None.
+- User submitted screenshot highlighting truncated text: `NVIDIA GeForce RTX...` and `AMD Radeon(TM) Gr...` in the hardware power breakdown card.
+- **Diagnosis**:
+  - Column 0 width was hardcoded to `170` and had `TextTrimming="CharacterEllipsis"`.
+  - Column 2 (values) width was hardcoded to `130`.
 
 ## Next Steps
-1. Update `Models/BatteryReportData.cs` to add `ChargingRateW`, `IsCharging`, `ChargingStatusText` to `RealTimePowerState`.
-2. Update `Services/RealTimePowerService.cs` to query WMI `ChargeRate` or estimate charging wattage based on battery % charging curve.
-3. Update `MainWindow.xaml` and `MainWindow.xaml.cs` to display glowing AC charging wattage (+W) and charging status badges.
-4. Verify build with `dotnet build WinBatLens.csproj`.
-5. Commit updates to Git.
+1. Update `MainWindow.xaml` grid column definitions: Column 0 `Width="240"`, Column 2 `Width="180"`.
+2. Remove `TextTrimming="CharacterEllipsis"` from GPU names so full GPU names display cleanly.
+3. Verify build with `dotnet build WinBatLens.csproj`.
+4. Commit updates to Git.
