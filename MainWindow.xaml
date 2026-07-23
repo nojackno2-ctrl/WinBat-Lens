@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="WinBat Lens - Windows 電池健康度分析診斷工具" 
-        Height="800" Width="1200" MinHeight="700" MinWidth="950"
+        Height="820" Width="1220" MinHeight="720" MinWidth="980"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgDark}"
         Foreground="{StaticResource TextMain}">
@@ -45,12 +45,12 @@
         <!-- Dashboard Content Area -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="340"/>
+                <ColumnDefinition Width="350"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left Panel -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,16,0">
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,16,0" Padding="0,0,8,20">
                 <StackPanel>
                     
                     <!-- Health Gauge Card -->
@@ -60,13 +60,13 @@
                             <TextBlock Text="電池健康度 (Health Score)" FontSize="13" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center"/>
                             
                             <!-- Large Health Score Ring / Value -->
-                            <Grid Margin="0,20">
-                                <Ellipse Width="150" Height="150" Stroke="#1E293B" StrokeThickness="12"/>
-                                <Ellipse x:Name="RingHealthProgress" Width="150" Height="150" Stroke="{StaticResource AccentEmerald}" StrokeThickness="12" StrokeDashArray="471" StrokeDashOffset="471"/>
+                            <Grid Margin="0,16">
+                                <Ellipse Width="140" Height="140" Stroke="#1E293B" StrokeThickness="12"/>
+                                <Ellipse x:Name="RingHealthProgress" Width="140" Height="140" Stroke="{StaticResource AccentEmerald}" StrokeThickness="12" StrokeDashArray="440" StrokeDashOffset="440"/>
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <TextBlock x:Name="TxtHealthPercent" Text="--" FontSize="42" FontWeight="ExtraBold" Foreground="{StaticResource TextMain}"/>
-                                        <TextBlock Text="%" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Bottom" Margin="2,0,0,8"/>
+                                        <TextBlock x:Name="TxtHealthPercent" Text="--" FontSize="40" FontWeight="ExtraBold" Foreground="{StaticResource TextMain}"/>
+                                        <TextBlock Text="%" FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Bottom" Margin="2,0,0,8"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>
@@ -77,13 +77,13 @@
                             </Border>
 
                             <TextBlock x:Name="TxtSummary" Text="請點擊右上角「執行電池檢測」按鈕載入最新報告。" 
-                                       FontSize="12" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,14,0,0"/>
+                                       FontSize="12" Foreground="{StaticResource TextMuted}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,12,0,0"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Battery Specs Card -->
                     <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}" 
-                            BorderThickness="1" CornerRadius="14" Padding="20">
+                            BorderThickness="1" CornerRadius="14" Padding="20" Margin="0,0,0,10">
                         <StackPanel>
                             <TextBlock Text="🔋 電池規格參數" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,14"/>
                             
@@ -135,7 +135,7 @@
             <!-- Right Panel -->
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="320"/>
+                    <RowDefinition Height="330"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -153,7 +153,7 @@
                             <TextBlock x:Name="TxtReportTime" Text="尚未載入" FontSize="12" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
 
-                        <ListView x:Name="LvCapacityHistory" Grid.Row="1" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}">
+                        <ListView x:Name="LvCapacityHistory" Grid.Row="1" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
                             <ListView.View>
                                 <GridView>
                                     <GridViewColumn Header="記錄期間" Width="200" DisplayMemberBinding="{Binding Period}"/>
@@ -170,15 +170,15 @@
                 <Border Grid.Row="1" Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}" 
                         BorderThickness="1" CornerRadius="14" Padding="20">
                     <TabControl Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}">
-                        <TabItem Header="💡 智慧診斷與維護建議" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextMain}">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
+                        <TabItem Header=" 💡 智慧診斷與維護建議 ">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
                                 <ItemsControl x:Name="IcDiagnostics">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Background="#10FFFFFF" CornerRadius="8" Padding="14" Margin="0,0,0,10" BorderBrush="{StaticResource AccentCyan}" BorderThickness="3,0,0,0">
+                                            <Border Background="#182338" CornerRadius="8" Padding="14" Margin="0,0,0,10" BorderBrush="{StaticResource AccentCyan}" BorderThickness="4,0,0,0">
                                                 <StackPanel>
                                                     <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="14" Foreground="{StaticResource TextMain}"/>
-                                                    <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding Description}" FontSize="13" Foreground="{StaticResource TextMuted}" Margin="0,4,0,0" TextWrapping="Wrap"/>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
@@ -187,8 +187,8 @@
                             </ScrollViewer>
                         </TabItem>
 
-                        <TabItem Header="⏱️ 續航估算表" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextMain}">
-                            <ListView x:Name="LvLifeEstimates" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}" Margin="0,10,0,0">
+                        <TabItem Header=" ⏱️ 續航估算表 ">
+                            <ListView x:Name="LvLifeEstimates" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}" Margin="0,12,0,0">
                                 <ListView.View>
                                     <GridView>
                                         <GridViewColumn Header="記錄期間" Width="220" DisplayMemberBinding="{Binding Period}"/>
@@ -199,8 +199,8 @@
                             </ListView>
                         </TabItem>
 
-                        <TabItem Header="📊 最近使用紀錄" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextMain}">
-                            <ListView x:Name="LvRecentUsage" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}" Margin="0,10,0,0">
+                        <TabItem Header=" 📊 最近使用紀錄 ">
+                            <ListView x:Name="LvRecentUsage" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}" Margin="0,12,0,0">
                                 <ListView.View>
                                     <GridView>
                                         <GridViewColumn Header="開始時間" Width="220" DisplayMemberBinding="{Binding StartTime}"/>

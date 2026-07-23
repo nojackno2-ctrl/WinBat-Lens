@@ -51,19 +51,27 @@ namespace WinBatLens.Services
         {
             var specs = new BatterySpecs();
 
-            var nameMatch = Regex.Match(html, @"NAME[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
-            if (nameMatch.Success) specs.Name = StripTags(nameMatch.Groups[1].Value);
+            // Locate INSTALLED BATTERIES section specifically
+            var sectionMatch = Regex.Match(html, @"INSTALLED BATTERIES[\s\S]*?<table[^>]*>([\s\S]*?)<\/table>", RegexOptions.IgnoreCase);
+            string searchBlock = sectionMatch.Success ? sectionMatch.Groups[1].Value : html;
 
-            var mfgMatch = Regex.Match(html, @"MANUFACTURER[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
+            var nameMatch = Regex.Match(searchBlock, @"NAME[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
+            if (nameMatch.Success)
+            {
+                string val = StripTags(nameMatch.Groups[1].Value);
+                if (!val.ToUpper().Contains("COMPUTER")) specs.Name = val;
+            }
+
+            var mfgMatch = Regex.Match(searchBlock, @"MANUFACTURER[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
             if (mfgMatch.Success) specs.Manufacturer = StripTags(mfgMatch.Groups[1].Value);
 
-            var snMatch = Regex.Match(html, @"SERIAL NUMBER[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
+            var snMatch = Regex.Match(searchBlock, @"SERIAL NUMBER[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
             if (snMatch.Success) specs.SerialNumber = StripTags(snMatch.Groups[1].Value);
 
-            var chemMatch = Regex.Match(html, @"CHEMISTRY[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
+            var chemMatch = Regex.Match(searchBlock, @"CHEMISTRY[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
             if (chemMatch.Success) specs.Chemistry = StripTags(chemMatch.Groups[1].Value);
 
-            var desMatch = Regex.Match(html, @"DESIGN CAPACITY[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
+            var desMatch = Regex.Match(searchBlock, @"DESIGN CAPACITY[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
             if (desMatch.Success)
             {
                 string raw = StripTags(desMatch.Groups[1].Value);
@@ -71,13 +79,13 @@ namespace WinBatLens.Services
                 if (raw.ToLower().Contains("mah")) specs.Unit = "mAh";
             }
 
-            var fullMatch = Regex.Match(html, @"FULL CHARGE CAPACITY[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
+            var fullMatch = Regex.Match(searchBlock, @"FULL CHARGE CAPACITY[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
             if (fullMatch.Success)
             {
                 specs.FullChargeCapacity = ExtractNumber(StripTags(fullMatch.Groups[1].Value));
             }
 
-            var cycleMatch = Regex.Match(html, @"CYCLE COUNT[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
+            var cycleMatch = Regex.Match(searchBlock, @"CYCLE COUNT[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>", RegexOptions.IgnoreCase);
             if (cycleMatch.Success)
             {
                 int val = ExtractNumber(StripTags(cycleMatch.Groups[1].Value));
@@ -91,7 +99,6 @@ namespace WinBatLens.Services
         {
             var list = new List<CapacityHistoryItem>();
 
-            // Find section header for BATTERY CAPACITY HISTORY
             var sectionMatch = Regex.Match(html, @"BATTERY CAPACITY HISTORY[\s\S]*?<table[^>]*>([\s\S]*?)<\/table>", RegexOptions.IgnoreCase);
             if (sectionMatch.Success)
             {

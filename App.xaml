@@ -21,12 +21,12 @@
             <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
             <SolidColorBrush x:Key="TextDim" Color="#64748B"/>
 
-            <!-- Rounded Button Style -->
+            <!-- Rounded Primary Button Style -->
             <Style x:Key="PrimaryButtonStyle" TargetType="Button">
                 <Setter Property="Background" Value="#38BDF8"/>
                 <Setter Property="Foreground" Value="#090D16"/>
                 <Setter Property="FontSize" Value="14"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="FontWeight" Value="Bold"/>
                 <Setter Property="Padding" Value="16,8"/>
                 <Setter Property="Cursor" Value="Hand"/>
                 <Setter Property="Template">
@@ -47,6 +47,7 @@
                 </Setter>
             </Style>
 
+            <!-- Secondary Button Style -->
             <Style x:Key="SecondaryButtonStyle" TargetType="Button">
                 <Setter Property="Background" Value="#1E293B"/>
                 <Setter Property="Foreground" Value="#F8FAFC"/>
@@ -72,6 +73,103 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
+            <!-- Global High-Contrast TabItem Style -->
+            <Style TargetType="TabItem">
+                <Setter Property="Foreground" Value="#94A3B8"/>
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Padding" Value="14,10"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TabItem">
+                            <Border x:Name="Border" 
+                                    Background="#1A2438" 
+                                    BorderBrush="#334155" 
+                                    BorderThickness="1" 
+                                    CornerRadius="8,8,0,0" 
+                                    Padding="{TemplateBinding Padding}" 
+                                    Margin="{TemplateBinding Margin}">
+                                <ContentPresenter x:Name="ContentSite"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Center"
+                                                  ContentSource="Header"
+                                                  RecognizesAccessKey="True"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="Border" Property="Background" Value="#38BDF8"/>
+                                    <Setter TargetName="Border" Property="BorderBrush" Value="#38BDF8"/>
+                                    <Setter Property="Foreground" Value="#090D16"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                </Trigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsSelected" Value="False"/>
+                                        <Condition Property="IsMouseOver" Value="True"/>
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="Border" Property="Background" Value="#2D3B55"/>
+                                    <Setter Property="Foreground" Value="#F8FAFC"/>
+                                </MultiTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Global High-Contrast ListView Header & Item Style -->
+            <Style TargetType="GridViewColumnHeader">
+                <Setter Property="Background" Value="#1E293B"/>
+                <Setter Property="Foreground" Value="#38BDF8"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Padding" Value="10,8"/>
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="GridViewColumnHeader">
+                            <Border Background="{TemplateBinding Background}" 
+                                    BorderBrush="#334155" 
+                                    BorderThickness="0,0,1,1" 
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" 
+                                                  VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="ListViewItem">
+                <Setter Property="Foreground" Value="#F8FAFC"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Padding" Value="8,8"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListViewItem">
+                            <Border x:Name="Bd" 
+                                    Background="{TemplateBinding Background}" 
+                                    BorderBrush="#10FFFFFF" 
+                                    BorderThickness="0,0,0,1" 
+                                    Padding="{TemplateBinding Padding}">
+                                <GridViewRowPresenter Columns="{TemplateBinding GridView.ColumnCollection}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#15FFFFFF"/>
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#2038BDF8"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>
