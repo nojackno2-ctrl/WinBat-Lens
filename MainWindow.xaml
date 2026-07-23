@@ -180,7 +180,7 @@
                                         </Border>
                                     </Grid>
 
-                                    <!-- Task Manager Style Real-Time Waveform Chart Card -->
+                                    <!-- Task Manager Style Real-Time Waveform Chart Card with Y-Axis Coordinates -->
                                     <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,16">
                                         <StackPanel>
                                             <Grid Margin="0,0,0,10">
@@ -199,12 +199,29 @@
                                                 </StackPanel>
                                             </Grid>
 
-                                            <!-- Waveform Canvas Box -->
-                                            <Border Height="140" Background="#060910" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+                                            <!-- Waveform Canvas Box with Y-Axis Wattage Coordinates -->
+                                            <Border Height="150" Background="#060910" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
                                                 <Grid x:Name="GridChartContainer" SizeChanged="GridChartContainer_SizeChanged">
                                                     <!-- Background Gridlines -->
                                                     <Canvas x:Name="CanvasGridlines"/>
                                                     
+                                                    <!-- Y-Axis Wattage Scale Labels Overlay (Left Side) -->
+                                                    <Grid VerticalAlignment="Stretch" HorizontalAlignment="Left" Margin="8,4,0,4" IsHitTestVisible="False">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="*"/>
+                                                            <RowDefinition Height="*"/>
+                                                            <RowDefinition Height="*"/>
+                                                            <RowDefinition Height="*"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        
+                                                        <TextBlock x:Name="TxtYAxis100" Grid.Row="0" Text="35 W (100%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
+                                                        <TextBlock x:Name="TxtYAxis75" Grid.Row="1" Text="26 W (75%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
+                                                        <TextBlock x:Name="TxtYAxis50" Grid.Row="2" Text="18 W (50%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
+                                                        <TextBlock x:Name="TxtYAxis25" Grid.Row="3" Text="9 W (25%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
+                                                        <TextBlock x:Name="TxtYAxis0" Grid.Row="4" Text="0 W (0%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Bottom"/>
+                                                    </Grid>
+
                                                     <!-- Polylines -->
                                                     <Polyline x:Name="PolylinePower" Stroke="{StaticResource AccentCyan}" StrokeThickness="2" StrokeLineJoin="Round"/>
                                                     <Polyline x:Name="PolylineCpu" Stroke="{StaticResource AccentEmerald}" StrokeThickness="1.5" StrokeLineJoin="Round" StrokeDashArray="4 2"/>

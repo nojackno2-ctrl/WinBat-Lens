@@ -153,6 +153,13 @@ namespace WinBatLens
                 var list = _chartHistory.ToList();
                 double maxPowerW = Math.Max(35.0, list.Max(x => x.PowerW) * 1.15);
 
+                // Update Y-Axis Scale Coordinates Text
+                TxtYAxis100.Text = $"{maxPowerW:F0} W (100%)";
+                TxtYAxis75.Text = $"{(maxPowerW * 0.75):F0} W (75%)";
+                TxtYAxis50.Text = $"{(maxPowerW * 0.50):F0} W (50%)";
+                TxtYAxis25.Text = $"{(maxPowerW * 0.25):F0} W (25%)";
+                TxtYAxis0.Text = "0 W (0%)";
+
                 for (int i = 0; i < list.Count; i++)
                 {
                     double x = (i / (double)(MAX_CHART_POINTS - 1)) * w;
