@@ -1,0 +1,22 @@
+## Visual Studio Build & Temporary Files
+.vs/
+bin/
+obj/
+*.user
+*.userosv
+*.suo
+*.userprefs
+*.pidb
+WinBatLens.slnx
+
+## Test & Report Temp Files
+*.html
+*.json
+*.log
+
+## Prototype / Web files
+node_modules/
+package.json
+package-lock.json
+src/
+start-winbat-lens.bat

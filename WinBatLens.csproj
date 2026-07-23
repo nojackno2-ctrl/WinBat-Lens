@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <Title>WinBat Lens - Windows 電池健康度分析診斷工具</Title>
+    <Authors>WinBat Lens Team</Authors>
+    <Company>WinBat Lens</Company>
+    <Product>WinBat Lens</Product>
+    <Description>Windows 電池健康度視覺化儀表板與 powercfg /batteryreport 解析工具</Description>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+  </PropertyGroup>
+
+</Project>
