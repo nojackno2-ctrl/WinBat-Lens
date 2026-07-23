@@ -380,25 +380,20 @@ namespace WinBatLens
                 // Charge / Discharge Wattage & Status Display
                 if (state.IsAcOnline)
                 {
+                    TxtLiveDischargeRate.Text = $"{state.AcTotalInputW:F1} W";
+                    TxtLiveDischargeRate.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81)); // Emerald Green
+
+                    BadgeLiveAcState.Background = new SolidColorBrush(MediaColor.FromArgb(0x20, 0x10, 0xB9, 0x81));
+                    BadgeLiveAcState.BorderBrush = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81));
+                    TxtLiveAcState.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81));
+
                     if (state.IsCharging)
                     {
-                        TxtLiveDischargeRate.Text = $"+{state.ChargingRateW:F1} W";
-                        TxtLiveDischargeRate.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81)); // Emerald Green
-                        
-                        BadgeLiveAcState.Background = new SolidColorBrush(MediaColor.FromArgb(0x20, 0x10, 0xB9, 0x81));
-                        BadgeLiveAcState.BorderBrush = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81));
-                        TxtLiveAcState.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81));
-                        TxtLiveAcState.Text = state.ChargingStatusText;
+                        TxtLiveAcState.Text = $"🔌 AC 變壓器總供電 {state.AcTotalInputW:F1}W (電池充電 +{state.ChargingRateW:F1}W | 硬體耗電 {state.TotalSystemHardwareW:F1}W)";
                     }
                     else
                     {
-                        TxtLiveDischargeRate.Text = "0.0 W";
-                        TxtLiveDischargeRate.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x38, 0xBD, 0xF8)); // Cyan
-                        
-                        BadgeLiveAcState.Background = new SolidColorBrush(MediaColor.FromArgb(0x20, 0x38, 0xBD, 0xF8));
-                        BadgeLiveAcState.BorderBrush = new SolidColorBrush(MediaColor.FromRgb(0x38, 0xBD, 0xF8));
-                        TxtLiveAcState.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x38, 0xBD, 0xF8));
-                        TxtLiveAcState.Text = "🔌 市電直供不傷電池 (100% 滿電保護中)";
+                        TxtLiveAcState.Text = $"🔌 AC 變壓器總供電 {state.AcTotalInputW:F1}W (市電直供硬體 | 電池 100% 滿電保護中)";
                     }
                 }
                 else
@@ -419,7 +414,7 @@ namespace WinBatLens
                 // Update System Tray Tooltip
                 if (_notifyIcon != null)
                 {
-                    string powerStatusStr = state.IsCharging ? $"+{state.ChargingRateW:F1}W 充電中" : $"-{state.DischargeRateW:F1}W 放電中";
+                    string powerStatusStr = state.IsAcOnline ? $"AC 總供電: {state.AcTotalInputW:F1}W" : $"-{state.DischargeRateW:F1}W 放電中";
                     _notifyIcon.Text = $"WinBat Lens - {state.PowerStatusText}\n電量: {state.BatteryPercent}% | {powerStatusStr}";
                 }
 
@@ -471,11 +466,11 @@ namespace WinBatLens
                 {
                     if (state.IsCharging)
                     {
-                        TxtLivePowerTip.Text = $"🔌 目前正連接 AC 市電快速充電中 (+{state.ChargingRateW:F1} W)。{state.EstimatedTimeRemainingText}。";
+                        TxtLivePowerTip.Text = $"🔌 AC 變壓器目前總供電 {state.AcTotalInputW:F1} W（包含電池充電 +{state.ChargingRateW:F1} W 與全系統硬體運作耗電 {state.TotalSystemHardwareW:F1} W）。{state.EstimatedTimeRemainingText}。";
                     }
                     else
                     {
-                        TxtLivePowerTip.Text = "💡 電池已充滿 (100%)。目前轉為 AC 市電直接供電，系統已自動啟用滿電保護保護電池壽命。";
+                        TxtLivePowerTip.Text = $"💡 電池已充滿 (100%)。目前 AC 變壓器總供電 {state.AcTotalInputW:F1} W (市電直接供給全系統硬體運做)，已自動啟用滿電過充保護。";
                     }
                 }
                 else

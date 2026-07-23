@@ -82,6 +82,9 @@ namespace WinBatLens.Models
 
         public double DischargeRateW { get; set; }
         public double ChargingRateW { get; set; }
+        public double TotalSystemHardwareW { get; set; }
+        public double AcTotalInputW { get; set; }
+
         public string DischargeRateText { get; set; } = "-- W";
         public string ChargingStatusText { get; set; } = "讀取中...";
         public string EstimatedTimeRemainingText { get; set; } = "--";
