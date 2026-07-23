@@ -1,16 +1,19 @@
 # Project State & Handoff
 
 ## Current Objective
-Eliminate the scrollbar in the left column of `MainWindow.xaml` by compacting card heights, reducing ring gauge diameter (100x100), removing `<ScrollViewer>`, and sizing all 3 left cards to fit naturally within the window height.
+Fix all text overlaps and layout distortions in `MainWindow.xaml` for the Hardware Power Breakdown card and restore clean structured cards.
 
 ## Project Status
-- User requested: "調整各欄位的大小，我要左側欄都不要有拉桿" (Adjust card sizes so the left sidebar has NO scrollbar at all).
+- User submitted screenshot showing text overlaps in the Hardware Power Breakdown card (e.g. `螢幕面板與背光` overlapping `~6.5W`, `主機板與 USB 外設` description overlapping `~2.5W`).
+- **Diagnosis**:
+  - Vertical spacing inside `Grid.Column="0"` of each hardware row was compressed.
+  - Absence of row background containers caused text to clash visually.
 
 ## Next Steps
-1. Update `MainWindow.xaml`:
-   - Replace Left Column `<ScrollViewer>` with a direct `<Grid>`/`<StackPanel>` (`VerticalAlignment="Stretch"`).
-   - Compact Health Score ring gauge to `105x105` with `FontSize="32"`.
-   - Compact Battery Specs list margins and padding to `12`.
-   - Set Capacity History ListView height to `140` with `12` padding.
-2. Verify build with `dotnet build WinBatLens.csproj`.
-3. Commit updates to Git.
+1. Redesign Hardware Power Breakdown rows in `MainWindow.xaml`:
+   - Wrap each hardware item in a clean dark container (`Border Background="#0C1322" CornerRadius="8" Padding="10,10"`).
+   - Use explicit row height spacing and clear vertical stack panels so title and wattage text never collide.
+   - Set Column 0 `Width="260"`, Column 1 `Width="*"`, Column 2 `Width="160"`.
+2. Restore `<ScrollViewer>` to Left Column with auto scrollbar visibility.
+3. Verify build with `dotnet build WinBatLens.csproj`.
+4. Commit updates to Git.
