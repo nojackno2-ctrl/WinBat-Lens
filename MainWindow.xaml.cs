@@ -30,7 +30,8 @@ namespace WinBatLens
         private NotifyIcon? _notifyIcon;
         private bool _isExitRequested = false;
 
-        private readonly Queue<(double PowerW, double CpuPct, double GpuPct)> _chartHistory = new Queue<(double, double, double)>();
+        private readonly Queue<(double DischargeW, double ChargeW, double CpuPct, double GpuPct)> _chartHistory = 
+            new Queue<(double, double, double, double)>();
         private const int MAX_CHART_POINTS = 60;
 
         public MainWindow()
@@ -127,8 +128,10 @@ namespace WinBatLens
 
         private void UpdateWaveformChart(RealTimePowerState state)
         {
-            double currentPower = state.IsCharging ? state.ChargingRateW : state.DischargeRateW;
-            _chartHistory.Enqueue((currentPower, state.CpuUsagePercent, state.DgpuUsagePercent));
+            double disW = state.IsAcOnline ? 0.0 : state.DischargeRateW;
+            double chgW = state.IsCharging ? state.ChargingRateW : 0.0;
+
+            _chartHistory.Enqueue((disW, chgW, state.CpuUsagePercent, state.DgpuUsagePercent));
             while (_chartHistory.Count > MAX_CHART_POINTS)
             {
                 _chartHistory.Dequeue();
@@ -146,12 +149,13 @@ namespace WinBatLens
 
                 if (w <= 0 || h <= 0 || _chartHistory.Count == 0) return;
 
-                var powerPoints = new PointCollection();
+                var dischargePoints = new PointCollection();
+                var chargePoints = new PointCollection();
                 var cpuPoints = new PointCollection();
                 var gpuPoints = new PointCollection();
 
                 var list = _chartHistory.ToList();
-                double maxPowerW = Math.Max(35.0, list.Max(x => x.PowerW) * 1.15);
+                double maxPowerW = Math.Max(35.0, list.Max(x => Math.Max(x.DischargeW, x.ChargeW)) * 1.15);
 
                 // Update Y-Axis Scale Coordinates Text
                 TxtYAxis100.Text = $"{maxPowerW:F0} W (100%)";
@@ -166,16 +170,19 @@ namespace WinBatLens
                     var item = list[i];
 
                     // Y values (0 at bottom, Height at top)
-                    double yPower = h - Math.Min(h, Math.Max(0, (item.PowerW / maxPowerW) * h));
+                    double yDischarge = h - Math.Min(h, Math.Max(0, (item.DischargeW / maxPowerW) * h));
+                    double yCharge = h - Math.Min(h, Math.Max(0, (item.ChargeW / maxPowerW) * h));
                     double yCpu = h - Math.Min(h, Math.Max(0, (item.CpuPct / 100.0) * h));
                     double yGpu = h - Math.Min(h, Math.Max(0, (item.GpuPct / 100.0) * h));
 
-                    powerPoints.Add(new WpfPoint(x, yPower));
+                    dischargePoints.Add(new WpfPoint(x, yDischarge));
+                    chargePoints.Add(new WpfPoint(x, yCharge));
                     cpuPoints.Add(new WpfPoint(x, yCpu));
                     gpuPoints.Add(new WpfPoint(x, yGpu));
                 }
 
-                PolylinePower.Points = powerPoints;
+                PolylineDischarge.Points = dischargePoints;
+                PolylineCharge.Points = chargePoints;
                 PolylineCpu.Points = cpuPoints;
                 PolylineGpu.Points = gpuPoints;
             }

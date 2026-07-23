@@ -1,16 +1,17 @@
 # Project State & Handoff
 
 ## Current Objective
-Add Y-axis wattage (W) and percentage (%) coordinate scale labels (Y 軸瓦數與百分比刻度座標) to the Task Manager style waveform chart in `MainWindow.xaml`.
+Separate Battery Discharge Wattage (放電功率 W) and AC Charging Wattage (充電功率 +W) into two distinct polylines (Cyan vs Glowing Emerald Green) in the waveform chart in `MainWindow.xaml`.
 
 ## Project Status
-- User requested: waveform graph needs Y-axis coordinate scale showing wattage (瓦數) and percentage.
-
-## Active Problems / Needs Clarification
-- None.
+- User raised concern: Charging power (+W) and Discharging power (-W) were plotted using the same polyline.
+- **Solution**:
+  - Add `PolylineCharge` (Glowing Emerald `#10B981`) for AC Charging Wattage (+W).
+  - Keep `PolylineDischarge` (Cyan `#38BDF8`) for Battery Discharging Wattage (-W).
+  - Update legend and data structures to separate `DischargeW` and `ChargeW`.
 
 ## Next Steps
-1. Update `MainWindow.xaml` to add Y-axis coordinate text blocks overlaying the left side of the chart container.
-2. Update `MainWindow.xaml.cs` in `DrawChartGridlines()` and `RedrawWaveformChart()` to dynamically update Y-axis wattage values (`maxPowerW`, `75%`, `50%`, `25%`, `0 W`).
+1. Update `MainWindow.xaml` to add `PolylineCharge` and update legend labels.
+2. Update `MainWindow.xaml.cs` to store `(DischargeW, ChargeW, CpuPct, GpuPct)` in `_chartHistory` and render both polylines independently.
 3. Verify build with `dotnet build WinBatLens.csproj`.
 4. Commit updates to Git.

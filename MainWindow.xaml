@@ -180,7 +180,7 @@
                                         </Border>
                                     </Grid>
 
-                                    <!-- Task Manager Style Real-Time Waveform Chart Card with Y-Axis Coordinates -->
+                                    <!-- Task Manager Style Real-Time Waveform Chart Card with Separate Charge & Discharge Lines -->
                                     <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,16">
                                         <StackPanel>
                                             <Grid Margin="0,0,0,10">
@@ -189,10 +189,13 @@
                                                 <!-- Legend -->
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                     <Border Width="12" Height="3" Background="{StaticResource AccentCyan}" Margin="0,0,4,0"/>
-                                                    <TextBlock Text="放電功率 (W)" FontSize="11" Foreground="{StaticResource AccentCyan}" Margin="0,0,14,0"/>
-                                                    
+                                                    <TextBlock Text="放電 (W)" FontSize="11" Foreground="{StaticResource AccentCyan}" Margin="0,0,10,0"/>
+
                                                     <Border Width="12" Height="3" Background="{StaticResource AccentEmerald}" Margin="0,0,4,0"/>
-                                                    <TextBlock Text="CPU (%)" FontSize="11" Foreground="{StaticResource AccentEmerald}" Margin="0,0,14,0"/>
+                                                    <TextBlock Text="充電 (+W)" FontSize="11" Foreground="{StaticResource AccentEmerald}" Margin="0,0,10,0"/>
+
+                                                    <Border Width="12" Height="3" Background="{StaticResource AccentPurple}" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="CPU (%)" FontSize="11" Foreground="{StaticResource AccentPurple}" Margin="0,0,10,0"/>
                                                     
                                                     <Border Width="12" Height="3" Background="{StaticResource AccentAmber}" Margin="0,0,4,0"/>
                                                     <TextBlock Text="獨顯 (%)" FontSize="11" Foreground="{StaticResource AccentAmber}"/>
@@ -222,9 +225,10 @@
                                                         <TextBlock x:Name="TxtYAxis0" Grid.Row="4" Text="0 W (0%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Bottom"/>
                                                     </Grid>
 
-                                                    <!-- Polylines -->
-                                                    <Polyline x:Name="PolylinePower" Stroke="{StaticResource AccentCyan}" StrokeThickness="2" StrokeLineJoin="Round"/>
-                                                    <Polyline x:Name="PolylineCpu" Stroke="{StaticResource AccentEmerald}" StrokeThickness="1.5" StrokeLineJoin="Round" StrokeDashArray="4 2"/>
+                                                    <!-- Separate Polylines for Discharge (Cyan), Charge (Emerald), CPU (Purple), GPU (Amber) -->
+                                                    <Polyline x:Name="PolylineDischarge" Stroke="{StaticResource AccentCyan}" StrokeThickness="2" StrokeLineJoin="Round"/>
+                                                    <Polyline x:Name="PolylineCharge" Stroke="{StaticResource AccentEmerald}" StrokeThickness="2.5" StrokeLineJoin="Round"/>
+                                                    <Polyline x:Name="PolylineCpu" Stroke="{StaticResource AccentPurple}" StrokeThickness="1.5" StrokeLineJoin="Round" StrokeDashArray="4 2"/>
                                                     <Polyline x:Name="PolylineGpu" Stroke="{StaticResource AccentAmber}" StrokeThickness="1.5" StrokeLineJoin="Round"/>
                                                 </Grid>
                                             </Border>
