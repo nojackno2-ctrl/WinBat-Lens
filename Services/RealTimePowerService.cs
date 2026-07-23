@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Management;
+using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using WinBatLens.Models;
 
@@ -28,6 +29,8 @@ namespace WinBatLens.Services
         private static PerformanceCounter? _diskTimeCounter;
         private static PerformanceCounter? _diskBytesCounter;
         private static List<GpuInfo> _cachedGpus = new List<GpuInfo>();
+        private static long _lastNetBytes = 0;
+        private static DateTime _lastNetTime = DateTime.MinValue;
 
         static RealTimePowerService()
         {
@@ -189,26 +192,15 @@ namespace WinBatLens.Services
             }
             state.DiskPowerW = Math.Round(0.4 + (state.DiskUsagePercent / 100.0) * 3.2, 1);
 
-            // 5. Total Discharge Rate W
-            double dischargeRateMw = GetWmiDischargeRateMw();
-            if (dischargeRateMw > 0)
-            {
-                state.DischargeRateW = Math.Round(dischargeRateMw / 1000.0, 1);
-                state.DischargeRateText = $"{state.DischargeRateW:F1} W ({dischargeRateMw:N0} mW)";
-            }
-            else if (state.IsAcOnline)
-            {
-                state.DischargeRateW = 0;
-                state.DischargeRateText = "AC 供電中 (0 W 放電)";
-            }
-            else
-            {
-                double estW = state.CpuPowerW + state.IgpuPowerW + state.DgpuPowerW + state.DiskPowerW + 3.0;
-                state.DischargeRateW = Math.Round(estW, 1);
-                state.DischargeRateText = $"~{state.DischargeRateW:F1} W (即時估算總瓦數)";
-            }
+            // 5. Screen Brightness & Display Power
+            state.ScreenBrightnessPercent = GetScreenBrightnessPercent();
+            state.ScreenPowerW = Math.Round(1.0 + (state.ScreenBrightnessPercent / 100.0) * 5.5, 1);
 
-            // 6. Memory (RAM) Usage
+            // 6. Wi-Fi Wireless Adapter & Traffic Power
+            state.WifiThroughputKbps = GetWifiThroughputKbps();
+            state.WifiPowerW = Math.Round(0.6 + Math.Min(1.8, (state.WifiThroughputKbps / 5000.0) * 1.5), 1);
+
+            // 7. Memory (RAM) Usage & Bus Power
             try
             {
                 var ramInfo = GetSystemRamInfo();
@@ -222,8 +214,33 @@ namespace WinBatLens.Services
                 state.RamUsageGB = 8.0;
                 state.RamUsagePercent = 50.0;
             }
+            state.RamPowerW = Math.Round(0.8 + (state.RamUsagePercent / 100.0) * 1.7, 1);
 
-            // 7. Overall System Power Load Rating
+            // 8. Motherboard Base Power
+            state.MotherboardPowerW = 2.5;
+
+            // 9. Total Discharge Rate W
+            double dischargeRateMw = GetWmiDischargeRateMw();
+            if (dischargeRateMw > 0)
+            {
+                state.DischargeRateW = Math.Round(dischargeRateMw / 1000.0, 1);
+                state.DischargeRateText = $"{state.DischargeRateW:F1} W ({dischargeRateMw:N0} mW)";
+            }
+            else if (state.IsAcOnline)
+            {
+                state.DischargeRateW = 0;
+                state.DischargeRateText = "AC 供電中 (0 W 放電)";
+            }
+            else
+            {
+                double estW = state.CpuPowerW + state.IgpuPowerW + state.DgpuPowerW + 
+                             state.ScreenPowerW + state.DiskPowerW + state.WifiPowerW + 
+                             state.RamPowerW + state.MotherboardPowerW;
+                state.DischargeRateW = Math.Round(estW, 1);
+                state.DischargeRateText = $"~{state.DischargeRateW:F1} W (即時全硬體估算)";
+            }
+
+            // 10. Overall System Power Load Rating
             if (state.CpuUsagePercent > 70.0 || state.DgpuUsagePercent > 40.0 || state.DischargeRateW > 25.0)
             {
                 state.SystemPowerLoadStatus = "高負載 (高耗電)";
@@ -238,6 +255,63 @@ namespace WinBatLens.Services
             }
 
             return state;
+        }
+
+        private static int GetScreenBrightnessPercent()
+        {
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT CurrentBrightness FROM WmiMonitorBrightness"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        var bObj = obj["CurrentBrightness"];
+                        if (bObj != null) return Convert.ToInt32(bObj);
+                    }
+                }
+            }
+            catch { }
+
+            return 75; // Default estimate
+        }
+
+        private static double GetWifiThroughputKbps()
+        {
+            try
+            {
+                long currentBytes = 0;
+                foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (ni.OperationalStatus == OperationalStatus.Up && 
+                       (ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet))
+                    {
+                        var stats = ni.GetIPStatistics();
+                        currentBytes += stats.BytesReceived + stats.BytesSent;
+                    }
+                }
+
+                DateTime now = DateTime.Now;
+                double speedKbps = 0;
+                if (_lastNetTime != DateTime.MinValue && _lastNetBytes > 0 && now > _lastNetTime)
+                {
+                    double seconds = (now - _lastNetTime).TotalSeconds;
+                    if (seconds > 0)
+                    {
+                        long diffBytes = currentBytes - _lastNetBytes;
+                        if (diffBytes > 0)
+                        {
+                            speedKbps = Math.Round((diffBytes / 1024.0) / seconds, 1);
+                        }
+                    }
+                }
+
+                _lastNetBytes = currentBytes;
+                _lastNetTime = now;
+                return speedKbps;
+            }
+            catch { }
+
+            return 120.0;
         }
 
         private static (double Igpu, double Dgpu) GetDualGpuUsage()

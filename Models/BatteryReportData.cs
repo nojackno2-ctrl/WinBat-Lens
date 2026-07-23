@@ -90,6 +90,7 @@ namespace WinBatLens.Models
         public double RamUsageGB { get; set; }
         public double TotalRamGB { get; set; }
         public double RamUsagePercent { get; set; }
+        public double RamPowerW { get; set; }
 
         // Integrated GPU (iGPU)
         public string IgpuName { get; set; } = "內建顯示晶片 (iGPU)";
@@ -102,6 +103,17 @@ namespace WinBatLens.Models
         public double DgpuUsagePercent { get; set; }
         public double DgpuPowerW { get; set; }
         public string DgpuStatusText { get; set; } = "0% (待機省電)";
+
+        // Screen / Display Backlight
+        public int ScreenBrightnessPercent { get; set; } = 75;
+        public double ScreenPowerW { get; set; }
+
+        // Wi-Fi / Wireless Network
+        public double WifiThroughputKbps { get; set; }
+        public double WifiPowerW { get; set; }
+
+        // Motherboard Chipset & Peripherals
+        public double MotherboardPowerW { get; set; }
 
         // Legacy / Main GPU summary
         public double GpuUsagePercent { get; set; }

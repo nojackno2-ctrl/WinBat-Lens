@@ -116,15 +116,28 @@ namespace WinBatLens
                 TxtIgpuUsageVal.Text = $"{state.IgpuUsagePercent:F1}%";
                 TxtIgpuPowerW.Text = $"~{state.IgpuPowerW:F1} W";
 
+                // Screen Display & Backlight Power
+                PbScreenBrightness.Value = state.ScreenBrightnessPercent;
+                TxtScreenBrightnessVal.Text = $"{state.ScreenBrightnessPercent}% 亮度";
+                TxtScreenPowerW.Text = $"~{state.ScreenPowerW:F1} W";
+
+                // Wi-Fi Wireless Power
+                TxtWifiSpeedVal.Text = $"即時網絡流量: {state.WifiThroughputKbps:N0} KB/s";
+                TxtWifiPowerW.Text = $"~{state.WifiPowerW:F1} W";
+
                 // Disk Load & Power
                 PbDiskUsage.Value = state.DiskUsagePercent;
                 TxtDiskUsageVal.Text = $"{state.DiskUsagePercent:F1}%";
                 TxtDiskStatusText.Text = $"{state.DiskReadWriteMbps:F1} MB/s";
                 TxtDiskPowerW.Text = $"~{state.DiskPowerW:F1} W";
 
-                // RAM Usage
+                // RAM Usage & Bus Power
                 PbRamUsage.Value = state.RamUsagePercent;
                 TxtRamUsageVal.Text = $"{state.RamUsageGB:F1} GB / {state.TotalRamGB:F1} GB ({state.RamUsagePercent:F1}%)";
+                TxtRamPowerW.Text = $"~{state.RamPowerW:F1} W";
+
+                // Motherboard Base Power
+                TxtMotherboardPowerW.Text = $"~{state.MotherboardPowerW:F1} W";
 
                 // Power Load Rating
                 TxtPowerLoadStatus.Text = state.SystemPowerLoadStatus;
@@ -138,11 +151,11 @@ namespace WinBatLens
                 {
                     if (state.DischargeRateW > 20.0 || state.DgpuUsagePercent > 40.0)
                     {
-                        TxtLivePowerTip.Text = $"⚠️ 注意：目前放電速率高達 {state.DischargeRateW:F1} W。獨立顯卡正進行高負載渲染 (功耗 ~{state.DgpuPowerW:F1}W)，離線續航時間將顯著縮短。";
+                        TxtLivePowerTip.Text = $"⚠️ 注意：目前放電速率高達 {state.DischargeRateW:F1} W。獨立顯卡正進行高負載渲染 (功耗 ~{state.DgpuPowerW:F1}W)，建議調低螢幕亮度 (目前 {state.ScreenBrightnessPercent}%) 以延長續航。";
                     }
                     else
                     {
-                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，放電功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | 獨顯 ~{state.DgpuPowerW:F1}W)，顯示晶片省電控制良好。";
+                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，系統總功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | 獨顯 ~{state.DgpuPowerW:F1}W | 螢幕 ~{state.ScreenPowerW:F1}W)，功耗控制良好。";
                     }
                 }
             }
