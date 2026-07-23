@@ -1,20 +1,17 @@
 # Project State & Handoff
 
 ## Current Objective
-Implement continuous real-time hardware power and battery charge/discharge event history logging (即時功耗與電池充放電歷史紀錄) in WinBat Lens C# WPF app.
+Add a Windows Task Manager style real-time dynamic waveform / line graph chart (工作管理員波形圖) to the Real-Time Hardware Power Breakdown tab in `MainWindow.xaml`.
 
 ## Project Status
-- System tray, app icon, full hardware power breakdown, and discrete GPU detection completed.
-- Adding `RealTimePowerHistoryService.cs` to automatically sample, record, and persist:
-  1. Live power consumption snapshots (Discharge rate W, CPU %, dGPU %, Screen W, Battery %).
-  2. Battery charge/discharge state transition events (AC plug-in, battery discharge, high drain warnings).
-  3. Exporting history to CSV/JSON format.
-- Adding UI tab/panel for **「📉 即時功耗與充放電歷史紀錄」**.
+- Previous session completed CSV/event logging.
+- User clarified requirement: wants a Task Manager style scrolling waveform graph (工作管理員波形圖) showing the last 60 seconds of Power (W), CPU (%), and GPU (%) dynamics.
+
+## Active Problems / Needs Clarification
+- None.
 
 ## Next Steps
-1. Create `Models/PowerHistoryRecord.cs`.
-2. Create `Services/RealTimePowerHistoryService.cs` for automated sampling, event detection, and CSV export.
-3. Update `MainWindow.xaml` with historical power & battery event list view and controls.
-4. Update `MainWindow.xaml.cs` to record history on 1s timer ticks and bind to UI.
-5. Verify build with `dotnet build WinBatLens.csproj`.
-6. Commit updates to Git.
+1. Update `MainWindow.xaml` to add a Task Manager style waveform chart canvas with grid lines and polylines for Power (W), CPU (%), and GPU (%).
+2. Update `MainWindow.xaml.cs` to maintain a 60-second ring buffer and update Polyline points on each 1s timer tick.
+3. Verify build with `dotnet build WinBatLens.csproj`.
+4. Commit updates to Git.

@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -15,6 +19,7 @@ using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
 using MediaColor = System.Windows.Media.Color;
+using WpfPoint = System.Windows.Point;
 
 namespace WinBatLens
 {
@@ -24,6 +29,9 @@ namespace WinBatLens
         private DispatcherTimer? _livePowerTimer;
         private NotifyIcon? _notifyIcon;
         private bool _isExitRequested = false;
+
+        private readonly Queue<(double PowerW, double CpuPct, double GpuPct)> _chartHistory = new Queue<(double, double, double)>();
+        private const int MAX_CHART_POINTS = 60;
 
         public MainWindow()
         {
@@ -54,11 +62,116 @@ namespace WinBatLens
             // Bind GPU Specs List
             LoadGpuSpecs();
 
+            // Draw Background Gridlines
+            DrawChartGridlines();
+
             // Start live power monitoring timer (1s interval)
             StartLivePowerMonitoring();
 
             // Run initial battery report scan
             await RunBatteryCheckAsync();
+        }
+
+        private void GridChartContainer_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            DrawChartGridlines();
+            RedrawWaveformChart();
+        }
+
+        private void DrawChartGridlines()
+        {
+            try
+            {
+                CanvasGridlines.Children.Clear();
+                double w = GridChartContainer.ActualWidth;
+                double h = GridChartContainer.ActualHeight;
+
+                if (w <= 0 || h <= 0) return;
+
+                // Horizontal Gridlines (4 divisions)
+                for (int i = 1; i <= 3; i++)
+                {
+                    double y = (h / 4.0) * i;
+                    var line = new Line
+                    {
+                        X1 = 0,
+                        Y1 = y,
+                        X2 = w,
+                        Y2 = y,
+                        Stroke = new SolidColorBrush(MediaColor.FromArgb(0x20, 0x94, 0xA3, 0xB8)),
+                        StrokeThickness = 1,
+                        StrokeDashArray = new DoubleCollection { 4, 4 }
+                    };
+                    CanvasGridlines.Children.Add(line);
+                }
+
+                // Vertical Gridlines (10 divisions)
+                for (int i = 1; i <= 9; i++)
+                {
+                    double x = (w / 10.0) * i;
+                    var line = new Line
+                    {
+                        X1 = x,
+                        Y1 = 0,
+                        X2 = x,
+                        Y2 = h,
+                        Stroke = new SolidColorBrush(MediaColor.FromArgb(0x15, 0x94, 0xA3, 0xB8)),
+                        StrokeThickness = 1,
+                        StrokeDashArray = new DoubleCollection { 2, 4 }
+                    };
+                    CanvasGridlines.Children.Add(line);
+                }
+            }
+            catch { }
+        }
+
+        private void UpdateWaveformChart(RealTimePowerState state)
+        {
+            _chartHistory.Enqueue((state.DischargeRateW, state.CpuUsagePercent, state.DgpuUsagePercent));
+            while (_chartHistory.Count > MAX_CHART_POINTS)
+            {
+                _chartHistory.Dequeue();
+            }
+
+            RedrawWaveformChart();
+        }
+
+        private void RedrawWaveformChart()
+        {
+            try
+            {
+                double w = GridChartContainer.ActualWidth;
+                double h = GridChartContainer.ActualHeight;
+
+                if (w <= 0 || h <= 0 || _chartHistory.Count == 0) return;
+
+                var powerPoints = new PointCollection();
+                var cpuPoints = new PointCollection();
+                var gpuPoints = new PointCollection();
+
+                var list = _chartHistory.ToList();
+                double maxPowerW = Math.Max(35.0, list.Max(x => x.PowerW) * 1.15);
+
+                for (int i = 0; i < list.Count; i++)
+                {
+                    double x = (i / (double)(MAX_CHART_POINTS - 1)) * w;
+                    var item = list[i];
+
+                    // Y values (0 at bottom, Height at top)
+                    double yPower = h - Math.Min(h, Math.Max(0, (item.PowerW / maxPowerW) * h));
+                    double yCpu = h - Math.Min(h, Math.Max(0, (item.CpuPct / 100.0) * h));
+                    double yGpu = h - Math.Min(h, Math.Max(0, (item.GpuPct / 100.0) * h));
+
+                    powerPoints.Add(new WpfPoint(x, yPower));
+                    cpuPoints.Add(new WpfPoint(x, yCpu));
+                    gpuPoints.Add(new WpfPoint(x, yGpu));
+                }
+
+                PolylinePower.Points = powerPoints;
+                PolylineCpu.Points = cpuPoints;
+                PolylineGpu.Points = gpuPoints;
+            }
+            catch { }
         }
 
         private void InitAutoStartState()
@@ -245,6 +358,9 @@ namespace WinBatLens
 
                 // Add to Power & Battery Event History Service
                 RealTimePowerHistoryService.AddRecordFromPowerState(state);
+
+                // Update 60-Second Waveform Chart
+                UpdateWaveformChart(state);
 
                 // Discharge Rate & Status
                 TxtLiveDischargeRate.Text = state.DischargeRateText;
