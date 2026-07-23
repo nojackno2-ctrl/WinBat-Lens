@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+
+namespace WinBatLens.Services
+{
+    public enum AppLanguage
+    {
+        TraditionalChinese,
+        English
+    }
+
+    public class LocalizationService
+    {
+        public static AppLanguage CurrentLanguage { get; set; } = AppLanguage.TraditionalChinese;
+
+        private static readonly Dictionary<string, string> ZhTwStrings = new Dictionary<string, string>
+        {
+            ["AppTitle"] = "WinBat Lens - Windows 電池健康度與即時硬體耗電監測",
+            ["SubTitle"] = "Windows 電池健康診斷與全系統耗電監測",
+            ["AutoStart"] = "🚀 開機自動啟動",
+            ["BtnOpenReport"] = "📁 開啟 HTML 報告",
+            ["BtnCheck"] = "⚡ 執行電池檢測",
+            ["BtnExportJson"] = "📥 匯出 JSON",
+            ["BtnLanguage"] = "🌐 English",
+            ["HealthTitle"] = "電池健康度 (Health Score)",
+            ["HealthSummaryDefault"] = "請點擊右上角「執行電池檢測」按鈕載入最新報告。",
+            ["BatterySpecsTitle"] = "🔋 電池規格參數",
+            ["SpecName"] = "電池名稱",
+            ["SpecMfg"] = "製造商",
+            ["SpecChem"] = "化學材質",
+            ["SpecDesign"] = "設計容量",
+            ["SpecFull"] = "滿電容量",
+            ["SpecLoss"] = "容量損耗",
+            ["SpecCycles"] = "充放電循環",
+            ["CapacityHistoryTitle"] = "📈 容量歷史紀錄",
+            ["ColPeriod"] = "期間",
+            ["ColFullCap"] = "滿電容量",
+            ["ColDesignCap"] = "設計容量",
+            ["ColHealthPct"] = "健康%",
+            ["TabRealTime"] = " ⚡ 全系統硬體功耗分佈 ",
+            ["TabHistoryLogs"] = " 📉 即時功耗與充放電歷史紀錄 ",
+            ["TabDiagnostics"] = " 💡 智慧診斷與維護建議 ",
+            ["TabLifeEstimates"] = " ⏱️ 續航估算表 ",
+            ["TabRecentUsage"] = " 📊 最近使用紀錄 ",
+            ["CardTotalPower"] = "⚡ 電池總放電 / AC 變壓器總供電功率",
+            ["CardEstTime"] = "⏱️ 電腦估算剩餘續航時間",
+            ["WaveformTitle"] = "📈 60 秒即時動態走勢波形圖 (Task Manager Style Live Graph)",
+            ["LegendDischarge"] = "放電 (W)",
+            ["LegendCharge"] = "充電 (+W)",
+            ["LegendCpu"] = "CPU (%)",
+            ["LegendGpu"] = "獨顯 (%)",
+            ["HardwareTitle"] = "💻 全系統各硬體元件功耗明細 (Full System Hardware Power Breakdown)",
+            ["HwCpu"] = "🔲 CPU 處理器",
+            ["HwDgpu"] = "🎮 獨立顯示卡 (dGPU)",
+            ["HwIgpu"] = "🖼️ 內建顯示晶片 (iGPU)",
+            ["HwScreen"] = "🖥️ 螢幕面板與背光",
+            ["HwWifi"] = "📶 Wi-Fi / 藍牙網絡",
+            ["HwDisk"] = "💾 硬碟 (SSD/HDD)",
+            ["HwRam"] = "🧠 記憶體 (RAM) 匯流排",
+            ["HwMotherboard"] = "🔌 主機板與 USB 外設",
+            ["GpuListTitle"] = "🎮 系統顯示卡清單 (Graphics Hardware List)",
+            ["BtnExportCsv"] = "📥 匯出 CSV 紀錄",
+            ["BtnClearHistory"] = "🗑️ 清除紀錄",
+            ["HistoryLogHeader"] = "📋 即時動態功耗與充放電事件歷史日誌 (Live Power & Event Logs)",
+            ["ColTime"] = "時間戳記",
+            ["ColEvent"] = "事件類型",
+            ["ColPower"] = "放電/充電功率",
+            ["ColBattery"] = "電量 (%)",
+            ["ColCpu"] = "CPU 負載",
+            ["ColDgpu"] = "獨顯負載",
+            ["ColScreen"] = "螢幕功耗",
+            ["ColSummary"] = "詳細狀態記錄"
+        };
+
+        private static readonly Dictionary<string, string> EnUsStrings = new Dictionary<string, string>
+        {
+            ["AppTitle"] = "WinBat Lens - Windows Battery Health & Real-Time Hardware Power Monitor",
+            ["SubTitle"] = "Windows Battery Health Diagnostics & Full System Power Monitor",
+            ["AutoStart"] = "🚀 Launch on Windows Startup",
+            ["BtnOpenReport"] = "📁 Open HTML Report",
+            ["BtnCheck"] = "⚡ Run Battery Check",
+            ["BtnExportJson"] = "📥 Export JSON",
+            ["BtnLanguage"] = "🌐 繁體中文",
+            ["HealthTitle"] = "Battery Health Score",
+            ["HealthSummaryDefault"] = "Click 'Run Battery Check' in the top right to load report.",
+            ["BatterySpecsTitle"] = "🔋 Battery Specifications",
+            ["SpecName"] = "Battery Name",
+            ["SpecMfg"] = "Manufacturer",
+            ["SpecChem"] = "Chemistry",
+            ["SpecDesign"] = "Design Capacity",
+            ["SpecFull"] = "Full Charge Capacity",
+            ["SpecLoss"] = "Capacity Loss",
+            ["SpecCycles"] = "Cycle Count",
+            ["CapacityHistoryTitle"] = "📈 Capacity Degradation History",
+            ["ColPeriod"] = "Period",
+            ["ColFullCap"] = "Full Charge Cap",
+            ["ColDesignCap"] = "Design Cap",
+            ["ColHealthPct"] = "Health %",
+            ["TabRealTime"] = " ⚡ Hardware Power Breakdown ",
+            ["TabHistoryLogs"] = " 📉 Power & Event History Logs ",
+            ["TabDiagnostics"] = " 💡 Smart Diagnostics & Tips ",
+            ["TabLifeEstimates"] = " ⏱️ Battery Life Estimates ",
+            ["TabRecentUsage"] = " 📊 Recent Battery Usage ",
+            ["CardTotalPower"] = "⚡ Battery Discharge / AC Adapter Power",
+            ["CardEstTime"] = "⏱️ Estimated Battery Life Remaining",
+            ["WaveformTitle"] = "📈 60-Second Real-Time Power & Load Waveform Graph",
+            ["LegendDischarge"] = "Discharge (W)",
+            ["LegendCharge"] = "Charge (+W)",
+            ["LegendCpu"] = "CPU (%)",
+            ["LegendGpu"] = "dGPU (%)",
+            ["HardwareTitle"] = "💻 Full System Hardware Power Breakdown",
+            ["HwCpu"] = "🔲 CPU Processor",
+            ["HwDgpu"] = "🎮 Discrete GPU (dGPU)",
+            ["HwIgpu"] = "🖼️ Integrated GPU (iGPU)",
+            ["HwScreen"] = "🖥️ Screen & Backlight",
+            ["HwWifi"] = "📶 Wi-Fi / Bluetooth",
+            ["HwDisk"] = "💾 Storage (SSD/HDD)",
+            ["HwRam"] = "🧠 RAM Bus Power",
+            ["HwMotherboard"] = "🔌 Motherboard & USB",
+            ["GpuListTitle"] = "🎮 System Graphics Hardware List",
+            ["BtnExportCsv"] = "📥 Export CSV",
+            ["BtnClearHistory"] = "🗑️ Clear History",
+            ["HistoryLogHeader"] = "📋 Real-Time Dynamic Power & Charge/Discharge Event Logs",
+            ["ColTime"] = "Timestamp",
+            ["ColEvent"] = "Event Type",
+            ["ColPower"] = "Power (W)",
+            ["ColBattery"] = "Battery (%)",
+            ["ColCpu"] = "CPU Load",
+            ["ColDgpu"] = "dGPU Load",
+            ["ColScreen"] = "Screen Power",
+            ["ColSummary"] = "Log Details"
+        };
+
+        public static string Get(string key)
+        {
+            var dict = CurrentLanguage == AppLanguage.English ? EnUsStrings : ZhTwStrings;
+            return dict.TryGetValue(key, out var val) ? val : key;
+        }
+
+        public static void ToggleLanguage()
+        {
+            CurrentLanguage = CurrentLanguage == AppLanguage.TraditionalChinese 
+                ? AppLanguage.English 
+                : AppLanguage.TraditionalChinese;
+        }
+    }
+}

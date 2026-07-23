@@ -1,14 +1,14 @@
 # Project State & Handoff
 
 ## Current Objective
-Add total AC adapter input wattage (`AcTotalInputW` = Battery Charging Wattage + System Hardware Power Consumption W) to `RealTimePowerService.cs` and `MainWindow.xaml`.
+Add dual-language support (Traditional Chinese 繁體中文 ↔ English) with a 1-click language switcher button (`🌐 Language`) in the header bar of WinBat Lens.
 
 ## Project Status
-- User requested: display total AC supplied wattage (AC 變壓器總供電瓦數 = 充電瓦數 + 硬體耗電瓦數), not just battery charging wattage.
+- User requested: add an English version / language support ("加入英文版").
 
 ## Next Steps
-1. Update `Models/BatteryReportData.cs` to add `AcTotalInputW`, `TotalSystemHardwareW`, and `AcTotalInputText` to `RealTimePowerState`.
-2. Update `Services/RealTimePowerService.cs` to calculate `AcTotalInputW = ChargingRateW + TotalSystemHardwareW`.
-3. Update `MainWindow.xaml` and `MainWindow.xaml.cs` to display total AC input wattage and breakdown badges.
+1. Create `Services/LocalizationService.cs` containing UI string dictionaries for Traditional Chinese (`zh-TW`) and English (`en-US`).
+2. Update `MainWindow.xaml` to add a `🌐 繁體中文 / English` toggle button in the header bar and assign name keys to text elements.
+3. Update `MainWindow.xaml.cs` to apply language dictionary on startup and on language toggle.
 4. Verify build with `dotnet build WinBatLens.csproj`.
 5. Commit updates to Git.

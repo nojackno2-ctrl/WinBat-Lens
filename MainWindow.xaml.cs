@@ -53,6 +53,9 @@ namespace WinBatLens
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            // Apply Initial Language
+            ApplyLanguage();
+
             // Bind Power History List
             LvPowerHistory.ItemsSource = RealTimePowerHistoryService.Records;
 
@@ -71,6 +74,69 @@ namespace WinBatLens
 
             // Run initial battery report scan
             await RunBatteryCheckAsync();
+        }
+
+        private void BtnLanguageToggle_Click(object sender, RoutedEventArgs e)
+        {
+            LocalizationService.ToggleLanguage();
+            ApplyLanguage();
+            UpdateLivePowerUI();
+        }
+
+        private void ApplyLanguage()
+        {
+            this.Title = LocalizationService.Get("AppTitle");
+            TxtSystemModel.Text = $"{Environment.MachineName} ({Environment.OSVersion}) - {LocalizationService.Get("SubTitle")}";
+            ChkAutoStart.Content = LocalizationService.Get("AutoStart");
+            BtnOpenReport.Content = LocalizationService.Get("BtnOpenReport");
+            BtnGenerateReport.Content = LocalizationService.Get("BtnCheck");
+            BtnExportData.Content = LocalizationService.Get("BtnExportJson");
+            BtnLanguageToggle.Content = LocalizationService.Get("BtnLanguage");
+
+            // Cards
+            TxtHealthCardTitle.Text = LocalizationService.Get("HealthTitle");
+            TxtBatterySpecsTitle.Text = LocalizationService.Get("BatterySpecsTitle");
+            LblSpecName.Text = LocalizationService.Get("SpecName");
+            LblSpecMfg.Text = LocalizationService.Get("SpecMfg");
+            LblSpecChem.Text = LocalizationService.Get("SpecChem");
+            LblSpecDesign.Text = LocalizationService.Get("SpecDesign");
+            LblSpecFull.Text = LocalizationService.Get("SpecFull");
+            LblSpecLoss.Text = LocalizationService.Get("SpecLoss");
+            LblSpecCycles.Text = LocalizationService.Get("SpecCycles");
+
+            TxtCapacityHistoryTitle.Text = LocalizationService.Get("CapacityHistoryTitle");
+            GvcColPeriod.Header = LocalizationService.Get("ColPeriod");
+            GvcColFullCap.Header = LocalizationService.Get("ColFullCap");
+            GvcColDesignCap.Header = LocalizationService.Get("ColDesignCap");
+            GvcColHealthPct.Header = LocalizationService.Get("ColHealthPct");
+
+            // Tabs
+            TabRealTime.Header = LocalizationService.Get("TabRealTime");
+            TabHistoryLogs.Header = LocalizationService.Get("TabHistoryLogs");
+            TabDiagnostics.Header = LocalizationService.Get("TabDiagnostics");
+            TabLifeEstimates.Header = LocalizationService.Get("TabLifeEstimates");
+            TabRecentUsage.Header = LocalizationService.Get("TabRecentUsage");
+
+            TxtCardTotalPower.Text = LocalizationService.Get("CardTotalPower");
+            TxtCardEstTime.Text = LocalizationService.Get("CardEstTime");
+            TxtWaveformTitle.Text = LocalizationService.Get("WaveformTitle");
+            TxtLegendDischarge.Text = LocalizationService.Get("LegendDischarge");
+            TxtLegendCharge.Text = LocalizationService.Get("LegendCharge");
+            TxtLegendCpu.Text = LocalizationService.Get("LegendCpu");
+            TxtLegendGpu.Text = LocalizationService.Get("LegendGpu");
+
+            TxtHardwareTitle.Text = LocalizationService.Get("HardwareTitle");
+            LblHwCpu.Text = LocalizationService.Get("HwCpu");
+            LblHwScreen.Text = LocalizationService.Get("HwScreen");
+            LblHwWifi.Text = LocalizationService.Get("HwWifi");
+            LblHwDisk.Text = LocalizationService.Get("HwDisk");
+            LblHwRam.Text = LocalizationService.Get("HwRam");
+            LblHwMotherboard.Text = LocalizationService.Get("HwMotherboard");
+            TxtGpuListTitle.Text = LocalizationService.Get("GpuListTitle");
+
+            TxtHistoryLogHeader.Text = LocalizationService.Get("HistoryLogHeader");
+            BtnExportPowerCsv.Content = LocalizationService.Get("BtnExportCsv");
+            BtnClearPowerHistory.Content = LocalizationService.Get("BtnClearHistory");
         }
 
         private void GridChartContainer_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -389,11 +455,15 @@ namespace WinBatLens
 
                     if (state.IsCharging)
                     {
-                        TxtLiveAcState.Text = $"🔌 AC 變壓器總供電 {state.AcTotalInputW:F1}W (電池充電 +{state.ChargingRateW:F1}W | 硬體耗電 {state.TotalSystemHardwareW:F1}W)";
+                        TxtLiveAcState.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                            ? $"🔌 AC Adapter Input {state.AcTotalInputW:F1}W (Charging +{state.ChargingRateW:F1}W | Hardware {state.TotalSystemHardwareW:F1}W)"
+                            : $"🔌 AC 變壓器總供電 {state.AcTotalInputW:F1}W (電池充電 +{state.ChargingRateW:F1}W | 硬體耗電 {state.TotalSystemHardwareW:F1}W)";
                     }
                     else
                     {
-                        TxtLiveAcState.Text = $"🔌 AC 變壓器總供電 {state.AcTotalInputW:F1}W (市電直供硬體 | 電池 100% 滿電保護中)";
+                        TxtLiveAcState.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                            ? $"🔌 AC Adapter Input {state.AcTotalInputW:F1}W (Direct Pass-Through | 100% Fully Charged Protection)"
+                            : $"🔌 AC 變壓器總供電 {state.AcTotalInputW:F1}W (市電直供硬體 | 電池 100% 滿電保護中)";
                     }
                 }
                 else
@@ -404,18 +474,22 @@ namespace WinBatLens
                     BadgeLiveAcState.Background = new SolidColorBrush(MediaColor.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
                     BadgeLiveAcState.BorderBrush = new SolidColorBrush(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
                     TxtLiveAcState.Foreground = new SolidColorBrush(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
-                    TxtLiveAcState.Text = $"🔋 電池放電中 (-{state.DischargeRateW:F1}W)";
+                    TxtLiveAcState.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                        ? $"🔋 Battery Discharging (-{state.DischargeRateW:F1}W)"
+                        : $"🔋 電池放電中 (-{state.DischargeRateW:F1}W)";
                 }
 
                 // Battery Remaining Time & Level
                 TxtLiveRemainingTime.Text = state.EstimatedTimeRemainingText;
-                TxtLiveBatteryPercent.Text = $"目前電池剩餘電量: {state.BatteryPercent}%";
+                TxtLiveBatteryPercent.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                    ? $"Current Battery Level: {state.BatteryPercent}%"
+                    : $"目前電池剩餘電量: {state.BatteryPercent}%";
 
                 // Update System Tray Tooltip
                 if (_notifyIcon != null)
                 {
-                    string powerStatusStr = state.IsAcOnline ? $"AC 總供電: {state.AcTotalInputW:F1}W" : $"-{state.DischargeRateW:F1}W 放電中";
-                    _notifyIcon.Text = $"WinBat Lens - {state.PowerStatusText}\n電量: {state.BatteryPercent}% | {powerStatusStr}";
+                    string powerStatusStr = state.IsAcOnline ? $"AC Input: {state.AcTotalInputW:F1}W" : $"-{state.DischargeRateW:F1}W Discharging";
+                    _notifyIcon.Text = $"WinBat Lens - {state.PowerStatusText}\nLevel: {state.BatteryPercent}% | {powerStatusStr}";
                 }
 
                 // CPU Load & Power
@@ -437,11 +511,15 @@ namespace WinBatLens
 
                 // Screen Display & Backlight Power
                 PbScreenBrightness.Value = state.ScreenBrightnessPercent;
-                TxtScreenBrightnessVal.Text = $"{state.ScreenBrightnessPercent}% 亮度";
+                TxtScreenBrightnessVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                    ? $"{state.ScreenBrightnessPercent}% Brightness"
+                    : $"{state.ScreenBrightnessPercent}% 亮度";
                 TxtScreenPowerW.Text = $"~{state.ScreenPowerW:F1} W";
 
                 // Wi-Fi Wireless Power
-                TxtWifiSpeedVal.Text = $"即時網絡流量: {state.WifiThroughputKbps:N0} KB/s";
+                TxtWifiSpeedVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                    ? $"Network Traffic: {state.WifiThroughputKbps:N0} KB/s"
+                    : $"即時傳輸流量: {state.WifiThroughputKbps:N0} KB/s";
                 TxtWifiPowerW.Text = $"~{state.WifiPowerW:F1} W";
 
                 // Disk Load & Power
@@ -466,22 +544,30 @@ namespace WinBatLens
                 {
                     if (state.IsCharging)
                     {
-                        TxtLivePowerTip.Text = $"🔌 AC 變壓器目前總供電 {state.AcTotalInputW:F1} W（包含電池充電 +{state.ChargingRateW:F1} W 與全系統硬體運作耗電 {state.TotalSystemHardwareW:F1} W）。{state.EstimatedTimeRemainingText}。";
+                        TxtLivePowerTip.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                            ? $"🔌 AC Adapter Input: {state.AcTotalInputW:F1} W (Battery Charging +{state.ChargingRateW:F1} W, Hardware Power {state.TotalSystemHardwareW:F1} W). {state.EstimatedTimeRemainingText}."
+                            : $"🔌 AC 變壓器目前總供電 {state.AcTotalInputW:F1} W（包含電池充電 +{state.ChargingRateW:F1} W 與全系統硬體運作耗電 {state.TotalSystemHardwareW:F1} W）。{state.EstimatedTimeRemainingText}。";
                     }
                     else
                     {
-                        TxtLivePowerTip.Text = $"💡 電池已充滿 (100%)。目前 AC 變壓器總供電 {state.AcTotalInputW:F1} W (市電直接供給全系統硬體運做)，已自動啟用滿電過充保護。";
+                        TxtLivePowerTip.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                            ? $"💡 Battery fully charged (100%). AC Adapter input: {state.AcTotalInputW:F1} W directly powering hardware."
+                            : $"💡 電池已充滿 (100%)。目前 AC 變壓器總供電 {state.AcTotalInputW:F1} W (市電直接供給全系統硬體運做)，已自動啟用滿電過充保護。";
                     }
                 }
                 else
                 {
                     if (state.DischargeRateW > 20.0 || state.DgpuUsagePercent > 40.0)
                     {
-                        TxtLivePowerTip.Text = $"⚠️ 注意：目前放電速率高達 {state.DischargeRateW:F1} W。獨立顯卡正進行高負載渲染 (功耗 ~{state.DgpuPowerW:F1}W)，建議調低螢幕亮度 (目前 {state.ScreenBrightnessPercent}%) 以延長續航。";
+                        TxtLivePowerTip.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                            ? $"⚠️ High discharge rate: {state.DischargeRateW:F1} W. Discrete GPU is active (~{state.DgpuPowerW:F1}W)."
+                            : $"⚠️ 注意：目前放電速率高達 {state.DischargeRateW:F1} W。獨立顯卡正進行高負載渲染 (功耗 ~{state.DgpuPowerW:F1}W)，建議調低螢幕亮度 (目前 {state.ScreenBrightnessPercent}%) 以延長續航。";
                     }
                     else
                     {
-                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，系統總功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | 獨顯 ~{state.DgpuPowerW:F1}W | 螢幕 ~{state.ScreenPowerW:F1}W)，功耗控制良好。";
+                        TxtLivePowerTip.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                            ? $"💡 Discharging on battery power (~{state.DischargeRateW:F1} W total)."
+                            : $"💡 目前正使用電池放電中，系統總功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | 獨顯 ~{state.DgpuPowerW:F1}W | 螢幕 ~{state.ScreenPowerW:F1}W)，功耗控制良好。";
                     }
                 }
             }
@@ -495,7 +581,7 @@ namespace WinBatLens
         {
             var saveDialog = new SaveFileDialog
             {
-                Title = "匯出即時功耗與充放電歷史日誌",
+                Title = LocalizationService.CurrentLanguage == AppLanguage.English ? "Export Live Power History Logs" : "匯出即時功耗與充放電歷史日誌",
                 FileName = $"WinBat_Power_Log_{DateTime.Now:yyyyMMdd_HHmmss}.csv",
                 Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
             };
@@ -505,18 +591,21 @@ namespace WinBatLens
                 bool success = RealTimePowerHistoryService.ExportToCsv(saveDialog.FileName);
                 if (success)
                 {
-                    MessageBox.Show($"已成功匯出歷史日誌至:\n{saveDialog.FileName}", "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出歷史日誌至:\n{saveDialog.FileName}", 
+                        LocalizationService.CurrentLanguage == AppLanguage.English ? "Export Success" : "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 else
                 {
-                    MessageBox.Show("匯出失敗，請確認檔案寫入權限。", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Export failed due to write permissions." : "匯出失敗，請確認檔案寫入權限。", 
+                        LocalizationService.CurrentLanguage == AppLanguage.English ? "Error" : "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
 
         private void BtnClearPowerHistory_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show("確定要清除所有即時功耗與充放電事件紀錄嗎？", "確認清除", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var result = MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Clear all live power and event history logs?" : "確定要清除所有即時功耗與充放電事件紀錄嗎？", 
+                LocalizationService.CurrentLanguage == AppLanguage.English ? "Confirm Clear" : "確認清除", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result == MessageBoxResult.Yes)
             {
                 RealTimePowerHistoryService.ClearHistory();
@@ -581,13 +670,14 @@ namespace WinBatLens
         {
             if (_currentReport == null)
             {
-                MessageBox.Show("目前尚無可供匯出的電池資料。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "No battery report data available to export." : "目前尚無可供匯出的電池資料。", 
+                    LocalizationService.CurrentLanguage == AppLanguage.English ? "Info" : "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             var saveDialog = new SaveFileDialog
             {
-                Title = "匯出電池健康度摘要報告",
+                Title = LocalizationService.CurrentLanguage == AppLanguage.English ? "Export Battery Summary Report" : "匯出電池健康度摘要報告",
                 FileName = $"WinBat_Lens_Summary_{DateTime.Now:yyyyMMdd}.json",
                 Filter = "JSON Data (*.json)|*.json|All Files (*.*)|*.*"
             };
@@ -598,7 +688,8 @@ namespace WinBatLens
                 {
                     string json = JsonSerializer.Serialize(_currentReport, new JsonSerializerOptions { WriteIndented = true });
                     File.WriteAllText(saveDialog.FileName, json);
-                    MessageBox.Show($"已成功匯出至:\n{saveDialog.FileName}", "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出至:\n{saveDialog.FileName}", 
+                        LocalizationService.CurrentLanguage == AppLanguage.English ? "Export Success" : "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
@@ -625,11 +716,11 @@ namespace WinBatLens
             TxtSpecDesign.Text = $"{specs.DesignCapacity:N0} {specs.Unit}";
             TxtSpecFull.Text = $"{specs.FullChargeCapacity:N0} {specs.Unit}";
             TxtSpecLoss.Text = $"{metrics.CapacityLoss:N0} {specs.Unit} ({metrics.WearPercent}%)";
-            TxtSpecCycles.Text = specs.CycleCount.HasValue ? $"{specs.CycleCount.Value} 次" : "未提供";
+            TxtSpecCycles.Text = specs.CycleCount.HasValue ? $"{specs.CycleCount.Value} 次" : (LocalizationService.CurrentLanguage == AppLanguage.English ? "N/A" : "未提供");
 
             TxtReportTime.Text = string.IsNullOrWhiteSpace(report.SystemInfo.ReportTime) 
-                ? $"檢測時間: {DateTime.Now:yyyy-MM-dd HH:mm}" 
-                : $"報告時間: {report.SystemInfo.ReportTime}";
+                ? $"{DateTime.Now:yyyy-MM-dd HH:mm}" 
+                : report.SystemInfo.ReportTime;
 
             // Bind Lists
             LvCapacityHistory.ItemsSource = report.CapacityHistory;
