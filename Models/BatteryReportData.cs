@@ -91,7 +91,19 @@ namespace WinBatLens.Models
         public double TotalRamGB { get; set; }
         public double RamUsagePercent { get; set; }
 
-        // GPU
+        // Integrated GPU (iGPU)
+        public string IgpuName { get; set; } = "內建顯示晶片 (iGPU)";
+        public double IgpuUsagePercent { get; set; }
+        public double IgpuPowerW { get; set; }
+
+        // Discrete GPU (dGPU)
+        public bool HasDiscreteGpu { get; set; }
+        public string DgpuName { get; set; } = "獨立顯示卡 (dGPU)";
+        public double DgpuUsagePercent { get; set; }
+        public double DgpuPowerW { get; set; }
+        public string DgpuStatusText { get; set; } = "0% (待機省電)";
+
+        // Legacy / Main GPU summary
         public double GpuUsagePercent { get; set; }
         public double GpuPowerW { get; set; }
         public string GpuName { get; set; } = "顯示晶片";

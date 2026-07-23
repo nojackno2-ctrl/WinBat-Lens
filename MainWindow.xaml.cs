@@ -26,7 +26,7 @@ namespace WinBatLens
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // Bind GPU Specs
+            // Bind GPU Specs List
             LoadGpuSpecs();
 
             // Start live power monitoring timer (1s interval)
@@ -104,11 +104,17 @@ namespace WinBatLens
                 TxtCpuUsageVal.Text = $"{state.CpuUsagePercent:F1}%";
                 TxtCpuPowerW.Text = $"~{state.CpuPowerW:F1} W";
 
-                // GPU Load & Power
-                TxtGpuName.Text = $"🎮 {state.GpuName}";
-                PbGpuUsage.Value = state.GpuUsagePercent;
-                TxtGpuUsageVal.Text = $"{state.GpuUsagePercent:F1}%";
-                TxtGpuPowerW.Text = $"~{state.GpuPowerW:F1} W";
+                // Discrete GPU (dGPU) Load & Power
+                TxtDgpuName.Text = $"🎮 {state.DgpuName}";
+                PbDgpuUsage.Value = state.DgpuUsagePercent;
+                TxtDgpuUsageVal.Text = state.DgpuStatusText;
+                TxtDgpuPowerW.Text = $"~{state.DgpuPowerW:F1} W";
+
+                // Integrated GPU (iGPU) Load & Power
+                TxtIgpuName.Text = $"🖼️ {state.IgpuName}";
+                PbIgpuUsage.Value = state.IgpuUsagePercent;
+                TxtIgpuUsageVal.Text = $"{state.IgpuUsagePercent:F1}%";
+                TxtIgpuPowerW.Text = $"~{state.IgpuPowerW:F1} W";
 
                 // Disk Load & Power
                 PbDiskUsage.Value = state.DiskUsagePercent;
@@ -130,13 +136,13 @@ namespace WinBatLens
                 }
                 else
                 {
-                    if (state.DischargeRateW > 20.0 || state.GpuUsagePercent > 50.0)
+                    if (state.DischargeRateW > 20.0 || state.DgpuUsagePercent > 40.0)
                     {
-                        TxtLivePowerTip.Text = $"⚠️ 注意：目前放電速率高達 {state.DischargeRateW:F1} W。獨立顯卡或 CPU 正進行高負載渲染，離線續航時間將顯著縮短。";
+                        TxtLivePowerTip.Text = $"⚠️ 注意：目前放電速率高達 {state.DischargeRateW:F1} W。獨立顯卡正進行高負載渲染 (功耗 ~{state.DgpuPowerW:F1}W)，離線續航時間將顯著縮短。";
                     }
                     else
                     {
-                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，放電功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | GPU ~{state.GpuPowerW:F1}W)，顯示晶片功耗控制良好。";
+                        TxtLivePowerTip.Text = $"💡 目前正使用電池放電中，放電功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | 獨顯 ~{state.DgpuPowerW:F1}W)，顯示晶片省電控制良好。";
                     }
                 }
             }

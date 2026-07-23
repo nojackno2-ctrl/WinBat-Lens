@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Management;
 using System.Runtime.InteropServices;
 using WinBatLens.Models;
@@ -25,7 +27,7 @@ namespace WinBatLens.Services
         private static PerformanceCounter? _cpuCounter;
         private static PerformanceCounter? _diskTimeCounter;
         private static PerformanceCounter? _diskBytesCounter;
-        private static string _gpuNameCache = "顯示晶片";
+        private static List<GpuInfo> _cachedGpus = new List<GpuInfo>();
 
         static RealTimePowerService()
         {
@@ -59,13 +61,33 @@ namespace WinBatLens.Services
                 Debug.WriteLine($"DiskBytes PerformanceCounter init warning: {ex.Message}");
             }
 
-            _gpuNameCache = FetchGpuName();
+            try
+            {
+                _cachedGpus = GpuInfoService.GetInstalledGpus();
+            }
+            catch { }
         }
 
         public static RealTimePowerState GetCurrentPowerState()
         {
             var state = new RealTimePowerState();
-            state.GpuName = _gpuNameCache;
+
+            // Set GPU Names
+            var dGpu = _cachedGpus.FirstOrDefault(g => g.IsDiscrete);
+            var iGpu = _cachedGpus.FirstOrDefault(g => !g.IsDiscrete);
+
+            if (dGpu != null)
+            {
+                state.HasDiscreteGpu = true;
+                state.DgpuName = dGpu.Name;
+                state.IgpuName = iGpu?.Name ?? "內建顯示晶片 (iGPU)";
+            }
+            else
+            {
+                state.HasDiscreteGpu = false;
+                state.IgpuName = _cachedGpus.FirstOrDefault()?.Name ?? "顯示晶片 (GPU)";
+                state.DgpuName = "無獨立顯示卡";
+            }
 
             // 1. Get Windows System Power Status
             if (GetSystemPowerStatus(out var status))
@@ -111,9 +133,36 @@ namespace WinBatLens.Services
             }
             state.CpuPowerW = Math.Round(2.5 + (state.CpuUsagePercent / 100.0) * 22.5, 1);
 
-            // 3. GPU Usage & Power
-            state.GpuUsagePercent = GetGpuUsagePercent();
-            state.GpuPowerW = Math.Round(1.5 + (state.GpuUsagePercent / 100.0) * 18.5, 1);
+            // 3. GPU (iGPU & dGPU) Usage & Power
+            var (iGpuVal, dGpuVal) = GetDualGpuUsage();
+            state.IgpuUsagePercent = iGpuVal;
+            state.IgpuPowerW = Math.Round(1.0 + (iGpuVal / 100.0) * 12.0, 1);
+
+            if (state.HasDiscreteGpu)
+            {
+                state.DgpuUsagePercent = dGpuVal;
+                if (dGpuVal > 0)
+                {
+                    state.DgpuPowerW = Math.Round(3.0 + (dGpuVal / 100.0) * 35.0, 1);
+                    state.DgpuStatusText = $"{dGpuVal:F1}% (高效能運算中)";
+                }
+                else
+                {
+                    state.DgpuPowerW = 0.0;
+                    state.DgpuStatusText = "0.0% (待機省電)";
+                }
+            }
+            else
+            {
+                state.DgpuUsagePercent = 0;
+                state.DgpuPowerW = 0;
+                state.DgpuStatusText = "無獨立顯示卡";
+            }
+
+            // Legacy total GPU
+            state.GpuUsagePercent = Math.Max(iGpuVal, dGpuVal);
+            state.GpuPowerW = Math.Round(state.IgpuPowerW + state.DgpuPowerW, 1);
+            state.GpuName = state.HasDiscreteGpu ? state.DgpuName : state.IgpuName;
 
             // 4. Disk (SSD / HDD) Usage & Power
             try
@@ -154,8 +203,7 @@ namespace WinBatLens.Services
             }
             else
             {
-                // Sum estimated component powers if WMI discharge rate unavailable
-                double estW = state.CpuPowerW + state.GpuPowerW + state.DiskPowerW + 3.0; // +3W display/board
+                double estW = state.CpuPowerW + state.IgpuPowerW + state.DgpuPowerW + state.DiskPowerW + 3.0;
                 state.DischargeRateW = Math.Round(estW, 1);
                 state.DischargeRateText = $"~{state.DischargeRateW:F1} W (即時估算總瓦數)";
             }
@@ -176,11 +224,11 @@ namespace WinBatLens.Services
             }
 
             // 7. Overall System Power Load Rating
-            if (state.CpuUsagePercent > 70.0 || state.GpuUsagePercent > 60.0 || state.DischargeRateW > 25.0)
+            if (state.CpuUsagePercent > 70.0 || state.DgpuUsagePercent > 40.0 || state.DischargeRateW > 25.0)
             {
                 state.SystemPowerLoadStatus = "高負載 (高耗電)";
             }
-            else if (state.CpuUsagePercent > 30.0 || state.GpuUsagePercent > 20.0 || state.DischargeRateW > 15.0)
+            else if (state.CpuUsagePercent > 30.0 || state.IgpuUsagePercent > 30.0 || state.DischargeRateW > 15.0)
             {
                 state.SystemPowerLoadStatus = "中度運算";
             }
@@ -192,49 +240,39 @@ namespace WinBatLens.Services
             return state;
         }
 
-        private static double GetGpuUsagePercent()
+        private static (double Igpu, double Dgpu) GetDualGpuUsage()
         {
+            double iGpuMax = 0.0;
+            double dGpuMax = 0.0;
+
             try
             {
                 var category = new PerformanceCounterCategory("GPU Engine");
                 var instanceNames = category.GetInstanceNames();
-                double maxVal = 0.0;
 
                 foreach (var inst in instanceNames)
                 {
-                    if (inst.ToLower().Contains("engtype_3d"))
+                    string lower = inst.ToLower();
+                    if (lower.Contains("engtype_3d"))
                     {
                         using (var pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", inst))
                         {
                             double val = pc.NextValue();
-                            if (val > maxVal) maxVal = val;
+                            if (lower.Contains("phys_1"))
+                            {
+                                if (val > dGpuMax) dGpuMax = val;
+                            }
+                            else
+                            {
+                                if (val > iGpuMax) iGpuMax = val;
+                            }
                         }
                     }
                 }
-
-                if (maxVal > 0) return Math.Min(100.0, Math.Round(maxVal, 1));
             }
             catch { }
 
-            return 0.0;
-        }
-
-        private static string FetchGpuName()
-        {
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        string name = obj["Name"]?.ToString() ?? "";
-                        if (!string.IsNullOrWhiteSpace(name)) return name;
-                    }
-                }
-            }
-            catch { }
-
-            return "顯示晶片 (GPU)";
+            return (Math.Min(100.0, Math.Round(iGpuMax, 1)), Math.Min(100.0, Math.Round(dGpuMax, 1)));
         }
 
         private static double GetWmiDischargeRateMw()
