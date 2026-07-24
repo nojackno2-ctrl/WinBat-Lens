@@ -137,25 +137,59 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Capacity Degradation History Card -->
+                    <!-- Capacity Degradation History Card (Redesigned Full-Width Proportional Table - NO SCROLLBARS) -->
                     <Border Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}" 
-                            BorderThickness="1" CornerRadius="12" Padding="16,14" Margin="0,0,0,10">
+                            BorderThickness="1" CornerRadius="12" Padding="14,12" Margin="0,0,0,10">
                         <StackPanel>
                             <Grid Margin="0,0,0,10">
                                 <TextBlock x:Name="TxtCapacityHistoryTitle" Text="📈 容量歷史紀錄" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>
                                 <TextBlock x:Name="TxtReportTime" Text="尚未載入" FontSize="10" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </Grid>
 
-                            <ListView x:Name="LvCapacityHistory" Height="180" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
-                                <ListView.View>
-                                    <GridView>
-                                        <GridViewColumn x:Name="GvcColPeriod" Header="期間" Width="90" DisplayMemberBinding="{Binding Period}"/>
-                                        <GridViewColumn x:Name="GvcColFullCap" Header="滿電容量" Width="80" DisplayMemberBinding="{Binding FullChargeCapacity}"/>
-                                        <GridViewColumn x:Name="GvcColDesignCap" Header="設計容量" Width="80" DisplayMemberBinding="{Binding DesignCapacity}"/>
-                                        <GridViewColumn x:Name="GvcColHealthPct" Header="健康%" Width="55" DisplayMemberBinding="{Binding HealthPercent}"/>
-                                    </GridView>
-                                </ListView.View>
-                            </ListView>
+                            <!-- Table Header -->
+                            <Border Background="#101B2E" CornerRadius="6" Padding="8,6" Margin="0,0,0,6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="68"/>
+                                        <ColumnDefinition Width="68"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="TxtColPeriod" Text="期間" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMuted}" Grid.Column="0"/>
+                                    <TextBlock x:Name="TxtColFullCap" Text="滿電" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMuted}" Grid.Column="1" HorizontalAlignment="Right"/>
+                                    <TextBlock x:Name="TxtColDesignCap" Text="設計" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMuted}" Grid.Column="2" HorizontalAlignment="Right"/>
+                                    <TextBlock x:Name="TxtColHealthPct" Text="健康%" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMuted}" Grid.Column="3" HorizontalAlignment="Right"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Table Data Rows -->
+                            <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl x:Name="LvCapacityHistory">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#0C1322" BorderBrush="#182338" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,0,4">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="90"/>
+                                                        <ColumnDefinition Width="68"/>
+                                                        <ColumnDefinition Width="68"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Period}" FontSize="11" Foreground="{StaticResource TextMain}" VerticalAlignment="Center" Grid.Column="0"/>
+                                                    <TextBlock Text="{Binding FullChargeCapacity}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentCyan}" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="1"/>
+                                                    <TextBlock Text="{Binding DesignCapacity}" FontSize="11" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="2"/>
+                                                    <Border Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="8" Padding="5,2" Background="#2010B981" BorderBrush="{StaticResource AccentEmerald}" BorderThickness="1">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding HealthPercent}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}"/>
+                                                            <TextBlock Text="%" FontSize="9" Foreground="{StaticResource AccentEmerald}"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
                         </StackPanel>
                     </Border>
 
@@ -254,7 +288,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Hardware Resource Load Breakdown Card (Restructured Card Rows to prevent Text Overlaps) -->
+                                <!-- Hardware Resource Load Breakdown Card (Restructured Card Rows) -->
                                 <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,14">
                                     <StackPanel>
                                         <TextBlock x:Name="TxtHardwareTitle" Text="💻 全系統各硬體元件功耗明細 (Full System Hardware Power Breakdown)" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,14"/>
@@ -393,7 +427,7 @@
                                                     <TextBlock x:Name="LblHwMotherboard" Text="🔌 主機板與 USB 外設" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
                                                     <TextBlock x:Name="TxtMotherboardPowerW" Text="~2.5 W" Foreground="{StaticResource TextDim}" FontSize="11" Margin="0,2,0,0"/>
                                                 </StackPanel>
-                                                <TextBlock Text="基板晶片組、音訊與週邊匯流排基礎功耗" Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Center" Margin="10,0"/>
+                                                <TextBlock Text="基板晶片組與週邊匯流排基礎功耗" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="晶片組運作中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>

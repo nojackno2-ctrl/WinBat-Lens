@@ -105,10 +105,10 @@ namespace WinBatLens
             LblSpecCycles.Text = LocalizationService.Get("SpecCycles");
 
             TxtCapacityHistoryTitle.Text = LocalizationService.Get("CapacityHistoryTitle");
-            GvcColPeriod.Header = LocalizationService.Get("ColPeriod");
-            GvcColFullCap.Header = LocalizationService.Get("ColFullCap");
-            GvcColDesignCap.Header = LocalizationService.Get("ColDesignCap");
-            GvcColHealthPct.Header = LocalizationService.Get("ColHealthPct");
+            TxtColPeriod.Text = LocalizationService.Get("ColPeriod");
+            TxtColFullCap.Text = LocalizationService.Get("ColFullCap");
+            TxtColDesignCap.Text = LocalizationService.Get("ColDesignCap");
+            TxtColHealthPct.Text = LocalizationService.Get("ColHealthPct");
 
             // Tabs
             TabRealTime.Header = LocalizationService.Get("TabRealTime");
