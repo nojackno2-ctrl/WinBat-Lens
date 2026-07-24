@@ -48,23 +48,16 @@ namespace WinBatLens.Services
                     textColor = Color.FromArgb(255, 239, 68, 68); // #EF4444 Crimson Red
                 }
 
-                // Generate 32x32 dynamic bitmap icon with large crisp numbers
+                // Generate 32x32 transparent bitmap with standalone pure colored numbers
                 using (var bitmap = new Bitmap(32, 32))
                 using (var g = Graphics.FromImage(bitmap))
                 {
                     g.SmoothingMode = SmoothingMode.AntiAlias;
                     g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                    g.Clear(Color.Transparent);
 
-                    // Draw dark badge background for contrast
-                    using (var bgBrush = new SolidBrush(Color.FromArgb(235, 9, 13, 22)))
-                    using (var borderPen = new Pen(textColor, 1.5f))
-                    {
-                        g.FillRectangle(bgBrush, 0, 0, 32, 32);
-                        g.DrawRectangle(borderPen, 1, 1, 30, 30);
-                    }
-
-                    // Choose large bold font for digits
-                    float fontSize = textToDraw.Length >= 3 ? 10.0f : (textToDraw.Length == 2 ? 13.0f : 15.0f);
+                    // Extra large bold font for standalone numbers
+                    float fontSize = textToDraw.Length >= 3 ? 11.0f : (textToDraw.Length == 2 ? 15.5f : 18.5f);
                     using (var font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Point))
                     using (var textBrush = new SolidBrush(textColor))
                     using (var sf = new StringFormat

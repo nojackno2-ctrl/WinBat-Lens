@@ -1,16 +1,15 @@
 # Project State & Handoff
 
 ## Current Objective
-Update `Services/DynamicTrayIconService.cs` to display **ONLY pure numbers** (e.g., `38` or `18` or `0`) without letters ("W", "AC", etc.), preventing text wrap and maximizing readability in the system tray.
+Remove the square border box and dark background fill from `Services/DynamicTrayIconService.cs` so that ONLY standalone pure colored numbers (Green/Red) float directly on the Windows taskbar icon.
 
 ## Project Status
-- User submitted screenshot showing "A" and "C" wrapping vertically in the tray icon, requesting: "顯示數字就好" (Only display the numbers!).
+- User submitted screenshot pointing to the red square border box around the number 1, requesting: "不要有那個框框，單純的數字就好" (Remove the border box, standalone numbers only!).
 
 ## Next Steps
 1. Update `Services/DynamicTrayIconService.cs`:
-   - Change `textToDraw` to contain ONLY numeric digits (e.g. `38`, `18`, `0`).
-   - Remove "W" and "AC" strings.
-   - Set `StringFormatFlags.NoWrap`.
-   - Keep Green (`#10B981`) for charging/full and Red (`#EF4444`) for discharging.
+   - Remove `g.DrawRectangle` and `g.FillRectangle`.
+   - Use `g.Clear(Color.Transparent)` to make background 100% transparent.
+   - Maximize font size to `15-18pt Bold` for pure standalone numbers.
 2. Verify build with `dotnet build WinBatLens.csproj`.
 3. Commit updates to Git.
