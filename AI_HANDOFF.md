@@ -1,14 +1,14 @@
 # Project State & Handoff
 
 ## Current Objective
-Fix Motherboard description text overlap in `MainWindow.xaml` by assigning explicit `Grid.Column="1"` to the Motherboard description `TextBlock`.
+Build a formal production release package (`WinBatLens.exe`) using `dotnet publish -c Release` and commit/push all updates to Git & GitHub.
 
 ## Project Status
-- User submitted screenshot showing `基板晶片組與週邊匯流排基礎功耗` overlapping `🔌 主機板與 USB 外設` in Column 0.
-- **Diagnosis**: The TextBlock omitted `Grid.Column="1"`, defaulting to `Grid.Column="0"`.
+- User requested: "更新到GitHUB並發布一樣正式版的執行檔" (Push to GitHub and release a formal production build executable).
 
 ## Next Steps
-1. Update `MainWindow.xaml`:
-   - Add `Grid.Column="1"` to Motherboard description `TextBlock`.
-2. Verify build with `dotnet build WinBatLens.csproj`.
-3. Commit updates to Git.
+1. Execute production build via `dotnet publish`:
+   - Command: `dotnet publish WinBatLens.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./publish/`
+2. Inspect `./publish/` output directory and verify `WinBatLens.exe` binary.
+3. Commit any uncommitted changes to Git (`git commit`).
+4. Update `AI_HANDOFF.md` and `walkthrough.md` with release links and instructions.
