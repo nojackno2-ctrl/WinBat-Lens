@@ -105,10 +105,10 @@ namespace WinBatLens
             LblSpecCycles.Text = LocalizationService.Get("SpecCycles");
 
             TxtCapacityHistoryTitle.Text = LocalizationService.Get("CapacityHistoryTitle");
-            GvcColPeriod.Header = LocalizationService.Get("ColPeriod");
-            GvcColFullCap.Header = LocalizationService.Get("ColFullCap");
-            GvcColDesignCap.Header = LocalizationService.Get("ColDesignCap");
-            GvcColHealthPct.Header = LocalizationService.Get("ColHealthPct");
+            TxtColPeriod.Text = LocalizationService.Get("ColPeriod");
+            TxtColFullCap.Text = LocalizationService.Get("ColFullCap");
+            TxtColDesignCap.Text = LocalizationService.Get("ColDesignCap");
+            TxtColHealthPct.Text = LocalizationService.Get("ColHealthPct");
 
             // Tabs
             TabRealTime.Header = LocalizationService.Get("TabRealTime");
@@ -303,10 +303,24 @@ namespace WinBatLens
 
                 if (_notifyIcon.Icon == null)
                 {
-                    string pngPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.png");
-                    string icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.ico");
-                    IconHelper.EnsureIcoFile(pngPath, icoPath);
-                    _notifyIcon.Icon = IconHelper.GetAppIcon(System.IO.File.Exists(icoPath) ? icoPath : pngPath);
+                    try
+                    {
+                        var pngStreamInfo = Application.GetResourceStream(new Uri("pack://application:,,,/app_icon.png"));
+                        if (pngStreamInfo != null && pngStreamInfo.Stream != null)
+                        {
+                            using (var bitmap = new System.Drawing.Bitmap(pngStreamInfo.Stream))
+                            {
+                                IntPtr hIcon = bitmap.GetHicon();
+                                _notifyIcon.Icon = System.Drawing.Icon.FromHandle(hIcon);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                if (_notifyIcon.Icon == null)
+                {
+                    _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
                 }
 
                 _notifyIcon.Text = "WinBat Lens - 電池健康度與即時耗電監測";
@@ -443,6 +457,12 @@ namespace WinBatLens
                 // Update 60-Second Waveform Chart
                 UpdateWaveformChart(state);
 
+                // Update Dynamic Real-Time Wattage System Tray Icon (Green for Charging > Power, Red for Discharging)
+                if (_notifyIcon != null)
+                {
+                    DynamicTrayIconService.UpdateTrayIcon(_notifyIcon, state);
+                }
+
                 // Charge / Discharge Wattage & Status Display
                 if (state.IsAcOnline)
                 {
@@ -485,7 +505,7 @@ namespace WinBatLens
                     ? $"Current Battery Level: {state.BatteryPercent}%"
                     : $"目前電池剩餘電量: {state.BatteryPercent}%";
 
-                // Update System Tray Tooltip
+                // Update System Tray Tooltip Text
                 if (_notifyIcon != null)
                 {
                     string powerStatusStr = state.IsAcOnline ? $"AC Input: {state.AcTotalInputW:F1}W" : $"-{state.DischargeRateW:F1}W Discharging";

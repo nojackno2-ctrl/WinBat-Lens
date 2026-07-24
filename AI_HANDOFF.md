@@ -1,23 +1,15 @@
 # Project State & Handoff
 
 ## Current Objective
-WinBat Lens (C# .NET 8 WPF Desktop Application) UI Layout Fix & Hardware Breakdown Card Restructuring is fully completed and verified.
+Re-create fresh Git tag `v1.0.0` and publish GitHub Release `v1.0.0` with `publish/WinBatLens.exe` (74.3 MB 100% self-contained single-file executable) explicitly attached under Assets.
 
 ## Project Status
-- **UI Layout Fix Completed**:
-  - `MainWindow.xaml`: Restructured all 8 hardware power breakdown rows into clean dark cards (`Border Background="#0C1322" BorderBrush="#1A2438"`).
-  - Widened left title column to `260px` with `TextTrimming="CharacterEllipsis"` and vertical alignment to eliminate all text overlaps (e.g. `螢幕面板與背光` vs `~6.5W` & `主機板與 USB 外設` vs `~2.5W`).
-  - Restored `<ScrollViewer>` to left sidebar for smooth scrolling across all screen resolutions.
+- User deleted all tags and releases on GitHub, requesting: "我把releases跟tag全部刪掉了，你重新上傳一次，我要完整打包進執行檔的" (Deleted all releases and tags, re-upload from scratch!).
 
-## Verification & Testing
-- Built with `dotnet build WinBatLens.csproj` -> **0 Warnings, 0 Errors** (Build Succeeded).
-- Git repository committed cleanly (`git commit`).
-
-## Actionable Next Steps for User
-1. Open [WinBatLens.sln](file:///c:/離線儲存/程式設計/WinBat%20Lens/WinBatLens.sln) with **Visual Studio 2022** and press `F5` to test viewing the untangled hardware breakdown cards!
-2. To push to GitHub:
-   ```bash
-   git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/WinBat-Lens.git
-   git push -u origin main
-   ```
+## Next Steps
+1. Re-build `./publish/WinBatLens.exe` via `dotnet publish WinBatLens.csproj -c Release -o ./publish/`.
+2. Delete local tag `v1.0.0` and create fresh tag `v1.0.0`.
+3. Push commits and tag to GitHub (`git push origin main`, `git push origin v1.0.0 --force`).
+4. Publish GitHub Release via `gh release create v1.0.0 ./publish/WinBatLens.exe --title "⚡ WinBat Lens v1.0.0 - Official Release" --notes-file release_notes.md`.
+5. Verify `gh release view v1.0.0` shows `WinBatLens.exe` under Assets.
+6. Update `AI_HANDOFF.md` and `walkthrough.md`.
