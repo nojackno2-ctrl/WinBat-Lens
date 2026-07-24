@@ -239,6 +239,24 @@ namespace WinBatLens.Services
 
         private static HealthMetrics CalculateHealthMetrics(BatterySpecs specs)
         {
+            // No design capacity means the battery-report contains no battery at
+            // all (e.g. a desktop PC, or the battery was removed). Report a neutral
+            // "no battery" state instead of a misleading 0% "critically degraded"
+            // score, which is what the old (current/1.0)*100 formula produced.
+            if (specs.DesignCapacity <= 0)
+            {
+                return new HealthMetrics
+                {
+                    HasBattery = false,
+                    HealthPercent = 0,
+                    WearPercent = 0,
+                    CapacityLoss = 0,
+                    StatusLabel = "無電池裝置",
+                    StatusClass = "None",
+                    SummaryText = "未偵測到電池，本機可能為桌上型電腦或電池已卸除。電池健康度數據不適用，但全系統即時硬體功耗監測仍可正常使用。"
+                };
+            }
+
             double design = specs.DesignCapacity > 0 ? specs.DesignCapacity : 1.0;
             double current = specs.FullChargeCapacity;
 
@@ -278,6 +296,19 @@ namespace WinBatLens.Services
             var tips = new List<DiagnosticItem>();
             var metrics = report.HealthMetrics;
             var specs = report.BatterySpecs;
+
+            // Desktop / no-battery machine: skip all degradation warnings that
+            // would otherwise be driven by a bogus 0% health score.
+            if (!metrics.HasBattery)
+            {
+                tips.Add(new DiagnosticItem
+                {
+                    Type = "info",
+                    Title = "未偵測到電池裝置",
+                    Description = "本機可能為桌上型電腦，或電池已被卸除，因此電池健康度、容量與循環次數等數據不適用。全系統即時硬體功耗監測功能仍可正常運作。"
+                });
+                return tips;
+            }
 
             if (metrics.HealthPercent < 70.0)
             {

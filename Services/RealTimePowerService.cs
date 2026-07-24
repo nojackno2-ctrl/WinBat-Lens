@@ -25,12 +25,53 @@ namespace WinBatLens.Services
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MEMORYSTATUSEX
+        {
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
+
         private static PerformanceCounter? _cpuCounter;
         private static PerformanceCounter? _diskTimeCounter;
         private static PerformanceCounter? _diskBytesCounter;
         private static List<GpuInfo> _cachedGpus = new List<GpuInfo>();
         private static long _lastNetBytes = 0;
         private static DateTime _lastNetTime = DateTime.MinValue;
+
+        // WMI (System.Management) queries are memory-heavy and allocate COM
+        // objects on every call. The UI ticks once per second, but brightness
+        // and battery charge/discharge rates change slowly, so these values are
+        // cached and only refreshed from WMI every few seconds.
+        private const double WmiRefreshSeconds = 4.0;
+        private static int _cachedBrightness = 75;
+        private static DateTime _lastBrightnessTime = DateTime.MinValue;
+        private static double _cachedChargeMw = 0;
+        private static DateTime _lastChargeTime = DateTime.MinValue;
+        private static double _cachedDischargeMw = 0;
+        private static DateTime _lastDischargeTime = DateTime.MinValue;
+
+        // Persistent GPU Engine counters, keyed by instance name. GPU utilization
+        // counters need two samples taken over an interval to produce a non-zero
+        // value, so the same counter object must survive across update ticks
+        // (the UI polls once per second). Recreating a counter every tick and
+        // reading it once always yields 0 — the original bug behind dGPU 0W.
+        private static readonly Dictionary<string, PerformanceCounter> _gpuEngineCounters
+            = new Dictionary<string, PerformanceCounter>(StringComparer.OrdinalIgnoreCase);
+        // Maps a GPU Engine LUID token (e.g. "luid_0x00000000_0x00010666") to
+        // whether that adapter is the discrete GPU. Built once from DXGI.
+        private static Dictionary<string, bool>? _luidIsDiscrete;
 
         static RealTimePowerService()
         {
@@ -313,6 +354,15 @@ namespace WinBatLens.Services
 
         private static double GetWmiChargeRateMw()
         {
+            if ((DateTime.Now - _lastChargeTime).TotalSeconds < WmiRefreshSeconds)
+                return _cachedChargeMw;
+            _lastChargeTime = DateTime.Now;
+            _cachedChargeMw = QueryWmiChargeRateMw();
+            return _cachedChargeMw;
+        }
+
+        private static double QueryWmiChargeRateMw()
+        {
             try
             {
                 using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT ChargeRate FROM Win32_Battery"))
@@ -333,6 +383,15 @@ namespace WinBatLens.Services
         }
 
         private static int GetScreenBrightnessPercent()
+        {
+            if ((DateTime.Now - _lastBrightnessTime).TotalSeconds < WmiRefreshSeconds)
+                return _cachedBrightness;
+            _lastBrightnessTime = DateTime.Now;
+            _cachedBrightness = QueryScreenBrightnessPercent();
+            return _cachedBrightness;
+        }
+
+        private static int QueryScreenBrightnessPercent()
         {
             try
             {
@@ -389,42 +448,165 @@ namespace WinBatLens.Services
             return 120.0;
         }
 
+        // Maps each GPU's LUID token to its per-engine-type utilization sums for
+        // the current tick. Task Manager reports a GPU's headline utilization as
+        // the busiest single engine, so we sum instances within an engine type
+        // and then take the max engine type per adapter.
         private static (double Igpu, double Dgpu) GetDualGpuUsage()
         {
-            double iGpuMax = 0.0;
-            double dGpuMax = 0.0;
+            EnsureLuidMap();
+
+            // luid -> (engtype -> summed utilization)
+            var perAdapter = new Dictionary<string, Dictionary<string, double>>(StringComparer.OrdinalIgnoreCase);
 
             try
             {
                 var category = new PerformanceCounterCategory("GPU Engine");
-                var instanceNames = category.GetInstanceNames();
+                var currentInstances = new HashSet<string>(category.GetInstanceNames(), StringComparer.OrdinalIgnoreCase);
 
-                foreach (var inst in instanceNames)
+                // Drop counters for instances that no longer exist (e.g. a process
+                // that closed) so the dictionary does not grow without bound.
+                var stale = new List<string>();
+                foreach (var key in _gpuEngineCounters.Keys)
                 {
-                    string lower = inst.ToLower();
-                    if (lower.Contains("engtype_3d"))
+                    if (!currentInstances.Contains(key)) stale.Add(key);
+                }
+                foreach (var key in stale)
+                {
+                    try { _gpuEngineCounters[key].Dispose(); } catch { }
+                    _gpuEngineCounters.Remove(key);
+                }
+
+                foreach (var inst in currentInstances)
+                {
+                    string lower = inst.ToLowerInvariant();
+                    string luid = ExtractToken(lower, "luid_", "_phys_");
+                    string engType = ExtractToken(lower, "engtype_", null);
+                    if (luid.Length == 0 || engType.Length == 0) continue;
+                    luid = "luid_" + luid;
+
+                    double val;
+                    try
                     {
-                        using (var pc = new PerformanceCounter("GPU Engine", "Utilization Percentage", inst))
+                        if (!_gpuEngineCounters.TryGetValue(inst, out var counter))
                         {
-                            double val = pc.NextValue();
-                            if (lower.Contains("phys_1"))
-                            {
-                                if (val > dGpuMax) dGpuMax = val;
-                            }
-                            else
-                            {
-                                if (val > iGpuMax) iGpuMax = val;
-                            }
+                            // New instance: create and prime it. The first read has
+                            // no baseline and returns 0; it becomes accurate next tick.
+                            counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", inst, true);
+                            _gpuEngineCounters[inst] = counter;
+                            counter.NextValue();
+                            val = 0.0;
+                        }
+                        else
+                        {
+                            val = counter.NextValue();
                         }
                     }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    if (val <= 0) continue;
+
+                    if (!perAdapter.TryGetValue(luid, out var engMap))
+                    {
+                        engMap = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+                        perAdapter[luid] = engMap;
+                    }
+                    engMap.TryGetValue(engType, out double running);
+                    engMap[engType] = running + val;
                 }
             }
             catch { }
 
-            return (Math.Min(100.0, Math.Round(iGpuMax, 1)), Math.Min(100.0, Math.Round(dGpuMax, 1)));
+            double iGpuMax = 0.0;
+            double dGpuMax = 0.0;
+
+            foreach (var kv in perAdapter)
+            {
+                // Busiest single engine on this adapter.
+                double adapterUtil = 0.0;
+                foreach (var eng in kv.Value.Values)
+                {
+                    if (eng > adapterUtil) adapterUtil = eng;
+                }
+                adapterUtil = Math.Min(100.0, adapterUtil);
+
+                bool isDiscrete = _luidIsDiscrete != null &&
+                                  _luidIsDiscrete.TryGetValue(kv.Key, out bool disc) && disc;
+
+                if (isDiscrete)
+                {
+                    if (adapterUtil > dGpuMax) dGpuMax = adapterUtil;
+                }
+                else
+                {
+                    // Unknown LUIDs (not in the DXGI map, e.g. software adapters)
+                    // fall through here and count toward the integrated bucket.
+                    if (adapterUtil > iGpuMax) iGpuMax = adapterUtil;
+                }
+            }
+
+            return (Math.Round(iGpuMax, 1), Math.Round(dGpuMax, 1));
+        }
+
+        private static void EnsureLuidMap()
+        {
+            if (_luidIsDiscrete != null) return;
+
+            var map = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var adapters = DxgiAdapterService.GetAdapters();
+
+                // DXGI returned nothing — enumeration failed this tick (rare, but
+                // possible under session-0 / remote contexts). Do NOT cache the
+                // empty result: caching it here would permanently strand the
+                // discrete GPU at 0% and lump all GPU load into the iGPU bucket
+                // for the rest of the session. Leave the map null so the next
+                // 1-second tick retries.
+                if (adapters.Count == 0) return;
+
+                foreach (var adapter in adapters)
+                {
+                    if (adapter.IsSoftware) continue;
+                    if (string.IsNullOrEmpty(adapter.LuidKey)) continue;
+                    map[adapter.LuidKey] = adapter.IsDiscrete;
+                }
+            }
+            catch
+            {
+                // Unexpected failure — retry next tick rather than caching a blank map.
+                return;
+            }
+
+            _luidIsDiscrete = map;
+        }
+
+        // Extracts the text between <start> and <end> markers. If <end> is null,
+        // reads to the end of the string. Returns "" if not found.
+        private static string ExtractToken(string source, string start, string? end)
+        {
+            int s = source.IndexOf(start, StringComparison.Ordinal);
+            if (s < 0) return string.Empty;
+            s += start.Length;
+            if (end == null) return source.Substring(s);
+            int e = source.IndexOf(end, s, StringComparison.Ordinal);
+            if (e < 0) return string.Empty;
+            return source.Substring(s, e - s);
         }
 
         private static double GetWmiDischargeRateMw()
+        {
+            if ((DateTime.Now - _lastDischargeTime).TotalSeconds < WmiRefreshSeconds)
+                return _cachedDischargeMw;
+            _lastDischargeTime = DateTime.Now;
+            _cachedDischargeMw = QueryWmiDischargeRateMw();
+            return _cachedDischargeMw;
+        }
+
+        private static double QueryWmiDischargeRateMw()
         {
             try
             {
@@ -447,23 +629,17 @@ namespace WinBatLens.Services
 
         private static (double UsedGb, double TotalGb) GetSystemRamInfo()
         {
-            try
+            // Native GlobalMemoryStatusEx avoids the heavy per-tick WMI/COM
+            // allocations of a Win32_OperatingSystem query. The UI polls this
+            // once per second, so keeping it allocation-free matters.
+            var mem = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
+            if (GlobalMemoryStatusEx(ref mem) && mem.ullTotalPhys > 0)
             {
-                using (var searcher = new ManagementObjectSearcher("SELECT FreePhysicalMemory, TotalVisibleMemorySize FROM Win32_OperatingSystem"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        double totalKb = Convert.ToDouble(obj["TotalVisibleMemorySize"]);
-                        double freeKb = Convert.ToDouble(obj["FreePhysicalMemory"]);
-                        double usedKb = totalKb - freeKb;
-
-                        double totalGb = Math.Round(totalKb / (1024 * 1024), 1);
-                        double usedGb = Math.Round(usedKb / (1024 * 1024), 1);
-                        return (usedGb, totalGb);
-                    }
-                }
+                const double gib = 1024.0 * 1024.0 * 1024.0;
+                double totalGb = Math.Round(mem.ullTotalPhys / gib, 1);
+                double usedGb = Math.Round((mem.ullTotalPhys - mem.ullAvailPhys) / gib, 1);
+                return (usedGb, totalGb);
             }
-            catch { }
 
             return (8.0, 16.0);
         }
