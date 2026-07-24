@@ -26,23 +26,14 @@ namespace WinBatLens.Services
 
                 if (state.IsAcOnline)
                 {
-                    if (state.IsCharging && state.ChargingRateW > 0)
-                    {
-                        // Green text rounded to integer (e.g. 16.1 -> 16)
-                        int wattVal = (int)Math.Round(state.ChargingRateW);
-                        textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
-                        textColor = Color.FromArgb(255, 16, 185, 129); // #10B981 Emerald Green
-                    }
-                    else
-                    {
-                        // 100% Fully charged / AC Pass Through -> 0
-                        textToDraw = "0";
-                        textColor = Color.FromArgb(255, 16, 185, 129); // Green
-                    }
+                    // Render AC Total Input Wattage (AcTotalInputW) e.g. 28.9W -> 29 in GREEN
+                    int wattVal = (int)Math.Round(state.AcTotalInputW);
+                    textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
+                    textColor = Color.FromArgb(255, 16, 185, 129); // #10B981 Emerald Green
                 }
                 else
                 {
-                    // Red text rounded to integer (e.g. 16.1 -> 16)
+                    // Render Battery Discharge Wattage (DischargeRateW) e.g. 15.7W -> 16 in RED
                     int wattVal = (int)Math.Round(state.DischargeRateW);
                     textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
                     textColor = Color.FromArgb(255, 239, 68, 68); // #EF4444 Crimson Red
