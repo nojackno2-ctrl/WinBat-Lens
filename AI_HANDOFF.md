@@ -1,21 +1,19 @@
 # Project State & Handoff
 
 ## Current Objective
-Fix `Desktop\WinBatLens.exe` crash by embedding `app_icon.png` and `app_icon.ico` as assembly `<Resource>` items loaded via `pack://application:,,,/` URIs instead of looking for loose files in `BaseDirectory`.
+WinBat Lens (C# .NET 8 WPF Desktop Application) Standalone Desktop Launch Fix (v1.0.1) & GitHub Release v1.0.1 Publication is 100% fully completed and verified.
 
 ## Project Status
-- User reported: `"C:\Users\nojac\Desktop\WinBatLens.exe"這是我從github上下載來的，無法啟動` (Downloaded to Desktop, fails to launch!).
-- **Diagnosis**: WPF XAML and `InitializeTrayIcon()` attempted to load `app_icon.png` and `app_icon.ico` from disk (`AppDomain.CurrentDomain.BaseDirectory`), which failed when `WinBatLens.exe` was moved to Desktop alone.
+- **Root Cause & Fix**:
+  - `WinBatLens.exe` attempted to load `app_icon.png` and `app_icon.ico` from disk (`AppDomain.CurrentDomain.BaseDirectory`), which failed when moved to Desktop alone.
+  - Updated `WinBatLens.csproj`, `MainWindow.xaml`, and `MainWindow.xaml.cs` to embed icons as assembly `<Resource>` items loaded via `pack://application:,,,/` URIs.
+- **Verification**:
+  - Tested launching `$desk\WinBatLens.exe` on Desktop -> Started cleanly!
+- **GitHub Release v1.0.1 Published**:
+  - URL: `https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v1.0.1`
+  - Attached Asset: `WinBatLens.exe` (~67.3 MB standalone portable executable).
 
-## Next Steps
-1. Update `WinBatLens.csproj`:
-   - Embed `app_icon.ico` and `app_icon.png` as `<Resource>` items.
-   - Remove `<None Update="...">` items.
-2. Update `MainWindow.xaml`:
-   - Change `Icon="app_icon.png"` to `Icon="pack://application:,,,/app_icon.png"`.
-   - Change `<Image Source="app_icon.png"/>` to `<Image Source="pack://application:,,,/app_icon.png"/>`.
-3. Update `MainWindow.xaml.cs`:
-   - Load tray icon directly from embedded assembly streams via `Application.GetResourceStream()`.
-4. Rebuild self-contained release executable (`dotnet publish`).
-5. Test launching `"C:\Users\nojac\Desktop\WinBatLens.exe"`.
-6. Commit, tag v1.0.1, push to GitHub, and update GitHub Releases.
+## Actionable Next Steps for User
+1. Download `v1.0.1` directly from GitHub Releases:
+   [https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v1.0.1](https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v1.0.1)
+2. Double-click `WinBatLens.exe` on your Desktop to launch!
