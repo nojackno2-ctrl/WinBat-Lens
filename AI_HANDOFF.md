@@ -1,15 +1,16 @@
 # Project State & Handoff
 
 ## Current Objective
-Remove the square border box and dark background fill from `Services/DynamicTrayIconService.cs` so that ONLY standalone pure colored numbers (Green/Red) float directly on the Windows taskbar icon.
+Update `Services/DynamicTrayIconService.cs` to auto-scale font size using `g.MeasureString()` so that full wattage precision (e.g., `15.7` or `38.5`) is rendered 100% completely without digit clipping or truncation.
 
 ## Project Status
-- User submitted screenshot pointing to the red square border box around the number 1, requesting: "不要有那個框框，單純的數字就好" (Remove the border box, standalone numbers only!).
+- User submitted screenshot showing `15.7W` in tooltip but icon showing only `1` due to font size overflow clipping the right digit.
+- Requested: "我要顯示完整個瓦數" (Display the FULL wattage value!).
 
 ## Next Steps
 1. Update `Services/DynamicTrayIconService.cs`:
-   - Remove `g.DrawRectangle` and `g.FillRectangle`.
-   - Use `g.Clear(Color.Transparent)` to make background 100% transparent.
-   - Maximize font size to `15-18pt Bold` for pure standalone numbers.
+   - Set `textToDraw = wattage.ToString("F1")` (e.g. `15.7`).
+   - Implement dynamic font auto-scaling with `g.MeasureString()` loop so text width is bounded (`Width <= 31px`).
+   - Center text in 32x32 transparent bitmap.
 2. Verify build with `dotnet build WinBatLens.csproj`.
 3. Commit updates to Git.
