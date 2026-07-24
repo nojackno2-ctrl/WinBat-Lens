@@ -28,25 +28,27 @@ namespace WinBatLens.Services
                 {
                     if (state.IsCharging && state.ChargingRateW > 0)
                     {
-                        // Green text for full charging wattage with decimal (e.g. 38.5)
-                        textToDraw = state.ChargingRateW.ToString("F1");
+                        // Green text rounded to integer (e.g. 16.1 -> 16)
+                        int wattVal = (int)Math.Round(state.ChargingRateW);
+                        textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
                         textColor = Color.FromArgb(255, 16, 185, 129); // #10B981 Emerald Green
                     }
                     else
                     {
-                        // 100% Fully charged / AC Pass Through -> 0.0 W
-                        textToDraw = "0.0";
+                        // 100% Fully charged / AC Pass Through -> 0
+                        textToDraw = "0";
                         textColor = Color.FromArgb(255, 16, 185, 129); // Green
                     }
                 }
                 else
                 {
-                    // Red text for full discharging wattage with decimal (e.g. 15.7)
-                    textToDraw = state.DischargeRateW.ToString("F1");
+                    // Red text rounded to integer (e.g. 16.1 -> 16)
+                    int wattVal = (int)Math.Round(state.DischargeRateW);
+                    textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
                     textColor = Color.FromArgb(255, 239, 68, 68); // #EF4444 Crimson Red
                 }
 
-                // Generate 32x32 transparent bitmap with auto-scaled full precision text
+                // Generate 32x32 transparent bitmap with EXTRA LARGE rounded integer digits
                 using (var bitmap = new Bitmap(32, 32))
                 using (var g = Graphics.FromImage(bitmap))
                 {
@@ -54,14 +56,14 @@ namespace WinBatLens.Services
                     g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
                     g.Clear(Color.Transparent);
 
-                    // Dynamic font auto-scaling using MeasureString to ensure 100% fit without clipping
-                    float fontSize = 16.0f;
+                    // Start from extra large font size for 1-2 digits
+                    float fontSize = 20.0f;
                     Font font = new Font("Segoe UI", fontSize, FontStyle.Bold, GraphicsUnit.Point);
                     
-                    while (fontSize > 5.5f)
+                    while (fontSize > 6.0f)
                     {
                         SizeF measuredSize = g.MeasureString(textToDraw, font);
-                        if (measuredSize.Width <= 31.0f && measuredSize.Height <= 31.0f)
+                        if (measuredSize.Width <= 31.5f && measuredSize.Height <= 31.5f)
                         {
                             break;
                         }
