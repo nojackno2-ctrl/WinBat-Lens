@@ -13,9 +13,9 @@
     <Company>WinBat Lens</Company>
     <Product>WinBat Lens</Product>
     <Description>Windows 電池健康度視覺化儀表板與 powercfg /batteryreport 解析工具</Description>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,15 +25,6 @@
   <ItemGroup>
     <Resource Include="app_icon.ico" />
     <Resource Include="app_icon.png" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Update="app_icon.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="app_icon.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
   </ItemGroup>
 
 </Project>

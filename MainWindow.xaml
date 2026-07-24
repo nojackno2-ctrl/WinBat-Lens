@@ -6,7 +6,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgDark}"
         Foreground="{StaticResource TextMain}"
-        Icon="app_icon.png">
+        Icon="pack://application:,,,/app_icon.png">
 
     <Grid Margin="18">
         <Grid.RowDefinitions>
@@ -27,7 +27,7 @@
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Width="40" Height="40" CornerRadius="10" Background="Transparent" Margin="0,0,12,0">
-                        <Image Source="app_icon.png" Width="38" Height="38"/>
+                        <Image Source="pack://application:,,,/app_icon.png" Width="38" Height="38"/>
                     </Border>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock x:Name="TxtHeaderAppTitle" Text="WinBat Lens" FontSize="19" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>

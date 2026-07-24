@@ -303,10 +303,24 @@ namespace WinBatLens
 
                 if (_notifyIcon.Icon == null)
                 {
-                    string pngPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.png");
-                    string icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app_icon.ico");
-                    IconHelper.EnsureIcoFile(pngPath, icoPath);
-                    _notifyIcon.Icon = IconHelper.GetAppIcon(System.IO.File.Exists(icoPath) ? icoPath : pngPath);
+                    try
+                    {
+                        var pngStreamInfo = Application.GetResourceStream(new Uri("pack://application:,,,/app_icon.png"));
+                        if (pngStreamInfo != null && pngStreamInfo.Stream != null)
+                        {
+                            using (var bitmap = new System.Drawing.Bitmap(pngStreamInfo.Stream))
+                            {
+                                IntPtr hIcon = bitmap.GetHicon();
+                                _notifyIcon.Icon = System.Drawing.Icon.FromHandle(hIcon);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                if (_notifyIcon.Icon == null)
+                {
+                    _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
                 }
 
                 _notifyIcon.Text = "WinBat Lens - 電池健康度與即時耗電監測";
