@@ -415,7 +415,7 @@
                                             </Grid>
                                         </Border>
 
-                                        <!-- Motherboard Base Power Row -->
+                                        <!-- Motherboard Base Power Row (Fixed Grid.Column="1" for description text) -->
                                         <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,4">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -427,7 +427,7 @@
                                                     <TextBlock x:Name="LblHwMotherboard" Text="🔌 主機板與 USB 外設" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
                                                     <TextBlock x:Name="TxtMotherboardPowerW" Text="~2.5 W" Foreground="{StaticResource TextDim}" FontSize="11" Margin="0,2,0,0"/>
                                                 </StackPanel>
-                                                <TextBlock Text="基板晶片組與週邊匯流排基礎功耗" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Column="1" Text="基板晶片組與週邊匯流排基礎功耗" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center" Margin="10,0" TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="晶片組運作中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
