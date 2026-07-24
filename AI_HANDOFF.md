@@ -1,19 +1,19 @@
 # Project State & Handoff
 
 ## Current Objective
-Adjust left column width (`370px`) and column widths in the Capacity Degradation History table (`85px`, `60px`, `60px`, `*`) to eliminate text overlap between `75998` and the `73.4%` health badge.
+Implement dynamic real-time System Tray Icon wattage rendering in C# WPF:
+- Renders live net wattage (e.g. `+38W` or `-18W`) directly onto the 32x32 system tray icon.
+- Renders in **Green (`#10B981`)** when AC Charging > Consumption.
+- Renders in **Red (`#EF4444`)** when Discharging / Power draw > AC.
 
 ## Project Status
-- User submitted screenshot showing `75998` overlapping the green `73.4%` badge because vertical scrollbar squeezed the rightmost columns.
-- **Diagnosis**:
-  - Left column width `350px` was too narrow when scrollbar is visible.
-  - Column 2 (`68px`) right alignment placed `75998` directly against Column 3.
+- User requested: "我要新增一個功能在工具列可以做一個小圖示顯示當前耗電總瓦數，充電大於耗電顯示綠色數字跟瓦數，反之紅色字體"
 
 ## Next Steps
-1. Update `MainWindow.xaml`:
-   - Increase Left Column width to `370px` (`<ColumnDefinition Width="370"/>`).
-   - Update header and item template ColumnDefinitions to `Width="85"`, `Width="60"`, `Width="60"`, `Width="*"`.
-   - Add right margin `Margin="0,0,10,0"` to Column 2 text to prevent collision.
-   - Add dark theme ScrollViewer style for the history list.
-2. Verify build with `dotnet build WinBatLens.csproj`.
-3. Commit updates to Git.
+1. Create `Services/DynamicTrayIconService.cs`:
+   - Generates a 32x32 icon bitmap dynamically containing the wattage number.
+   - Handles text formatting (`+38W` or `-18W`), background badge, text alignment, and proper `DestroyIcon` GDI cleanup to prevent leaks.
+2. Integrate into `MainWindow.xaml.cs`:
+   - Call `DynamicTrayIconService.UpdateTrayIcon(_notifyIcon, state)` every 1s during `UpdateLivePowerUI()`.
+3. Verify build with `dotnet build WinBatLens.csproj`.
+4. Commit updates to Git.
