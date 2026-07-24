@@ -1,19 +1,16 @@
 # Project State & Handoff
 
 ## Current Objective
-Implement dynamic real-time System Tray Icon wattage rendering in C# WPF:
-- Renders live net wattage (e.g. `+38W` or `-18W`) directly onto the 32x32 system tray icon.
-- Renders in **Green (`#10B981`)** when AC Charging > Consumption.
-- Renders in **Red (`#EF4444`)** when Discharging / Power draw > AC.
+Update `Services/DynamicTrayIconService.cs` to display **ONLY pure numbers** (e.g., `38` or `18` or `0`) without letters ("W", "AC", etc.), preventing text wrap and maximizing readability in the system tray.
 
 ## Project Status
-- User requested: "我要新增一個功能在工具列可以做一個小圖示顯示當前耗電總瓦數，充電大於耗電顯示綠色數字跟瓦數，反之紅色字體"
+- User submitted screenshot showing "A" and "C" wrapping vertically in the tray icon, requesting: "顯示數字就好" (Only display the numbers!).
 
 ## Next Steps
-1. Create `Services/DynamicTrayIconService.cs`:
-   - Generates a 32x32 icon bitmap dynamically containing the wattage number.
-   - Handles text formatting (`+38W` or `-18W`), background badge, text alignment, and proper `DestroyIcon` GDI cleanup to prevent leaks.
-2. Integrate into `MainWindow.xaml.cs`:
-   - Call `DynamicTrayIconService.UpdateTrayIcon(_notifyIcon, state)` every 1s during `UpdateLivePowerUI()`.
-3. Verify build with `dotnet build WinBatLens.csproj`.
-4. Commit updates to Git.
+1. Update `Services/DynamicTrayIconService.cs`:
+   - Change `textToDraw` to contain ONLY numeric digits (e.g. `38`, `18`, `0`).
+   - Remove "W" and "AC" strings.
+   - Set `StringFormatFlags.NoWrap`.
+   - Keep Green (`#10B981`) for charging/full and Red (`#EF4444`) for discharging.
+2. Verify build with `dotnet build WinBatLens.csproj`.
+3. Commit updates to Git.
