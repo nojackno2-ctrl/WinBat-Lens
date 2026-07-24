@@ -1,15 +1,24 @@
 # Project State & Handoff
 
 ## Current Objective
-Re-create fresh Git tag `v1.0.0` and publish GitHub Release `v1.0.0` with `publish/WinBatLens.exe` (74.3 MB 100% self-contained single-file executable) explicitly attached under Assets.
+Full code & functionality review of WinBat Lens (C# .NET 8 WPF) plus two reliability fixes, all verified on a live AMD iGPU + NVIDIA RTX 3060 dGPU laptop.
 
 ## Project Status
-- User deleted all tags and releases on GitHub, requesting: "我把releases跟tag全部刪掉了，你重新上傳一次，我要完整打包進執行檔的" (Deleted all releases and tags, re-upload from scratch!).
+- **Build**: `dotnet build WinBatLens.csproj -c Debug` → 0 warnings, 0 errors. Launches clean (no `winbat_crash.log`).
+  - NOTE: because the csproj sets `<RuntimeIdentifier>win-x64</RuntimeIdentifier>`, build output lives in `bin/Debug/net8.0-windows/win-x64/`, not `bin/Debug/net8.0-windows/`.
+- **Verified working on this machine** (by replaying each underlying data source):
+  - Battery %/AC (`Win32_Battery` / `GetSystemPowerStatus`), brightness (`WmiMonitorBrightness`), RAM (`Win32_OperatingSystem`), CPU/disk PerformanceCounters, GPU list (`Win32_VideoController`).
+  - dGPU real-time load: GPU Engine counter LUIDs map exactly to DXGI adapter LUIDs; NVIDIA RTX 3060 correctly flagged discrete.
+  - `powercfg /batteryreport` generation + regex parsing (health 74%, absent cycle-count handled). Report labels are English even on zh-TW Windows, so the parser is locale-safe.
+- **Known caveat**: `Win32_Battery.ChargeRate`/`DischargeRate` return blank on this laptop, so on-screen charge/discharge wattage is an estimate from built-in formulas, not a measurement (common — many laptops' EC does not expose these).
 
-## Next Steps
-1. Re-build `./publish/WinBatLens.exe` via `dotnet publish WinBatLens.csproj -c Release -o ./publish/`.
-2. Delete local tag `v1.0.0` and create fresh tag `v1.0.0`.
-3. Push commits and tag to GitHub (`git push origin main`, `git push origin v1.0.0 --force`).
-4. Publish GitHub Release via `gh release create v1.0.0 ./publish/WinBatLens.exe --title "⚡ WinBat Lens v1.0.0 - Official Release" --notes-file release_notes.md`.
-5. Verify `gh release view v1.0.0` shows `WinBatLens.exe` under Assets.
-6. Update `AI_HANDOFF.md` and `walkthrough.md`.
+## Fixes applied this session (not yet committed at time of writing)
+1. **No-battery / desktop machines no longer show a misleading "0% critically degraded" health score.**
+   - `HealthMetrics.HasBattery` flag added; `CalculateHealthMetrics` returns a neutral "無電池裝置" state when `DesignCapacity <= 0`; `GenerateDiagnostics` emits a single informational tip instead of degradation warnings; UI shows `—` for health/capacity and hides the `%` sign.
+   - Verified with the real parser: desktop report → `HasBattery=false`; laptop report → 74.2% "需要注意" (no regression).
+2. **DXGI LUID map no longer caches an empty result on enumeration failure.**
+   - `EnsureLuidMap()` returns without caching when `DxgiAdapterService.GetAdapters()` yields 0 adapters, so a transient DXGI failure can no longer strand the dGPU at 0% for the whole session.
+
+## Open items / suggestions (not yet done)
+- `publish/WinBatLens.exe` + `.pdb` (~71 MB) are committed in git → `.git` is ~334 MB. Consider `git rm -r --cached publish` + add `publish/` to `.gitignore`.
+- Distribution: the self-contained exe is unsigned, so SmartScreen / AV will warn on other machines.

@@ -26,6 +26,7 @@ namespace WinBatLens.Models
 
     public class HealthMetrics
     {
+        public bool HasBattery { get; set; } = true;
         public double HealthPercent { get; set; }
         public double WearPercent { get; set; }
         public int CapacityLoss { get; set; }

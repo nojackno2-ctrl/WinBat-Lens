@@ -724,8 +724,13 @@ namespace WinBatLens
             var metrics = report.HealthMetrics;
             var specs = report.BatterySpecs;
 
+            bool isEn = LocalizationService.CurrentLanguage == AppLanguage.English;
+            string naText = isEn ? "N/A" : "未提供";
+            string dash = "—";
+
             // Score & Badge
-            TxtHealthPercent.Text = metrics.HealthPercent.ToString("F1");
+            TxtHealthPercent.Text = metrics.HasBattery ? metrics.HealthPercent.ToString("F1") : dash;
+            TxtHealthPercentSign.Visibility = metrics.HasBattery ? Visibility.Visible : Visibility.Collapsed;
             TxtStatusLabel.Text = metrics.StatusLabel;
             TxtSummary.Text = metrics.SummaryText;
 
@@ -733,10 +738,10 @@ namespace WinBatLens
             TxtSpecName.Text = specs.Name;
             TxtSpecMfg.Text = specs.Manufacturer;
             TxtSpecChem.Text = specs.Chemistry;
-            TxtSpecDesign.Text = $"{specs.DesignCapacity:N0} {specs.Unit}";
-            TxtSpecFull.Text = $"{specs.FullChargeCapacity:N0} {specs.Unit}";
-            TxtSpecLoss.Text = $"{metrics.CapacityLoss:N0} {specs.Unit} ({metrics.WearPercent}%)";
-            TxtSpecCycles.Text = specs.CycleCount.HasValue ? $"{specs.CycleCount.Value} 次" : (LocalizationService.CurrentLanguage == AppLanguage.English ? "N/A" : "未提供");
+            TxtSpecDesign.Text = specs.DesignCapacity > 0 ? $"{specs.DesignCapacity:N0} {specs.Unit}" : dash;
+            TxtSpecFull.Text = specs.FullChargeCapacity > 0 ? $"{specs.FullChargeCapacity:N0} {specs.Unit}" : dash;
+            TxtSpecLoss.Text = metrics.HasBattery ? $"{metrics.CapacityLoss:N0} {specs.Unit} ({metrics.WearPercent}%)" : dash;
+            TxtSpecCycles.Text = specs.CycleCount.HasValue ? $"{specs.CycleCount.Value} 次" : naText;
 
             TxtReportTime.Text = string.IsNullOrWhiteSpace(report.SystemInfo.ReportTime) 
                 ? $"{DateTime.Now:yyyy-MM-dd HH:mm}" 

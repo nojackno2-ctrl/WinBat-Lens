@@ -73,7 +73,7 @@
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                         <TextBlock x:Name="TxtHealthPercent" Text="--" FontSize="34" FontWeight="ExtraBold" Foreground="{StaticResource TextMain}"/>
-                                        <TextBlock Text="%" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Bottom" Margin="2,0,0,6"/>
+                                        <TextBlock x:Name="TxtHealthPercentSign" Text="%" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextMuted}" VerticalAlignment="Bottom" Margin="2,0,0,6"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Grid>
