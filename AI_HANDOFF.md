@@ -1,19 +1,19 @@
 # Project State & Handoff
 
 ## Current Objective
-Redesign the bottom-left card (`📈 容量歷史紀錄` Capacity Degradation History) into a sleek, clean, scrollbar-free card with proportional column widths, and fix the remaining `主機板與 USB 外設` text overlap on the right panel.
+Adjust left column width (`370px`) and column widths in the Capacity Degradation History table (`85px`, `60px`, `60px`, `*`) to eliminate text overlap between `75998` and the `73.4%` health badge.
 
 ## Project Status
-- User submitted screenshot pointing out that the bottom-left card (`📈 容量歷史紀錄`) looked squished and bad ("左下的欄位也太失敗"), with horizontal scrollbars cutting off the `健康%` column.
+- User submitted screenshot showing `75998` overlapping the green `73.4%` badge because vertical scrollbar squeezed the rightmost columns.
 - **Diagnosis**:
-  - `ListView` with fixed pixel column widths (`90`, `80`, `80`, `55`) inside a `350px` sidebar forced a horizontal scrollbar.
-  - The inner ListView container had awkward borders.
+  - Left column width `350px` was too narrow when scrollbar is visible.
+  - Column 2 (`68px`) right alignment placed `75998` directly against Column 3.
 
 ## Next Steps
-1. Redesign `LvCapacityHistory` in `MainWindow.xaml`:
-   - Replace rigid fixed-width `ListView` GridView columns with proportional star widths OR use a clean `ItemsControl` template with dark row borders (`#0C1322`).
-   - Columns: `期間 (Period)`, `滿電 (Full Cap)`, `設計 (Design)`, `健康% (Health %)`.
-   - 100% fill width without horizontal scrollbars!
-2. Fix `主機板與 USB 外設` text overlap in the right panel.
-3. Verify build with `dotnet build WinBatLens.csproj`.
-4. Commit updates to Git.
+1. Update `MainWindow.xaml`:
+   - Increase Left Column width to `370px` (`<ColumnDefinition Width="370"/>`).
+   - Update header and item template ColumnDefinitions to `Width="85"`, `Width="60"`, `Width="60"`, `Width="*"`.
+   - Add right margin `Margin="0,0,10,0"` to Column 2 text to prevent collision.
+   - Add dark theme ScrollViewer style for the history list.
+2. Verify build with `dotnet build WinBatLens.csproj`.
+3. Commit updates to Git.
