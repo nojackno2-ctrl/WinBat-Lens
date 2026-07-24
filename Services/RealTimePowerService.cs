@@ -25,12 +25,42 @@ namespace WinBatLens.Services
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MEMORYSTATUSEX
+        {
+            public uint dwLength;
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
+
         private static PerformanceCounter? _cpuCounter;
         private static PerformanceCounter? _diskTimeCounter;
         private static PerformanceCounter? _diskBytesCounter;
         private static List<GpuInfo> _cachedGpus = new List<GpuInfo>();
         private static long _lastNetBytes = 0;
         private static DateTime _lastNetTime = DateTime.MinValue;
+
+        // WMI (System.Management) queries are memory-heavy and allocate COM
+        // objects on every call. The UI ticks once per second, but brightness
+        // and battery charge/discharge rates change slowly, so these values are
+        // cached and only refreshed from WMI every few seconds.
+        private const double WmiRefreshSeconds = 4.0;
+        private static int _cachedBrightness = 75;
+        private static DateTime _lastBrightnessTime = DateTime.MinValue;
+        private static double _cachedChargeMw = 0;
+        private static DateTime _lastChargeTime = DateTime.MinValue;
+        private static double _cachedDischargeMw = 0;
+        private static DateTime _lastDischargeTime = DateTime.MinValue;
 
         // Persistent GPU Engine counters, keyed by instance name. GPU utilization
         // counters need two samples taken over an interval to produce a non-zero
@@ -324,6 +354,15 @@ namespace WinBatLens.Services
 
         private static double GetWmiChargeRateMw()
         {
+            if ((DateTime.Now - _lastChargeTime).TotalSeconds < WmiRefreshSeconds)
+                return _cachedChargeMw;
+            _lastChargeTime = DateTime.Now;
+            _cachedChargeMw = QueryWmiChargeRateMw();
+            return _cachedChargeMw;
+        }
+
+        private static double QueryWmiChargeRateMw()
+        {
             try
             {
                 using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT ChargeRate FROM Win32_Battery"))
@@ -344,6 +383,15 @@ namespace WinBatLens.Services
         }
 
         private static int GetScreenBrightnessPercent()
+        {
+            if ((DateTime.Now - _lastBrightnessTime).TotalSeconds < WmiRefreshSeconds)
+                return _cachedBrightness;
+            _lastBrightnessTime = DateTime.Now;
+            _cachedBrightness = QueryScreenBrightnessPercent();
+            return _cachedBrightness;
+        }
+
+        private static int QueryScreenBrightnessPercent()
         {
             try
             {
@@ -551,6 +599,15 @@ namespace WinBatLens.Services
 
         private static double GetWmiDischargeRateMw()
         {
+            if ((DateTime.Now - _lastDischargeTime).TotalSeconds < WmiRefreshSeconds)
+                return _cachedDischargeMw;
+            _lastDischargeTime = DateTime.Now;
+            _cachedDischargeMw = QueryWmiDischargeRateMw();
+            return _cachedDischargeMw;
+        }
+
+        private static double QueryWmiDischargeRateMw()
+        {
             try
             {
                 using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT DischargeRate, BatteryStatus FROM Win32_Battery"))
@@ -572,23 +629,17 @@ namespace WinBatLens.Services
 
         private static (double UsedGb, double TotalGb) GetSystemRamInfo()
         {
-            try
+            // Native GlobalMemoryStatusEx avoids the heavy per-tick WMI/COM
+            // allocations of a Win32_OperatingSystem query. The UI polls this
+            // once per second, so keeping it allocation-free matters.
+            var mem = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
+            if (GlobalMemoryStatusEx(ref mem) && mem.ullTotalPhys > 0)
             {
-                using (var searcher = new ManagementObjectSearcher("SELECT FreePhysicalMemory, TotalVisibleMemorySize FROM Win32_OperatingSystem"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        double totalKb = Convert.ToDouble(obj["TotalVisibleMemorySize"]);
-                        double freeKb = Convert.ToDouble(obj["FreePhysicalMemory"]);
-                        double usedKb = totalKb - freeKb;
-
-                        double totalGb = Math.Round(totalKb / (1024 * 1024), 1);
-                        double usedGb = Math.Round(usedKb / (1024 * 1024), 1);
-                        return (usedGb, totalGb);
-                    }
-                }
+                const double gib = 1024.0 * 1024.0 * 1024.0;
+                double totalGb = Math.Round(mem.ullTotalPhys / gib, 1);
+                double usedGb = Math.Round((mem.ullTotalPhys - mem.ullAvailPhys) / gib, 1);
+                return (usedGb, totalGb);
             }
-            catch { }
 
             return (8.0, 16.0);
         }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -30,9 +31,36 @@ namespace WinBatLens
         private NotifyIcon? _notifyIcon;
         private bool _isExitRequested = false;
 
-        private readonly Queue<(double DischargeW, double ChargeW, double CpuPct, double GpuPct)> _chartHistory = 
+        private readonly Queue<(double DischargeW, double ChargeW, double CpuPct, double GpuPct)> _chartHistory =
             new Queue<(double, double, double, double)>();
         private const int MAX_CHART_POINTS = 60;
+
+        // Frozen, shared brushes reused across timer ticks. UpdateLivePowerUI
+        // runs once per second; allocating fresh SolidColorBrush objects every
+        // tick created needless GC pressure. Freezing also lets WPF share them
+        // across threads without cloning.
+        private static readonly SolidColorBrush BrushEmerald = CreateFrozen(MediaColor.FromRgb(0x10, 0xB9, 0x81));
+        private static readonly SolidColorBrush BrushEmeraldBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0x10, 0xB9, 0x81));
+        private static readonly SolidColorBrush BrushAmber = CreateFrozen(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
+        private static readonly SolidColorBrush BrushAmberBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
+        private static readonly SolidColorBrush BrushGridStrong = CreateFrozen(MediaColor.FromArgb(0x20, 0x94, 0xA3, 0xB8));
+        private static readonly SolidColorBrush BrushGridFaint = CreateFrozen(MediaColor.FromArgb(0x15, 0x94, 0xA3, 0xB8));
+        private static readonly DoubleCollection DashStrong = CreateFrozenDashes(4, 4);
+        private static readonly DoubleCollection DashFaint = CreateFrozenDashes(2, 4);
+
+        private static SolidColorBrush CreateFrozen(MediaColor color)
+        {
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+
+        private static DoubleCollection CreateFrozenDashes(double a, double b)
+        {
+            var dashes = new DoubleCollection { a, b };
+            dashes.Freeze();
+            return dashes;
+        }
 
         public MainWindow()
         {
@@ -165,9 +193,9 @@ namespace WinBatLens
                         Y1 = y,
                         X2 = w,
                         Y2 = y,
-                        Stroke = new SolidColorBrush(MediaColor.FromArgb(0x20, 0x94, 0xA3, 0xB8)),
+                        Stroke = BrushGridStrong,
                         StrokeThickness = 1,
-                        StrokeDashArray = new DoubleCollection { 4, 4 }
+                        StrokeDashArray = DashStrong
                     };
                     CanvasGridlines.Children.Add(line);
                 }
@@ -182,9 +210,9 @@ namespace WinBatLens
                         Y1 = 0,
                         X2 = x,
                         Y2 = h,
-                        Stroke = new SolidColorBrush(MediaColor.FromArgb(0x15, 0x94, 0xA3, 0xB8)),
+                        Stroke = BrushGridFaint,
                         StrokeThickness = 1,
-                        StrokeDashArray = new DoubleCollection { 2, 4 }
+                        StrokeDashArray = DashFaint
                     };
                     CanvasGridlines.Children.Add(line);
                 }
@@ -220,8 +248,15 @@ namespace WinBatLens
                 var cpuPoints = new PointCollection();
                 var gpuPoints = new PointCollection();
 
-                var list = _chartHistory.ToList();
-                double maxPowerW = Math.Max(35.0, list.Max(x => Math.Max(x.DischargeW, x.ChargeW)) * 1.15);
+                // Iterate the queue directly (oldest→newest) instead of
+                // materialising a List and running a LINQ Max each tick.
+                double peakPower = 0.0;
+                foreach (var item in _chartHistory)
+                {
+                    double p = Math.Max(item.DischargeW, item.ChargeW);
+                    if (p > peakPower) peakPower = p;
+                }
+                double maxPowerW = Math.Max(35.0, peakPower * 1.15);
 
                 // Update Y-Axis Scale Coordinates Text
                 TxtYAxis100.Text = $"{maxPowerW:F0} W (100%)";
@@ -230,10 +265,10 @@ namespace WinBatLens
                 TxtYAxis25.Text = $"{(maxPowerW * 0.25):F0} W (25%)";
                 TxtYAxis0.Text = "0 W (0%)";
 
-                for (int i = 0; i < list.Count; i++)
+                int i = 0;
+                foreach (var item in _chartHistory)
                 {
                     double x = (i / (double)(MAX_CHART_POINTS - 1)) * w;
-                    var item = list[i];
 
                     // Y values (0 at bottom, Height at top)
                     double yDischarge = h - Math.Min(h, Math.Max(0, (item.DischargeW / maxPowerW) * h));
@@ -245,6 +280,7 @@ namespace WinBatLens
                     chargePoints.Add(new WpfPoint(x, yCharge));
                     cpuPoints.Add(new WpfPoint(x, yCpu));
                     gpuPoints.Add(new WpfPoint(x, yGpu));
+                    i++;
                 }
 
                 PolylineDischarge.Points = dischargePoints;
@@ -389,6 +425,9 @@ namespace WinBatLens
             }
         }
 
+        [DllImport("psapi.dll")]
+        private static extern int EmptyWorkingSet(IntPtr hProcess);
+
         private void HideToTray()
         {
             this.Hide();
@@ -396,6 +435,23 @@ namespace WinBatLens
             {
                 _notifyIcon.ShowBalloonTip(2000, "WinBat Lens 已縮小至托盤", "程式將在背景持續為您進行即時耗電與電池狀態監測。", ToolTipIcon.Info);
             }
+
+            // The app spends most of its life minimized in the tray. Once the
+            // window's visuals are torn down, compact the heap and hand idle
+            // pages back to the OS so the background working set stays small.
+            // Pages are transparently reloaded on demand when the user restores.
+            TrimWorkingSet();
+        }
+
+        private static void TrimWorkingSet()
+        {
+            try
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle);
+            }
+            catch { }
         }
 
         private void RestoreFromTray()
@@ -467,11 +523,11 @@ namespace WinBatLens
                 if (state.IsAcOnline)
                 {
                     TxtLiveDischargeRate.Text = $"{state.AcTotalInputW:F1} W";
-                    TxtLiveDischargeRate.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81)); // Emerald Green
+                    TxtLiveDischargeRate.Foreground = BrushEmerald; // Emerald Green
 
-                    BadgeLiveAcState.Background = new SolidColorBrush(MediaColor.FromArgb(0x20, 0x10, 0xB9, 0x81));
-                    BadgeLiveAcState.BorderBrush = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81));
-                    TxtLiveAcState.Foreground = new SolidColorBrush(MediaColor.FromRgb(0x10, 0xB9, 0x81));
+                    BadgeLiveAcState.Background = BrushEmeraldBadge;
+                    BadgeLiveAcState.BorderBrush = BrushEmerald;
+                    TxtLiveAcState.Foreground = BrushEmerald;
 
                     if (state.IsCharging)
                     {
@@ -489,11 +545,11 @@ namespace WinBatLens
                 else
                 {
                     TxtLiveDischargeRate.Text = $"-{state.DischargeRateW:F1} W";
-                    TxtLiveDischargeRate.Foreground = new SolidColorBrush(MediaColor.FromRgb(0xF5, 0x9E, 0x0B)); // Amber
+                    TxtLiveDischargeRate.Foreground = BrushAmber; // Amber
 
-                    BadgeLiveAcState.Background = new SolidColorBrush(MediaColor.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
-                    BadgeLiveAcState.BorderBrush = new SolidColorBrush(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
-                    TxtLiveAcState.Foreground = new SolidColorBrush(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
+                    BadgeLiveAcState.Background = BrushAmberBadge;
+                    BadgeLiveAcState.BorderBrush = BrushAmber;
+                    TxtLiveAcState.Foreground = BrushAmber;
                     TxtLiveAcState.Text = LocalizationService.CurrentLanguage == AppLanguage.English
                         ? $"🔋 Battery Discharging (-{state.DischargeRateW:F1}W)"
                         : $"🔋 電池放電中 (-{state.DischargeRateW:F1}W)";

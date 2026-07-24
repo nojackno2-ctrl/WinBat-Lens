@@ -17,6 +17,14 @@
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
 
+    <!-- Memory tuning for a long-running background tray app -->
+    <!-- Workstation (non-server) GC keeps a single small heap instead of one per CPU core -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <!-- Disable the background GC thread; a low-throughput UI app doesn't need it -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- Trim the managed heap and return memory to the OS more aggressively -->
+    <TieredCompilationQuickJitForLoops>true</TieredCompilationQuickJitForLoops>
+
     <!-- Single-File Standalone Self-Extracting Packaging Flags -->
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
@@ -28,6 +36,12 @@
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- GC heap-hardening (0-9): favours a smaller working set over raw speed,
+         appropriate for a monitor that mostly sits idle in the system tray. -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" Trim="false" />
   </ItemGroup>
 
   <ItemGroup>

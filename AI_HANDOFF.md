@@ -1,7 +1,36 @@
 # Project State & Handoff
 
 ## Current Objective
-Full code & functionality review of WinBat Lens (C# .NET 8 WPF) plus two reliability fixes, all verified on a live AMD iGPU + NVIDIA RTX 3060 dGPU laptop.
+Memory-usage optimization of WinBat Lens (C# .NET 8 WPF), following an earlier
+full code review + two reliability fixes (documented below).
+
+## Memory optimization session (latest)
+Goal: reduce the footprint of this always-on, once-per-second tray monitor.
+
+Changes (all in `Services/RealTimePowerService.cs`, `MainWindow.xaml.cs`, `WinBatLens.csproj`):
+1. **RAM stats via native `GlobalMemoryStatusEx`** instead of a per-second
+   `Win32_OperatingSystem` WMI query — removes heavy COM allocation each tick.
+2. **Throttled the remaining WMI queries** (brightness, charge rate, discharge
+   rate) to a 4s cache (`WmiRefreshSeconds`); they change slowly. Tray wattage
+   still moves each second via the hardware estimate. ~75% fewer WMI calls.
+3. **Frozen, shared `SolidColorBrush`/`DoubleCollection`** in `MainWindow` —
+   `UpdateLivePowerUI` + `DrawChartGridlines` no longer allocate brushes per tick.
+4. **Waveform redraw** iterates the `Queue` directly (no `.ToList()`/`.Max()` LINQ each tick).
+5. **GC tuning** in csproj/runtimeconfig: `Server=false`, `Concurrent=false`,
+   `System.GC.ConserveMemory=5`.
+6. **`EmptyWorkingSet` + `GC.Collect` on minimize-to-tray** (`TrimWorkingSet()` in
+   `MainWindow.HideToTray`) — the app's dominant use case.
+
+Measured (Release self-contained single-file, this machine):
+- Steady-state visible: WS ~200–220 MB (WPF framework baseline dominates), flat over
+  time (no more per-tick heap creep — the key anti-leak win).
+- **Minimized to tray: WS drops ~201 MB → ~61 MB (~70% less) and stays stable.**
+- Build: `dotnet build/publish WinBatLens.csproj -c Release` → 0 warnings, 0 errors.
+
+Not yet committed at time of writing.
+
+## Prior session: code review + reliability fixes
+Verified on a live AMD iGPU + NVIDIA RTX 3060 dGPU laptop.
 
 ## Project Status
 - **Build**: `dotnet build WinBatLens.csproj -c Debug` → 0 warnings, 0 errors. Launches clean (no `winbat_crash.log`).
