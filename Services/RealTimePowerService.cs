@@ -133,11 +133,6 @@ namespace WinBatLens.Services
         }
 
         /// <summary>
-        /// GPU list discovered once at startup (WMI). Exposed so the UI can
-        /// reuse it instead of issuing a second Win32_VideoController query.
-        /// </summary>
-        public static IReadOnlyList<GpuInfo> InstalledGpus => _cachedGpus;
-
         /// <summary>
         /// Warms up everything the first monitoring tick would otherwise pay
         /// for on the UI thread: the static constructor (PerformanceCounter and

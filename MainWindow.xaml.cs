@@ -112,8 +112,6 @@ namespace WinBatLens
 
             await warmup;
 
-            // Bind GPU Specs List (reuses the list discovered during warmup)
-            LoadGpuSpecs();
 
             // Start live power monitoring timer (1s interval)
             StartLivePowerMonitoring();
@@ -174,7 +172,6 @@ namespace WinBatLens
             TxtHardwareTitle.Text = LocalizationService.Get("HardwareTitle");
             LblHwBatteryTelemetry.Text = LocalizationService.Get("HwBatteryTelemetry");
             LblHwPowerPlan.Text = LocalizationService.Get("HwPowerPlan");
-            TxtGpuListTitle.Text = LocalizationService.Get("GpuListTitle");
 
             TxtHistoryLogHeader.Text = LocalizationService.Get("HistoryLogHeader");
             BtnExportPowerCsv.Content = LocalizationService.Get("BtnExportCsv");
@@ -513,20 +510,6 @@ namespace WinBatLens
             // Visual updates are skipped while hidden; refresh everything now
             // so the window doesn't show stale values for up to a second.
             UpdateLivePowerUI();
-        }
-
-        private void LoadGpuSpecs()
-        {
-            try
-            {
-                // The service already enumerated GPUs via WMI at startup;
-                // reuse that list instead of running the query a second time.
-                IcGpuList.ItemsSource = RealTimePowerService.InstalledGpus;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"LoadGpuSpecs error: {ex.Message}");
-            }
         }
 
         private void MainWindow_Unloaded(object sender, RoutedEventArgs e)
