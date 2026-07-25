@@ -81,10 +81,12 @@ namespace WinBatLens.Models
         public string PowerStatusText { get; set; } = "讀取中...";
         public int BatteryPercent { get; set; }
 
+        // The two real battery figures, both from the battery driver.
+        // There is no system total and no AC adapter input: the components that
+        // used to be summed had no power sensors, and Windows exposes no API
+        // for adapter input at all.
         public double DischargeRateW { get; set; }
         public double ChargingRateW { get; set; }
-        public double TotalSystemHardwareW { get; set; }
-        public double AcTotalInputW { get; set; }
 
         public string DischargeRateText { get; set; } = "-- W";
         public string ChargingStatusText { get; set; } = "讀取中...";

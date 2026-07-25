@@ -174,11 +174,6 @@ namespace WinBatLens
             TxtHardwareTitle.Text = LocalizationService.Get("HardwareTitle");
             LblHwBatteryTelemetry.Text = LocalizationService.Get("HwBatteryTelemetry");
             LblHwPowerPlan.Text = LocalizationService.Get("HwPowerPlan");
-            LblHwCpu.Text = LocalizationService.Get("HwCpu");
-            LblHwScreen.Text = LocalizationService.Get("HwScreen");
-            LblHwWifi.Text = LocalizationService.Get("HwWifi");
-            LblHwDisk.Text = LocalizationService.Get("HwDisk");
-            LblHwRam.Text = LocalizationService.Get("HwRam");
             TxtGpuListTitle.Text = LocalizationService.Get("GpuListTitle");
 
             TxtHistoryLogHeader.Text = LocalizationService.Get("HistoryLogHeader");
@@ -608,7 +603,14 @@ namespace WinBatLens
                 {
                     DynamicTrayIconService.UpdateTrayIcon(_notifyIcon, state);
 
-                    string powerStatusStr = state.IsAcOnline ? $"AC Input: {state.AcTotalInputW:F1}W" : $"-{state.DischargeRateW:F1}W Discharging";
+                    string powerStatusStr;
+                    if (state.IsCharging && state.IsChargeRateMeasured)
+                        powerStatusStr = $"+{state.ChargingRateW:F1}W Charging";
+                    else if (!state.IsAcOnline && state.IsDischargeRateMeasured)
+                        powerStatusStr = $"-{state.DischargeRateW:F1}W Discharging";
+                    else
+                        powerStatusStr = "-- W";
+
                     _notifyIcon.Text = $"WinBat Lens - {state.PowerStatusText}\nLevel: {state.BatteryPercent}% | {powerStatusStr}";
                 }
 
@@ -622,42 +624,44 @@ namespace WinBatLens
 
                 if (state.IsAcOnline)
                 {
-                    // AC adapter input cannot be measured: Windows exposes no API
-                    // for it and it is vendor-EC territory. It stays a sum of the
-                    // charge rate and the hardware estimate, marked with a tilde.
-                    TxtLiveDischargeRate.Text = $"~{state.AcTotalInputW:F1} W";
+                    // Charging is a real measurement, so it belongs in the
+                    // headline. There is deliberately no adapter-input figure:
+                    // Windows exposes no API for it.
+                    TxtLiveDischargeRate.Text = state.IsCharging && state.IsChargeRateMeasured
+                        ? $"+{state.ChargingRateW:F1} W"
+                        : "-- W";
                     TxtLiveDischargeRate.Foreground = BrushEmerald; // Emerald Green
 
                     BadgeLiveAcState.Background = BrushEmeraldBadge;
                     BadgeLiveAcState.BorderBrush = BrushEmerald;
                     TxtLiveAcState.Foreground = BrushEmerald;
 
-                    if (state.IsCharging)
+                    if (state.IsCharging && state.IsChargeRateMeasured)
                     {
-                        string chg = state.IsChargeRateMeasured
-                            ? (en ? $"Charging +{state.ChargingRateW:F1}W measured"
-                                  : $"電池充電 +{state.ChargingRateW:F1}W 實測")
-                            : (en ? "Charging +--W" : "電池充電 +--W");
-
                         TxtLiveAcState.Text = en
-                            ? $"🔌 AC Input ~{state.AcTotalInputW:F1}W estimated ({chg} | Hardware ~{state.TotalSystemHardwareW:F1}W)"
-                            : $"🔌 AC 變壓器總供電 ~{state.AcTotalInputW:F1}W 推估 ({chg} | 硬體耗電 ~{state.TotalSystemHardwareW:F1}W)";
+                            ? $"🔌 Charging the battery at +{state.ChargingRateW:F1}W (measured at the pack)"
+                            : $"🔌 電池充電中 +{state.ChargingRateW:F1}W（電池實測）";
+                    }
+                    else if (state.IsCharging)
+                    {
+                        TxtLiveAcState.Text = en
+                            ? "🔌 Charging — this battery does not report a charge rate"
+                            : "🔌 電池充電中 — 此電池未回報充電功率";
                     }
                     else
                     {
                         TxtLiveAcState.Text = en
-                            ? $"🔌 AC Input ~{state.AcTotalInputW:F1}W estimated (Direct Pass-Through | Battery not charging)"
-                            : $"🔌 AC 變壓器總供電 ~{state.AcTotalInputW:F1}W 推估 (市電直供硬體 | 電池未充電)";
+                            ? "🔌 On AC, battery idle — no current in or out, so there is nothing to measure"
+                            : "🔌 市電直供中，電池無充放電電流 — 此狀態下沒有可量測的功率";
                     }
                 }
                 else
                 {
-                    // On battery the pack itself reports the draw, so this is the
-                    // one headline figure that is a genuine whole-system
-                    // measurement rather than a sum of estimates.
+                    // On battery the pack itself reports the draw, so this is a
+                    // genuine whole-system measurement.
                     TxtLiveDischargeRate.Text = state.IsDischargeRateMeasured
                         ? $"-{state.DischargeRateW:F1} W"
-                        : $"~-{state.DischargeRateW:F1} W";
+                        : "-- W";
                     TxtLiveDischargeRate.Foreground = BrushAmber; // Amber
 
                     BadgeLiveAcState.Background = BrushAmberBadge;
@@ -689,59 +693,14 @@ namespace WinBatLens
                 TxtHwTelemetryVal.Text = state.BatteryTelemetryText;
                 TxtHwPowerPlanVal.Text = state.PowerPlanName;
 
-                // Per-component rows below report utilisation, throughput and
-                // brightness — all really measured. The only per-component
-                // wattage that exists is the dGPU's, read over NVML.
-
-                // CPU load
-                PbCpuUsage.Value = state.CpuUsagePercent;
-                TxtCpuUsageVal.Text = $"{state.CpuUsagePercent:F1}%";
-
-                // Discrete GPU (dGPU) load and real package power
+                // The discrete GPU is the only component with a real power
+                // sensor, so it is the only component row left on this page.
                 TxtDgpuName.Text = $"🎮 {state.DgpuName}";
                 PbDgpuUsage.Value = state.DgpuUsagePercent;
                 TxtDgpuUsageVal.Text = state.DgpuStatusText;
                 TxtDgpuPowerW.Text = state.IsDgpuPowerMeasured
                     ? $"{state.DgpuPowerW:F1} W"
                     : "-- W";
-
-                // Integrated GPU (iGPU) load
-                TxtIgpuName.Text = $"🖼️ {state.IgpuName}";
-                PbIgpuUsage.Value = state.IgpuUsagePercent;
-                TxtIgpuUsageVal.Text = $"{state.IgpuUsagePercent:F1}%";
-
-                // Screen brightness. Panels that do not expose
-                // WmiMonitorBrightness show "--" rather than a fallback number.
-                PbScreenBrightness.Value = state.ScreenBrightnessPercent;
-                if (state.IsBrightnessMeasured)
-                {
-                    TxtScreenBrightnessVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                        ? $"{state.ScreenBrightnessPercent}% Brightness"
-                        : $"{state.ScreenBrightnessPercent}% 亮度";
-                }
-                else
-                {
-                    TxtScreenBrightnessVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                        ? "-- (not reported)"
-                        : "-- (無法讀取)";
-                }
-
-                // Wi-Fi throughput
-                TxtWifiSpeedVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                    ? $"Network Traffic: {state.WifiThroughputKbps:N0} KB/s"
-                    : $"即時傳輸流量: {state.WifiThroughputKbps:N0} KB/s";
-
-                // Disk load and throughput
-                PbDiskUsage.Value = state.DiskUsagePercent;
-                TxtDiskUsageVal.Text = $"{state.DiskUsagePercent:F1}%";
-                TxtDiskStatusText.Text = $"{state.DiskReadWriteMbps:F1} MB/s";
-
-                // RAM usage
-                PbRamUsage.Value = state.RamUsagePercent;
-                TxtRamUsageVal.Text = $"{state.RamUsageGB:F1} GB / {state.TotalRamGB:F1} GB ({state.RamUsagePercent:F1}%)";
-
-                // Power Load Rating
-                TxtPowerLoadStatus.Text = state.SystemPowerLoadStatus;
 
                 // Live tips. Every wattage quoted here is a real reading; when
                 // nothing real is available the tip says so rather than
