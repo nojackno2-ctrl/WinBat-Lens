@@ -458,6 +458,7 @@ namespace WinBatLens
             // Window, so release the timer, sensors and tray icon here.
             _livePowerTimer?.Stop();
             try { HardwareSensorService.Shutdown(); } catch { }
+            try { BatteryTelemetryService.Shutdown(); } catch { }
             try
             {
                 if (_notifyIcon != null)
@@ -614,9 +615,14 @@ namespace WinBatLens
                 if (!IsVisible) return;
 
                 // Charge / Discharge Wattage & Status Display
+                bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
+
                 if (state.IsAcOnline)
                 {
-                    TxtLiveDischargeRate.Text = $"{state.AcTotalInputW:F1} W";
+                    // AC adapter input cannot be measured: Windows exposes no API
+                    // for it and it is vendor-EC territory. It stays a sum of the
+                    // charge rate and the hardware estimate, marked with a tilde.
+                    TxtLiveDischargeRate.Text = $"~{state.AcTotalInputW:F1} W";
                     TxtLiveDischargeRate.Foreground = BrushEmerald; // Emerald Green
 
                     BadgeLiveAcState.Background = BrushEmeraldBadge;
@@ -625,28 +631,48 @@ namespace WinBatLens
 
                     if (state.IsCharging)
                     {
-                        TxtLiveAcState.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                            ? $"🔌 AC Adapter Input {state.AcTotalInputW:F1}W (Charging +{state.ChargingRateW:F1}W | Hardware {state.TotalSystemHardwareW:F1}W)"
-                            : $"🔌 AC 變壓器總供電 {state.AcTotalInputW:F1}W (電池充電 +{state.ChargingRateW:F1}W | 硬體耗電 {state.TotalSystemHardwareW:F1}W)";
+                        string chg = state.IsChargeRateMeasured
+                            ? (en ? $"Charging +{state.ChargingRateW:F1}W measured"
+                                  : $"電池充電 +{state.ChargingRateW:F1}W 實測")
+                            : (en ? "Charging +--W" : "電池充電 +--W");
+
+                        TxtLiveAcState.Text = en
+                            ? $"🔌 AC Input ~{state.AcTotalInputW:F1}W estimated ({chg} | Hardware ~{state.TotalSystemHardwareW:F1}W)"
+                            : $"🔌 AC 變壓器總供電 ~{state.AcTotalInputW:F1}W 推估 ({chg} | 硬體耗電 ~{state.TotalSystemHardwareW:F1}W)";
                     }
                     else
                     {
-                        TxtLiveAcState.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                            ? $"🔌 AC Adapter Input {state.AcTotalInputW:F1}W (Direct Pass-Through | 100% Fully Charged Protection)"
-                            : $"🔌 AC 變壓器總供電 {state.AcTotalInputW:F1}W (市電直供硬體 | 電池 100% 滿電保護中)";
+                        TxtLiveAcState.Text = en
+                            ? $"🔌 AC Input ~{state.AcTotalInputW:F1}W estimated (Direct Pass-Through | Battery not charging)"
+                            : $"🔌 AC 變壓器總供電 ~{state.AcTotalInputW:F1}W 推估 (市電直供硬體 | 電池未充電)";
                     }
                 }
                 else
                 {
-                    TxtLiveDischargeRate.Text = $"-{state.DischargeRateW:F1} W";
+                    // On battery the pack itself reports the draw, so this is the
+                    // one headline figure that is a genuine whole-system
+                    // measurement rather than a sum of estimates.
+                    TxtLiveDischargeRate.Text = state.IsDischargeRateMeasured
+                        ? $"-{state.DischargeRateW:F1} W"
+                        : $"~-{state.DischargeRateW:F1} W";
                     TxtLiveDischargeRate.Foreground = BrushAmber; // Amber
 
                     BadgeLiveAcState.Background = BrushAmberBadge;
                     BadgeLiveAcState.BorderBrush = BrushAmber;
                     TxtLiveAcState.Foreground = BrushAmber;
-                    TxtLiveAcState.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                        ? $"🔋 Battery Discharging (-{state.DischargeRateW:F1}W)"
-                        : $"🔋 電池放電中 (-{state.DischargeRateW:F1}W)";
+
+                    if (state.IsDischargeRateMeasured)
+                    {
+                        TxtLiveAcState.Text = en
+                            ? $"🔋 Battery Discharging (-{state.DischargeRateW:F1}W measured at the pack — whole system)"
+                            : $"🔋 電池放電中 (-{state.DischargeRateW:F1}W 電池實測 — 全系統真實耗電)";
+                    }
+                    else
+                    {
+                        TxtLiveAcState.Text = en
+                            ? $"🔋 Battery Discharging (~-{state.DischargeRateW:F1}W estimated)"
+                            : $"🔋 電池放電中 (~-{state.DischargeRateW:F1}W 推估)";
+                    }
                 }
 
                 // Battery Remaining Time & Level

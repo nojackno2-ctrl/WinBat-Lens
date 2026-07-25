@@ -108,6 +108,13 @@ namespace WinBatLens.Models
         public bool IsCpuPowerMeasured { get; set; }
         public bool IsDgpuPowerMeasured { get; set; }
         public bool IsTotalPowerMeasured { get; set; }
+
+        // Read from the battery driver itself (IOCTL_BATTERY_QUERY_STATUS).
+        // When IsDischargeRateMeasured is true, DischargeRateW is the whole
+        // machine's real power draw measured at the pack — not a sum of
+        // per-component estimates.
+        public bool IsDischargeRateMeasured { get; set; }
+        public bool IsChargeRateMeasured { get; set; }
         
         // CPU
         public double CpuUsagePercent { get; set; }

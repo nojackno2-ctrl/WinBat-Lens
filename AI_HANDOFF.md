@@ -1,6 +1,68 @@
 # Project State & Handoff
 
-## Real hardware sensors + temperature removal (latest, v1.0.3)
+## Real battery charge/discharge power (latest, v1.0.4)
+
+**The app was falling back to an estimate while the battery was reporting a
+real figure the whole time.** `RealTimePowerService` read
+`Win32_Battery.DischargeRate` (`root\CIMV2`), which is blank on this laptop and
+on many others. `root\WMI BatteryStatus` and the underlying
+`IOCTL_BATTERY_QUERY_STATUS` both work fine.
+
+### The earlier "the EC does not report rate" conclusion was wrong
+Every previous check ran with `RemainingCapacity == FullChargedCapacity` and
+the charger plugged in — a full pack on AC passes no current, so **0 mW was the
+correct answer** and was misread as "unsupported". The tell was that the driver
+returned a real `0` rather than `BATTERY_UNKNOWN_RATE` (`0x80000000`), which is
+the value the spec reserves for genuine unavailability.
+
+Confirmed by unplugging while polling:
+
+```
+21:54:24  電池  放電中   -5.51 W    idle, just unplugged
+21:54:38  電池  放電中  -22.29 W
+21:54:57  電池  放電中  -30.91 W
+21:58:45  電池  放電中  -39.90 W    under load
+21:58:51  市電  ...      0.00 W     replugged
+```
+
+### New `Services/BatteryTelemetryService.cs`
+Reads the battery class driver directly over
+`IOCTL_BATTERY_QUERY_STATUS` (SetupDi enumeration of
+`GUID_DEVCLASS_BATTERY` → `CreateFile` → `IOCTL_BATTERY_QUERY_TAG`).
+
+- **No elevation, no WMI/COM.** Measured **0.4 ms average / 1.2 ms max** per
+  read, so unlike the WMI path it is cheap enough to poll every second on the
+  UI thread. (Contrast the LibreHardwareMonitor sweep at 85–256 ms, which had
+  to be moved to a background timer.)
+- Returns voltage in the same call, so the separate voltage WMI query is gone.
+- `IsRateKnown` distinguishes a true `0` from `BATTERY_UNKNOWN_RATE`. **Do not
+  treat 0 W as failure** — that is the bug this section exists to document.
+- Direction comes from the `BATTERY_CHARGING`/`BATTERY_DISCHARGING` state flags
+  with `Math.Abs` on the rate, because not every driver honours the
+  negative-means-discharging convention.
+- Re-queries the battery tag once on failure (the tag invalidates when a pack
+  is swapped) before giving up.
+
+### On battery, the headline number is now a real measurement
+`DischargeRateW` with `IsDischargeRateMeasured` set is the **whole machine's
+actual power draw, measured at the pack** — no per-component estimation, and it
+neatly sidesteps the Armoury-Crate-owns-the-SMU problem that makes CPU package
+power unreadable (see v1.0.3). This is the app's core metric.
+
+### Two other fabrications removed while in here
+- Charging wattage fell back to hard-coded `12.5 / 28.0 / 45.0 W` chosen by
+  battery percentage. Now reports `--` when unknown.
+- `IsCharging` was inferred from `BatteryPercent >= 98`. Wrong on any laptop
+  with a charge limit — this ASUS stops around 95%, which the old test called
+  "still charging". The driver's own `BATTERY_CHARGING` flag is now used.
+
+### AC adapter input is still an estimate, and always will be
+Windows exposes no API for adapter input wattage; it is vendor-EC territory
+(hence Armoury Crate can show it). It stays `charge rate + hardware estimate`
+and is rendered with a leading `~`. A USB-C PD machine could read the
+negotiated contract over UCSI, but this laptop uses a barrel connector.
+
+## Real hardware sensors + temperature removal (v1.0.3)
 
 Triggered by the user noticing WinBat Lens disagreed with Armoury Crate during
 a 3DMark run. It did, and the reasons were real.
@@ -48,7 +110,7 @@ Measured on this machine (Ryzen + RTX 3060 Laptop), unelevated:
 | NVIDIA GPU package power | ✅ real, 11–19 W tracking (NVML is userspace) |
 | GPU core / hot-spot temp | ✅ real |
 | Battery pack voltage | ✅ 15.83 V |
-| CPU package power | ❌ 0 W — RAPL needs a Ring0 driver, i.e. elevation |
+| CPU package power | ❌ 0 W — SMU owned by Armoury Crate; elevation does not help (tested) |
 | AMD iGPU power | ❌ no such sensor exists |
 | Battery charge/discharge W | ❌ EC does not report it (long-standing) |
 
@@ -72,13 +134,32 @@ Three non-obvious things this cost, all verified by measurement:
 `MainWindow.FormatPower` renders `18.8 W (實測)` for sensor values and
 `~6.6 W (推估)` for formula values, so the two can never be confused.
 
-### Open: CPU power needs elevation
-Unelevated the CPU figure is still the old formula. Making it real requires
-running elevated, which costs a UAC prompt on every launch and complicates the
-HKCU autostart entry. Not done — it is a product decision, not a code one.
-The elevated probe could not be run from the agent sandbox, so *whether* RAPL
-actually populates on this specific AMD part is untested; the sensors exist and
-read 0.00, which is the signature of a driver that did not load.
+### Closed: CPU power cannot be read on this machine, elevated or not
+The user ran the sensor probe elevated. **Elevation does not help.** On an
+AMD Ryzen 9 5900HS every SMU sensor still reports zero:
+
+```
+系統管理員權限: 是 ✔
+[Cpu] AMD Ryzen 9 5900HS with Radeon Graphics
+    Power       Core #1..#8 (SMU) = 0.00 W
+    Power       Package           = 0.00 W
+    Temperature Core (Tctl/Tdie)  = 0.00 °C
+[GpuNvidia] NVIDIA GeForce RTX 3060 Laptop GPU
+    Power       GPU Package       = 10.84 W    <-- works fine
+```
+
+CPU *temperature* reads zero too, and it shares the SMU mailbox with power —
+so this is not a privilege problem, the whole SMU channel is unreachable.
+Cause confirmed by process/service enumeration: `ArmouryCrateService`,
+`ArmouryCrateControlInterface` and `ASUSOptimization` are running, and ASUS's
+driver takes exclusive ownership of the AMD SMU mailbox. This is the standard
+reason third-party tools read zero for AMD sensors on ROG laptops — Armoury
+Crate can show CPU watts precisely because it is the one holding the channel.
+
+**Do not build an elevation path.** It was tested and does not work, and the
+only workaround would be asking the user to quit their OEM software. The CPU
+figure stays a clearly-labelled estimate. Probe source kept at
+`scratchpad/probe/` if another machine ever needs checking.
 
 ## Icon fix + startup/installer session (v1.0.2)
 
@@ -281,7 +362,7 @@ Verified on a live AMD iGPU + NVIDIA RTX 3060 dGPU laptop.
   1 Hz forever is what forces the repeated working-set trims. Dropping to ~5 s
   while hidden would cut background CPU ~80%; the tray wattage number would just
   update less often. Not done because it changes observable behaviour.
-- **CPU package power still needs elevation.** Unelevated, RAPL reports 0 W and the CPU figure falls back to the `2.5 + u*22.5` formula (labelled 推估). Making it real means running the app elevated — UAC on every launch, and the HKCU autostart entry gets messy. Product decision, not a code one.
+- **CPU package power is unavailable on ASUS ROG / AMD hardware** and stays a labelled estimate. Verified elevated: every SMU sensor reads 0 because Armoury Crate owns the SMU mailbox. Not fixable from this side — see the v1.0.3 section.
   headline wattage is still a formula estimate, not a measurement. A proper fix
   reads `IOCTL_BATTERY_QUERY_STATUS` against the battery device directly.
 - **500-record history cap is memory-only** — nothing is persisted, so closing the
