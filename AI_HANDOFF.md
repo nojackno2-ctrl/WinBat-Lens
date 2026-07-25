@@ -1,6 +1,27 @@
 # Project State & Handoff
 
-## Charging shown in the headline; power-less rows removed (latest, v1.0.6)
+## GPU list card removed (latest, v1.0.7)
+
+Removed the 「系統顯示卡清單」 card. It listed adapter name, VRAM, driver version
+and driver date — inventory data, not power, and nothing else consumed it.
+
+The cascade was larger than the card itself:
+
+- `GpuInfo` dropped `GpuTypeTag`, `VramText`, `DriverVersion`, `DriverDate`,
+  `Status` and `StatusClass`. Only `Name`, `IsDiscrete` and `VramBytes` remain —
+  `VramBytes` solely because the discrete-GPU heuristic tests `>= 1 GB`.
+- `GpuInfoService` no longer selects `DriverVersion`, `DriverDate`, `Status` or
+  `Availability` from `Win32_VideoController`, and no longer formats a VRAM
+  string or a status string.
+- `RealTimePowerService.InstalledGpus` was the accessor that fed the card and is
+  gone; `_cachedGpus` stays for resolving dGPU/iGPU names.
+- `MainWindow.LoadGpuSpecs()` and the `GpuListTitle` localisation key are gone.
+
+The tip box still claimed the app updates "CPU、獨顯、內顯、螢幕背光、Wi-Fi、磁碟與
+記憶體功耗" every second — untrue since v1.0.6 removed those rows. Now just
+「即時監測每 1 秒自動更新一次。」
+
+## Charging shown in the headline; power-less rows removed (v1.0.6)
 
 Two user-reported problems, the first a genuine bug I introduced in v1.0.5.
 

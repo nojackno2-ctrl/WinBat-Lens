@@ -1,15 +1,19 @@
 namespace WinBatLens.Models
 {
+    /// <summary>
+    /// The little that is still needed about a display adapter: its name, and
+    /// whether it is the discrete one.
+    /// </summary>
+    /// <remarks>
+    /// This used to carry VRAM text, driver version, driver date and a status
+    /// string for the "系統顯示卡清單" card. That card is gone and none of that
+    /// data fed anything else, so it is no longer queried or stored.
+    /// VramBytes stays because the discrete-GPU heuristic uses it.
+    /// </remarks>
     public class GpuInfo
     {
         public string Name { get; set; } = "Unknown GPU";
         public bool IsDiscrete { get; set; }
-        public string GpuTypeTag => IsDiscrete ? "獨立顯示卡 (dGPU)" : "內建顯示晶片 (iGPU)";
-        public string VramText { get; set; } = "共享視訊記憶體";
         public ulong VramBytes { get; set; }
-        public string DriverVersion { get; set; } = "N/A";
-        public string DriverDate { get; set; } = "N/A";
-        public string Status { get; set; } = "正常運作中";
-        public string StatusClass => IsDiscrete ? "Discrete" : "Integrated";
     }
 }
