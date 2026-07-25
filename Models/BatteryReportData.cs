@@ -103,64 +103,63 @@ namespace WinBatLens.Models
         public string BatteryTelemetryText { get; set; } = "-- V | -- A";
         public string PowerPlanName { get; set; } = "平衡 (Balanced)";
 
-        // True when the corresponding *PowerW below came from a real hardware
-        // sensor rather than the utilisation-based estimate.
-        public bool IsCpuPowerMeasured { get; set; }
-        public bool IsDgpuPowerMeasured { get; set; }
-        public bool IsTotalPowerMeasured { get; set; }
-
         // Read from the battery driver itself (IOCTL_BATTERY_QUERY_STATUS).
         // When IsDischargeRateMeasured is true, DischargeRateW is the whole
-        // machine's real power draw measured at the pack — not a sum of
-        // per-component estimates.
+        // machine's real power draw measured at the pack.
         public bool IsDischargeRateMeasured { get; set; }
         public bool IsChargeRateMeasured { get; set; }
-        
+
+        // NOTE ON WATTAGE
+        // Only three power figures exist in this model, and every one of them
+        // comes from real hardware: battery discharge and charge (battery
+        // driver IOCTL) and discrete GPU package power (NVML).
+        //
+        // Per-component wattage for CPU, iGPU, RAM, screen, disk, Wi-Fi and
+        // chipset — plus the system total and AC adapter input derived from
+        // them — used to be computed from linear formulas over utilisation and
+        // have been removed outright rather than shown as estimates. None of
+        // them are obtainable on this hardware: AMD SMU (CPU) is held
+        // exclusively by the OEM utility, no consumer iGPU exposes package
+        // power, and Windows has no API at all for adapter input wattage.
+        // Utilisation, throughput and brightness below are all really measured.
+
         // CPU
         public double CpuUsagePercent { get; set; }
-        public double CpuPowerW { get; set; }
 
         // RAM
         public double RamUsageGB { get; set; }
         public double TotalRamGB { get; set; }
         public double RamUsagePercent { get; set; }
-        public double RamPowerW { get; set; }
 
         // Integrated GPU (iGPU)
         public string IgpuName { get; set; } = "內建顯示晶片 (iGPU)";
         public double IgpuUsagePercent { get; set; }
-        public double IgpuPowerW { get; set; }
 
-        // Discrete GPU (dGPU)
+        // Discrete GPU (dGPU). Power is real, read over NVML.
         public bool HasDiscreteGpu { get; set; }
         public string DgpuName { get; set; } = "獨立顯示卡 (dGPU)";
         public double DgpuUsagePercent { get; set; }
         public double DgpuPowerW { get; set; }
+        public bool IsDgpuPowerMeasured { get; set; }
         public string DgpuStatusText { get; set; } = "0% (待機省電)";
 
         // Screen / Display Backlight
         public int ScreenBrightnessPercent { get; set; } = 75;
         public bool IsBrightnessMeasured { get; set; }
-        public double ScreenPowerW { get; set; }
 
         // Wi-Fi / Wireless Network
         public double WifiThroughputKbps { get; set; }
-        public double WifiPowerW { get; set; }
-
-        // Motherboard Chipset & Peripherals
-        public double MotherboardPowerW { get; set; }
 
         // Legacy / Main GPU summary
         public double GpuUsagePercent { get; set; }
-        public double GpuPowerW { get; set; }
         public string GpuName { get; set; } = "顯示晶片";
 
         // Disk (SSD / HDD)
         public double DiskUsagePercent { get; set; }
         public double DiskReadWriteMbps { get; set; }
-        public double DiskPowerW { get; set; }
         public string DiskStatusText { get; set; } = "讀寫 0 MB/s";
 
+        // Load rating is derived from utilisation only — no wattage involved.
         public string SystemPowerLoadStatus { get; set; } = "一般";
     }
 

@@ -195,61 +195,42 @@ namespace WinBatLens.Services
             {
                 state.CpuUsagePercent = 0.0;
             }
-            // Prefer the real RAPL/NVML reading; the linear formula is only a
-            // last resort and is flagged as such so the UI can label it. The
-            // sensor values are refreshed on their own background timer, so
-            // reading them here costs nothing.
-            double? cpuMeasuredW = HardwareSensorService.CpuPackageW;
-            state.IsCpuPowerMeasured = cpuMeasuredW.HasValue;
-            state.CpuPowerW = cpuMeasuredW ?? Math.Round(2.5 + (state.CpuUsagePercent / 100.0) * 22.5, 1);
+            // CPU package power is deliberately not reported. It is unreadable
+            // here (the OEM utility owns the AMD SMU mailbox) and the linear
+            // estimate that used to stand in for it has been removed.
 
-            // 2. GPU (iGPU & dGPU) Usage & Power
+            // 2. GPU (iGPU & dGPU) usage. Only dGPU package power is real.
             var (iGpuVal, dGpuVal) = GetDualGpuUsage();
             state.IgpuUsagePercent = iGpuVal;
-            state.IgpuPowerW = HardwareSensorService.IgpuPackageW
-                               ?? Math.Round(1.0 + (iGpuVal / 100.0) * 12.0, 1);
 
             if (state.HasDiscreteGpu)
             {
                 state.DgpuUsagePercent = dGpuVal;
 
-                // A real GPU draws real watts even at 0% utilisation (measured
-                // ~19 W idle on an RTX 3060 Laptop), so the sensor value is used
-                // whatever the load says. Only the estimate zeroes out at idle.
+                // A real GPU draws real watts even at 0% utilisation (~19 W idle
+                // measured on an RTX 3060 Laptop), so the sensor value is used
+                // whatever the load reads.
                 double? dGpuMeasuredW = HardwareSensorService.DgpuPackageW;
                 state.IsDgpuPowerMeasured = dGpuMeasuredW.HasValue;
+                state.DgpuPowerW = dGpuMeasuredW ?? 0.0;
 
-                if (dGpuMeasuredW.HasValue)
-                {
-                    state.DgpuPowerW = dGpuMeasuredW.Value;
-                    state.DgpuStatusText = dGpuVal > 0
-                        ? $"{dGpuVal:F1}% (高效能運算中)"
-                        : $"{dGpuVal:F1}% (待機)";
-                }
-                else if (dGpuVal > 0)
-                {
-                    state.DgpuPowerW = Math.Round(3.0 + (dGpuVal / 100.0) * 35.0, 1);
-                    state.DgpuStatusText = $"{dGpuVal:F1}% (高效能運算中)";
-                }
-                else
-                {
-                    state.DgpuPowerW = 0.0;
-                    state.DgpuStatusText = "0.0% (待機省電)";
-                }
+                state.DgpuStatusText = dGpuVal > 0
+                    ? $"{dGpuVal:F1}% (高效能運算中)"
+                    : $"{dGpuVal:F1}% (待機)";
             }
             else
             {
                 state.DgpuUsagePercent = 0;
                 state.DgpuPowerW = 0;
+                state.IsDgpuPowerMeasured = false;
                 state.DgpuStatusText = "無獨立顯示卡";
             }
 
             // Legacy total GPU
             state.GpuUsagePercent = Math.Max(iGpuVal, dGpuVal);
-            state.GpuPowerW = Math.Round(state.IgpuPowerW + state.DgpuPowerW, 1);
             state.GpuName = state.HasDiscreteGpu ? state.DgpuName : state.IgpuName;
 
-            // 3. Disk (SSD / HDD) Usage & Power
+            // 3. Disk (SSD / HDD) usage and throughput
             try
             {
                 if (_diskTimeCounter != null)
@@ -272,18 +253,15 @@ namespace WinBatLens.Services
                 state.DiskReadWriteMbps = 0.0;
                 state.DiskStatusText = "即時吞吐量: --";
             }
-            state.DiskPowerW = Math.Round(0.4 + (state.DiskUsagePercent / 100.0) * 3.2, 1);
 
-            // 4. Screen Brightness & Display Power
+            // 4. Screen brightness
             state.ScreenBrightnessPercent = GetScreenBrightnessPercent();
             state.IsBrightnessMeasured = _brightnessMeasured;
-            state.ScreenPowerW = Math.Round(1.0 + (state.ScreenBrightnessPercent / 100.0) * 5.5, 1);
 
-            // 5. Wi-Fi Wireless Adapter & Traffic Power
+            // 5. Wi-Fi throughput
             state.WifiThroughputKbps = GetWifiThroughputKbps();
-            state.WifiPowerW = Math.Round(0.6 + Math.Min(1.8, (state.WifiThroughputKbps / 5000.0) * 1.5), 1);
 
-            // 6. Memory (RAM) Usage & Bus Power
+            // 6. Memory (RAM) usage
             try
             {
                 var ramInfo = GetSystemRamInfo();
@@ -297,20 +275,12 @@ namespace WinBatLens.Services
                 state.RamUsageGB = 0.0;
                 state.RamUsagePercent = 0.0;
             }
-            state.RamPowerW = Math.Round(0.8 + (state.RamUsagePercent / 100.0) * 1.7, 1);
 
-            // 7. Motherboard Base Power
-            state.MotherboardPowerW = 2.5;
-
-            // Calculate Total System Hardware Power W. The total is only called
-            // "measured" when both of the two dominant consumers (CPU and dGPU)
-            // came from real sensors — the remaining terms are small estimates.
-            state.TotalSystemHardwareW = Math.Round(
-                state.CpuPowerW + state.IgpuPowerW + state.DgpuPowerW +
-                state.ScreenPowerW + state.DiskPowerW + state.WifiPowerW +
-                state.RamPowerW + state.MotherboardPowerW, 1);
-            state.IsTotalPowerMeasured = state.IsCpuPowerMeasured &&
-                                         (!state.HasDiscreteGpu || state.IsDgpuPowerMeasured);
+            // There is no system-total wattage. Screen, disk, Wi-Fi, RAM and
+            // chipset power were all linear guesses over utilisation and are
+            // gone; summing them produced an equally invented total. On battery
+            // the pack reports the real whole-system figure (section 9), which
+            // is strictly better than any sum of estimates could be.
 
             // 8. Windows power status + the battery's own charge/discharge rate.
             bool haveBatt = BatteryTelemetryService.TryRead(out var batt);
@@ -346,14 +316,19 @@ namespace WinBatLens.Services
                         }
 
                         state.PowerStatusText = "AC 充電中";
-                        state.AcTotalInputW = Math.Round(state.ChargingRateW + state.TotalSystemHardwareW, 1);
-                        state.DischargeRateText = $"{state.AcTotalInputW:F1} W (AC 變壓器總供電)";
 
-                        string chargeStr = state.IsChargeRateMeasured
-                            ? $"充電 +{state.ChargingRateW:F1}W"
-                            : "充電 +--W";
-                        state.ChargingStatusText =
-                            $"AC 總輸出 ~{state.AcTotalInputW:F1}W ({chargeStr} + 硬體 ~{state.TotalSystemHardwareW:F1}W 推估)";
+                        // Only the charge rate is real. AC adapter input cannot
+                        // be measured at all on Windows, so no total is shown.
+                        if (state.IsChargeRateMeasured)
+                        {
+                            state.DischargeRateText = $"+{state.ChargingRateW:F1} W (電池充電實測)";
+                            state.ChargingStatusText = $"電池充電中 +{state.ChargingRateW:F1}W (電池實測)";
+                        }
+                        else
+                        {
+                            state.DischargeRateText = "-- W";
+                            state.ChargingStatusText = "電池充電中 (充電功率無法讀取)";
+                        }
 
                         if (state.IsChargeRateMeasured && state.ChargingRateW > 0)
                         {
@@ -368,22 +343,22 @@ namespace WinBatLens.Services
                     }
                     else
                     {
+                        // On AC with no current flowing there is nothing real to
+                        // measure: the pack reports 0 and adapter input is not
+                        // exposed by Windows. Report that honestly.
                         state.ChargingRateW = 0.0;
-                        state.AcTotalInputW = state.TotalSystemHardwareW;
                         state.PowerStatusText = "市電供電中 (未充電)";
-                        state.ChargingStatusText =
-                            $"市電直供硬體 (~{state.TotalSystemHardwareW:F1}W 推估) | 電池未充電 (0 W)";
+                        state.ChargingStatusText = "市電直供 | 電池未充放電 (無可量測功率)";
                         state.EstimatedTimeRemainingText = state.BatteryPercent >= 98
                             ? "電量已充滿 100%"
                             : $"電量 {state.BatteryPercent}% (電池保養未充電)";
-                        state.DischargeRateText = $"{state.AcTotalInputW:F1} W (AC 變壓器總供電)";
+                        state.DischargeRateText = "-- W";
                     }
                 }
                 else
                 {
                     state.IsCharging = false;
                     state.ChargingRateW = 0.0;
-                    state.AcTotalInputW = 0.0;
                     state.PowerStatusText = "電池放電中";
                     state.ChargingStatusText = "使用電池供電";
 
@@ -412,18 +387,20 @@ namespace WinBatLens.Services
                 }
                 else
                 {
-                    state.DischargeRateW = state.TotalSystemHardwareW;
+                    // No substitute figure: if the pack will not report a rate
+                    // there is no honest number to show.
+                    state.DischargeRateW = 0.0;
                     state.IsDischargeRateMeasured = false;
-                    state.DischargeRateText = $"-{state.DischargeRateW:F1} W (全硬體推估)";
+                    state.DischargeRateText = "-- W";
                 }
             }
 
-            // 10. Overall System Power Load Rating
-            if (state.CpuUsagePercent > 70.0 || state.DgpuUsagePercent > 40.0 || state.TotalSystemHardwareW > 25.0)
+            // 10. Load rating, from utilisation only — no wattage involved.
+            if (state.CpuUsagePercent > 70.0 || state.DgpuUsagePercent > 40.0)
             {
                 state.SystemPowerLoadStatus = "高負載 (高耗電)";
             }
-            else if (state.CpuUsagePercent > 30.0 || state.IgpuUsagePercent > 30.0 || state.TotalSystemHardwareW > 15.0)
+            else if (state.CpuUsagePercent > 30.0 || state.IgpuUsagePercent > 30.0)
             {
                 state.SystemPowerLoadStatus = "中度運算";
             }
