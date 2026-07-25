@@ -1,8 +1,20 @@
 # Project State & Handoff
 
 ## Current Objective
-Memory-usage optimization of WinBat Lens (C# .NET 8 WPF), following an earlier
-full code review + two reliability fixes (documented below).
+Synchronizing codebase to GitHub repository and creating GitHub Release v1.0.1 with Installer (`Setup.exe`), Portable Single Executable (`.exe`), and Portable ZIP (`.zip`) packages.
+
+## Release Packaging & Version Upgrade Session (latest)
+- Added **Single Instance Mutex** (`WinBatLens_SingleInstance_Mutex`) in `App.xaml.cs`.
+- Updated **Inno Setup Script** (`installer/WinBatLens.iss`):
+  - Fixed `AppId={{D2B3F0E1-8E4B-4D2A-9A2C-5F1B3E7A902A}` for continuous version tracking across builds.
+  - Configured `AppMutex=WinBatLens_SingleInstance_Mutex`, `UsePreviousAppDir=yes`, `UsePreviousGroup=yes`, `UsePreviousTasks=yes`, `CloseApplications=yes`.
+  - Installer automatically detects existing installed version, safely shuts down background instances, updates binaries, updates registry version numbers, and preserves user preferences.
+- Generated **Dist Packages** (`dist/`):
+  - `WinBatLens_v1.0.1_Setup_x64.exe` (Installer Setup with in-place update support).
+  - `WinBatLens_v1.0.1_Portable_x64.exe` (Standalone Portable Single Executable).
+  - `WinBatLens_v1.0.1_Portable_x64.zip` (Portable ZIP archive).
+
+
 
 ## Memory optimization session (latest)
 Goal: reduce the footprint of this always-on, once-per-second tray monitor.

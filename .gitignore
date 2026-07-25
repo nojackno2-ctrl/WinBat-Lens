@@ -23,3 +23,6 @@ start-winbat-lens.bat
 
 ## Published self-contained build artifacts (do not track - ~71MB each)
 publish/
+dist/
+installer/Output/
+
