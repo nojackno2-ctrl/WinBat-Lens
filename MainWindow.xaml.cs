@@ -42,8 +42,10 @@ namespace WinBatLens
         private ToolStripMenuItem? _trayItemAutoStart;
         private ToolStripMenuItem? _trayItemExit;
 
-        private readonly Queue<(double DischargeW, double ChargeW, double CpuW, double GpuW)> _chartHistory =
-            new Queue<(double, double, double, double)>();
+        // The CPU series is gone from this tuple: its wattage was a formula over
+        // utilisation, and CPU package power is unreadable on this hardware.
+        private readonly Queue<(double DischargeW, double ChargeW, double GpuW)> _chartHistory =
+            new Queue<(double, double, double)>();
         private const int MAX_CHART_POINTS = 60;
 
         // Frozen, shared brushes reused across timer ticks. UpdateLivePowerUI
@@ -245,9 +247,7 @@ namespace WinBatLens
             double chgW = (state.IsCharging && state.IsChargeRateMeasured) ? state.ChargingRateW : 0.0;
             double gpuW = state.IsDgpuPowerMeasured ? state.DgpuPowerW : 0.0;
 
-            // The CPU series is gone: its wattage was a formula over
-            // utilisation, and CPU package power is unreadable on this hardware.
-            _chartHistory.Enqueue((disW, chgW, 0.0, gpuW));
+            _chartHistory.Enqueue((disW, chgW, gpuW));
             while (_chartHistory.Count > MAX_CHART_POINTS)
             {
                 _chartHistory.Dequeue();
@@ -269,7 +269,6 @@ namespace WinBatLens
 
                 var dischargePoints = new PointCollection();
                 var chargePoints = new PointCollection();
-                var cpuPoints = new PointCollection();
                 var gpuPoints = new PointCollection();
 
                 // Iterate the queue directly (oldest→newest) instead of
@@ -277,7 +276,7 @@ namespace WinBatLens
                 double peakPower = 0.0;
                 foreach (var item in _chartHistory)
                 {
-                    double p = Math.Max(Math.Max(item.DischargeW, item.ChargeW), Math.Max(item.CpuW, item.GpuW));
+                    double p = Math.Max(Math.Max(item.DischargeW, item.ChargeW), item.GpuW);
                     if (p > peakPower) peakPower = p;
                 }
                 double maxPowerW = Math.Max(35.0, peakPower * 1.15);
@@ -297,19 +296,16 @@ namespace WinBatLens
                     // Y values (0 at bottom, Height at top)
                     double yDischarge = h - Math.Min(h, Math.Max(0, (item.DischargeW / maxPowerW) * h));
                     double yCharge = h - Math.Min(h, Math.Max(0, (item.ChargeW / maxPowerW) * h));
-                    double yCpu = h - Math.Min(h, Math.Max(0, (item.CpuW / maxPowerW) * h));
                     double yGpu = h - Math.Min(h, Math.Max(0, (item.GpuW / maxPowerW) * h));
 
                     dischargePoints.Add(new WpfPoint(x, yDischarge));
                     chargePoints.Add(new WpfPoint(x, yCharge));
-                    cpuPoints.Add(new WpfPoint(x, yCpu));
                     gpuPoints.Add(new WpfPoint(x, yGpu));
                     i++;
                 }
 
                 PolylineDischarge.Points = dischargePoints;
                 PolylineCharge.Points = chargePoints;
-                PolylineCpu.Points = cpuPoints;
                 PolylineGpu.Points = gpuPoints;
             }
             catch { }

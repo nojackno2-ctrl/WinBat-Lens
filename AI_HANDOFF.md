@@ -1,6 +1,31 @@
 # Project State & Handoff
 
-## GPU list card removed (latest, v1.0.7)
+## One colour per meaning (latest, v1.0.8)
+
+Discharge was being drawn in three different colours depending on where you
+looked, and the dGPU shared a colour with it:
+
+| surface | discharge (before) | dGPU (before) |
+|---|---|---|
+| headline number | amber `#F59E0B` | — |
+| chart line + legend | cyan `#38BDF8` | amber `#F59E0B` |
+| tray icon | red `#EF4444` | — |
+
+So the amber in the headline and the amber line on the chart meant different
+things, while the same concept changed colour three times.
+
+Settled on **discharge = amber `#F59E0B`, charge = emerald `#10B981`, dGPU =
+cyan `#38BDF8`**, applied to the headline, the chart polylines, the legend and
+the tray icon. Charge was already emerald everywhere and did not move. Amber
+won for discharge because the headline is the most-looked-at surface; the dGPU
+took over the freed cyan.
+
+Also removed with it: the `PolylineCpu` series and the orphaned purple legend
+swatch (a `Border` with no label after its `TextBlock` was deleted earlier). The
+CPU line had been pinned flat at zero since v1.0.5 removed CPU wattage. The
+chart history tuple drops its `CpuW` slot, so it is now a 3-tuple.
+
+## GPU list card removed (v1.0.7)
 
 Removed the 「系統顯示卡清單」 card. It listed adapter name, VRAM, driver version
 and driver date — inventory data, not power, and nothing else consumed it.

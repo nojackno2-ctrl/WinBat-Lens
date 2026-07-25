@@ -38,10 +38,12 @@ namespace WinBatLens.Services
                 }
                 else if (!state.IsAcOnline && state.IsDischargeRateMeasured)
                 {
-                    // Discharging, e.g. 48.9W -> 49 in RED
+                    // Discharging, e.g. 48.9W -> 49 in AMBER. Amber, not red:
+                    // discharge is amber everywhere else in the app and the
+                    // colours have to agree.
                     int wattVal = (int)Math.Round(state.DischargeRateW);
                     textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
-                    textColor = Color.FromArgb(255, 239, 68, 68); // #EF4444 Crimson Red
+                    textColor = Color.FromArgb(255, 245, 158, 11); // #F59E0B Amber
                 }
                 else
                 {
