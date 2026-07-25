@@ -15,7 +15,7 @@ namespace WinBatLens.Services
 
         private static Icon? _currentCreatedIcon = null;
         private static string? _lastDrawnText;
-        private static bool _lastDrawnIsAc;
+        private static Color _lastDrawnColor;
 
         public static void UpdateTrayIcon(NotifyIcon notifyIcon, RealTimePowerState state)
         {
@@ -26,26 +26,37 @@ namespace WinBatLens.Services
                 string textToDraw;
                 Color textColor;
 
-                if (state.IsAcOnline)
+                // Only ever draw a measured rate. With the pack idle on AC there
+                // is no real wattage, so the icon shows a dash rather than a
+                // number that would look like a reading.
+                if (state.IsCharging && state.IsChargeRateMeasured)
                 {
-                    // Render AC Total Input Wattage (AcTotalInputW) e.g. 28.9W -> 29 in GREEN
-                    int wattVal = (int)Math.Round(state.AcTotalInputW);
+                    // Charging into the battery, e.g. 56.1W -> 56 in GREEN
+                    int wattVal = (int)Math.Round(state.ChargingRateW);
                     textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
                     textColor = Color.FromArgb(255, 16, 185, 129); // #10B981 Emerald Green
                 }
-                else
+                else if (!state.IsAcOnline && state.IsDischargeRateMeasured)
                 {
-                    // Render Battery Discharge Wattage (DischargeRateW) e.g. 15.7W -> 16 in RED
+                    // Discharging, e.g. 48.9W -> 49 in RED
                     int wattVal = (int)Math.Round(state.DischargeRateW);
                     textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
                     textColor = Color.FromArgb(255, 239, 68, 68); // #EF4444 Crimson Red
                 }
+                else
+                {
+                    textToDraw = "–";
+                    textColor = Color.FromArgb(255, 148, 163, 184); // slate
+                }
 
                 // The rounded wattage usually repeats between ticks; skip the
                 // whole bitmap/font/icon regeneration when nothing changed.
+                // Key on exactly what is drawn — text and colour — so a state
+                // change that keeps the digits but changes the colour still
+                // repaints.
                 if (_currentCreatedIcon != null &&
                     textToDraw == _lastDrawnText &&
-                    state.IsAcOnline == _lastDrawnIsAc)
+                    textColor == _lastDrawnColor)
                 {
                     return;
                 }
@@ -102,7 +113,7 @@ namespace WinBatLens.Services
 
                     _currentCreatedIcon = newIcon;
                     _lastDrawnText = textToDraw;
-                    _lastDrawnIsAc = state.IsAcOnline;
+                    _lastDrawnColor = textColor;
                 }
             }
             catch (Exception ex)

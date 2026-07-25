@@ -1,6 +1,48 @@
 # Project State & Handoff
 
-## All estimated wattage deleted (latest, v1.0.5)
+## Charging shown in the headline; power-less rows removed (latest, v1.0.6)
+
+Two user-reported problems, the first a genuine bug I introduced in v1.0.5.
+
+### Bug: the headline card read 0.0 W while charging at 56.1 W
+The v1.0.5 refactor removed the *assignments* to `TotalSystemHardwareW` and
+`AcTotalInputW` but left the fields on the model and **six UI references** to
+them. Both stayed 0 forever, so on AC the main card showed `~0.0 W` and its
+subtitle still carried the old v1.0.4 wording — while the subtitle's own
+`電池充電 +56.1W 實測` proved a real measurement was in hand.
+
+Fixed by deleting both fields outright and reworking the headline to show
+whichever rate is actually measured:
+
+| state | headline |
+|---|---|
+| charging | `+56.1 W` (emerald) |
+| on battery | `-48.9 W` (amber) |
+| on AC, pack idle | `-- W` |
+
+The tray icon and its tooltip had the same defect and now follow the same rule
+(a slate `–` glyph when there is nothing real to show). `DynamicTrayIconService`
+also keyed its redraw cache on `IsAcOnline`, which no longer determines the
+colour; the key is now the drawn text **and** colour, otherwise a state change
+that kept the digits would have kept a stale colour.
+
+Card title changed from 「電池總放電 / AC 變壓器總供電功率」 to
+「電池充放電功率 (實測)」 — it never showed adapter power and now never will.
+
+### Rows without a power sensor removed from the breakdown
+Per the user: components whose power cannot be detected are meaningless in a
+power breakdown. Removed the CPU, iGPU, screen, Wi-Fi, disk and RAM rows
+entirely. **Only the dGPU row remains**, because NVML gives it a real wattage.
+
+Their underlying utilisation values are still collected — `SystemPowerLoadStatus`
+and the history log still use CPU/dGPU load — they are simply no longer
+displayed on a page about wattage. A short note now explains on-screen why each
+component is absent. Section retitled to 「硬體實測功耗」.
+
+Verified live: charging read **54.5 W** through the production service at the
+time of the build.
+
+## All estimated wattage deleted (v1.0.5)
 
 User decision, stated plainly: *"我不要推估的東西，如果真的沒辦法抓到真實的數據
 就刪掉該功能"* — no estimates; if a real value cannot be obtained, remove the

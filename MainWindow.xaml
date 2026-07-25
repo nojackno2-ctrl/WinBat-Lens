@@ -337,21 +337,10 @@
                                             </Grid>
                                         </Border>
 
-                                        <!-- CPU Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="260"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="160"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwCpu" Text="🔲 CPU 處理器" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
-                                                </StackPanel>
-                                                <ProgressBar x:Name="PbCpuUsage" Grid.Column="1" Height="10" Value="0" Maximum="100" Foreground="{StaticResource AccentCyan}" Background="#090D16" BorderThickness="0" Margin="10,0" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="TxtCpuUsageVal" Grid.Column="2" Text="0%" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
+                                        <!-- Only the discrete GPU exposes a real power sensor, so it is
+                                             the only component row left here. Rows for CPU, iGPU, screen,
+                                             Wi-Fi, disk and RAM were removed: no wattage can be obtained
+                                             for any of them on this hardware. -->
 
                                         <!-- Discrete GPU (dGPU) Row -->
                                         <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
@@ -370,98 +359,10 @@
                                             </Grid>
                                         </Border>
 
-                                        <!-- Integrated GPU (iGPU) Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="260"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="160"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="TxtIgpuName" Text="🖼️ 內建顯示晶片 (iGPU)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
-                                                <ProgressBar x:Name="PbIgpuUsage" Grid.Column="1" Height="10" Value="0" Maximum="100" Foreground="{StaticResource AccentCyan}" Background="#090D16" BorderThickness="0" Margin="10,0" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="TxtIgpuUsageVal" Grid.Column="2" Text="0%" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
-
-                                        <!-- Screen Display & Backlight Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="260"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="160"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwScreen" Text="🖥️ 螢幕面板與背光" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
-                                                </StackPanel>
-                                                <ProgressBar x:Name="PbScreenBrightness" Grid.Column="1" Height="10" Value="0" Maximum="100" Foreground="{StaticResource AccentRose}" Background="#090D16" BorderThickness="0" Margin="10,0" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="TxtScreenBrightnessVal" Grid.Column="2" Text="75% 亮度" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
-
-                                        <!-- Wi-Fi Wireless Adapter & Traffic Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="260"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="160"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwWifi" Text="📶 Wi-Fi / 藍牙網絡" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
-                                                </StackPanel>
-                                                <TextBlock x:Name="TxtWifiSpeedVal" Grid.Column="1" Text="即時傳輸流量: 0 KB/s" Foreground="{StaticResource TextMuted}" FontSize="12" VerticalAlignment="Center" Margin="10,0"/>
-                                                <TextBlock Text="無線網卡運作中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
-
-                                        <!-- Disk (SSD/HDD) Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="260"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="160"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwDisk" Text="💾 硬碟 (SSD/HDD)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
-                                                </StackPanel>
-                                                <ProgressBar x:Name="PbDiskUsage" Grid.Column="1" Height="10" Value="0" Maximum="100" Foreground="{StaticResource AccentEmerald}" Background="#090D16" BorderThickness="0" Margin="10,0" VerticalAlignment="Center"/>
-                                                <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="TxtDiskUsageVal" Text="0%" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right"/>
-                                                    <TextBlock x:Name="TxtDiskStatusText" Text="0 MB/s" Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-
-                                        <!-- RAM Usage & Power Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="260"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="160"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwRam" Text="🧠 記憶體 (RAM) 匯流排" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
-                                                </StackPanel>
-                                                <ProgressBar x:Name="PbRamUsage" Grid.Column="1" Height="10" Value="0" Maximum="100" Foreground="{StaticResource AccentPurple}" Background="#090D16" BorderThickness="0" Margin="10,0" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="TxtRamUsageVal" Grid.Column="2" Text="0 GB / 0 GB" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
-
-                                        <!-- The motherboard/USB row was removed: its wattage was a
-                                             hard-coded 2.5 W with no data source behind it. -->
-
                                         <Separator Background="#10FFFFFF" Margin="0,10"/>
 
-                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                            <TextBlock Text="系統負載評級: " Foreground="{StaticResource TextMuted}" FontSize="13"/>
-                                            <TextBlock x:Name="TxtPowerLoadStatus" Text="輕度省電" Foreground="{StaticResource AccentEmerald}" FontWeight="Bold" FontSize="13" Margin="4,0,0,0"/>
-                                        </StackPanel>
+                                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextMuted}"
+                                                   Text="說明：本頁僅顯示能真實量測到的功耗。CPU、內顯、螢幕、Wi-Fi、硬碟與記憶體均無法取得功耗數值（CPU 的 AMD SMU 通道被原廠軟體獨佔，其餘元件硬體本身就沒有功耗感測器），因此不再列出推估值。變壓器輸入功率 Windows 未提供任何 API。"/>
                                     </StackPanel>
                                 </Border>
 
