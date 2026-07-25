@@ -89,6 +89,17 @@ namespace WinBatLens.Models
         public string DischargeRateText { get; set; } = "-- W";
         public string ChargingStatusText { get; set; } = "讀取中...";
         public string EstimatedTimeRemainingText { get; set; } = "--";
+
+        // Battery Physical Telemetry. The *Measured flags are false when the
+        // hardware/firmware does not expose the value, so the UI can show "--"
+        // instead of presenting a fallback constant as a real reading.
+        public double BatteryVoltageV { get; set; }
+        public bool IsVoltageMeasured { get; set; }
+        public double BatteryCurrentA { get; set; }
+        public double BatteryTemperatureC { get; set; }
+        public bool IsTemperatureMeasured { get; set; }
+        public string BatteryTelemetryText { get; set; } = "-- V | -- A | -- °C";
+        public string PowerPlanName { get; set; } = "平衡 (Balanced)";
         
         // CPU
         public double CpuUsagePercent { get; set; }
@@ -114,6 +125,7 @@ namespace WinBatLens.Models
 
         // Screen / Display Backlight
         public int ScreenBrightnessPercent { get; set; } = 75;
+        public bool IsBrightnessMeasured { get; set; }
         public double ScreenPowerW { get; set; }
 
         // Wi-Fi / Wireless Network

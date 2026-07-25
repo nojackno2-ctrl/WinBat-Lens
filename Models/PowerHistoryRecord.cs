@@ -23,6 +23,17 @@ namespace WinBatLens.Models
         public double ScreenPowerW { get; set; }
         public string ScreenPowerText => $"{ScreenPowerW:F1} W";
 
+        public double BatteryVoltageV { get; set; }
+        public string VoltageText => BatteryVoltageV > 0 ? $"{BatteryVoltageV:F2} V" : "-- V";
+
+        public double BatteryCurrentA { get; set; }
+        public string CurrentText => BatteryCurrentA > 0 ? $"{BatteryCurrentA:F2} A" : "-- A";
+
+        public double BatteryTemperatureC { get; set; }
+        public string TemperatureText => BatteryTemperatureC > 0 ? $"{BatteryTemperatureC:F1} °C" : "-- °C";
+
+        public string TelemetryText => $"{VoltageText} | {CurrentText} | {TemperatureText}";
+
         public string SummaryText { get; set; } = string.Empty;
     }
 }

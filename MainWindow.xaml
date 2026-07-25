@@ -210,13 +210,14 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
 
                                     <!-- Live Discharge Rate Card -->
-                                    <Border Grid.Column="0" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,8,0">
+                                    <Border Grid.Column="0" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,6,0">
                                         <StackPanel>
                                             <TextBlock x:Name="TxtCardTotalPower" Text="⚡ 電池總放電 / AC 變壓器總供電功率" FontSize="13" Foreground="{StaticResource TextMuted}"/>
-                                            <TextBlock x:Name="TxtLiveDischargeRate" Text="-- W" FontSize="30" FontWeight="ExtraBold" Foreground="{StaticResource AccentCyan}" Margin="0,6"/>
+                                            <TextBlock x:Name="TxtLiveDischargeRate" Text="-- W" FontSize="28" FontWeight="ExtraBold" Foreground="{StaticResource AccentCyan}" Margin="0,6"/>
                                             <Border x:Name="BadgeLiveAcState" Background="#2038BDF8" BorderBrush="{StaticResource AccentCyan}" BorderThickness="1" CornerRadius="12" Padding="10,3" HorizontalAlignment="Left">
                                                 <TextBlock x:Name="TxtLiveAcState" Text="電源狀態讀取中..." FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentCyan}"/>
                                             </Border>
@@ -224,11 +225,20 @@
                                     </Border>
 
                                     <!-- Live Remaining Battery Time Card -->
-                                    <Border Grid.Column="1" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="8,0,0,0">
+                                    <Border Grid.Column="1" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="3,0,3,0">
                                         <StackPanel>
                                             <TextBlock x:Name="TxtCardEstTime" Text="⏱️ 電腦估算剩餘續航時間" FontSize="13" Foreground="{StaticResource TextMuted}"/>
-                                            <TextBlock x:Name="TxtLiveRemainingTime" Text="--" FontSize="26" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}" Margin="0,8"/>
+                                            <TextBlock x:Name="TxtLiveRemainingTime" Text="--" FontSize="24" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}" Margin="0,8"/>
                                             <TextBlock x:Name="TxtLiveBatteryPercent" Text="目前電量: --%" FontSize="13" Foreground="{StaticResource TextMuted}"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Live Battery Hardware Telemetry Card -->
+                                    <Border Grid.Column="2" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="6,0,0,0">
+                                        <StackPanel>
+                                            <TextBlock x:Name="TxtCardTelemetry" Text="🔋 電池物理狀態 (電壓/電流/溫度)" FontSize="13" Foreground="{StaticResource TextMuted}"/>
+                                            <TextBlock x:Name="TxtLiveBatteryTelemetry" Text="-- V | -- A | -- °C" FontSize="20" FontWeight="Bold" Foreground="{StaticResource AccentAmber}" Margin="0,10,0,8"/>
+                                            <TextBlock x:Name="TxtLiveBatteryTelemetrySub" Text="WMI &amp; ACPI 即時硬體感測" FontSize="12" Foreground="{StaticResource TextMuted}"/>
                                         </StackPanel>
                                     </Border>
                                 </Grid>
@@ -248,10 +258,10 @@
                                                 <TextBlock x:Name="TxtLegendCharge" Text="充電 (+W)" FontSize="11" Foreground="{StaticResource AccentEmerald}" Margin="0,0,10,0"/>
 
                                                 <Border Width="12" Height="3" Background="{StaticResource AccentPurple}" Margin="0,0,4,0"/>
-                                                <TextBlock x:Name="TxtLegendCpu" Text="CPU (%)" FontSize="11" Foreground="{StaticResource AccentPurple}" Margin="0,0,10,0"/>
+                                                <TextBlock x:Name="TxtLegendCpu" Text="CPU (W)" FontSize="11" Foreground="{StaticResource AccentPurple}" Margin="0,0,10,0"/>
                                                 
                                                 <Border Width="12" Height="3" Background="{StaticResource AccentAmber}" Margin="0,0,4,0"/>
-                                                <TextBlock x:Name="TxtLegendGpu" Text="獨顯 (%)" FontSize="11" Foreground="{StaticResource AccentAmber}"/>
+                                                <TextBlock x:Name="TxtLegendGpu" Text="獨顯 (W)" FontSize="11" Foreground="{StaticResource AccentAmber}"/>
                                             </StackPanel>
                                         </Grid>
 
@@ -292,6 +302,40 @@
                                 <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,14">
                                     <StackPanel>
                                         <TextBlock x:Name="TxtHardwareTitle" Text="💻 全系統各硬體元件功耗明細 (Full System Hardware Power Breakdown)" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,14"/>
+
+                                        <!-- Battery Hardware Telemetry Row -->
+                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="260"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="160"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="LblHwBatteryTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流 / 溫度)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                    <TextBlock x:Name="TxtTelemetrySub" Text="WMI &amp; ACPI 即時電氣感測" Foreground="{StaticResource AccentAmber}" FontSize="11" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                                <TextBlock x:Name="TxtHwTelemetryVal" Grid.Column="1" Text="-- V  |  -- A  |  -- °C" Foreground="{StaticResource AccentAmber}" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" Margin="10,0"/>
+                                                <TextBlock Text="ACPI 感測器運作中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Windows Power Scheme Row -->
+                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="260"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="160"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="LblHwPowerPlan" Text="⚙️ Windows 運作電源計劃" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                    <TextBlock Text="PowrProf 電源管理策略" Foreground="{StaticResource AccentEmerald}" FontSize="11" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                                <TextBlock x:Name="TxtHwPowerPlanVal" Grid.Column="1" Text="平衡 (Balanced)" Foreground="{StaticResource AccentEmerald}" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" Margin="10,0"/>
+                                                <TextBlock Text="電源配置生效中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
 
                                         <!-- CPU Row -->
                                         <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="8" Padding="12,10" Margin="0,0,0,8">
@@ -518,6 +562,7 @@
                                         <GridViewColumn Header="事件類型" Width="130" DisplayMemberBinding="{Binding EventType}"/>
                                         <GridViewColumn Header="放電/充電功率" Width="120" DisplayMemberBinding="{Binding DischargeRateText}"/>
                                         <GridViewColumn Header="電量 (%)" Width="100" DisplayMemberBinding="{Binding BatteryPercentText}"/>
+                                        <GridViewColumn Header="電池狀態 (V/A/°C)" Width="170" DisplayMemberBinding="{Binding TelemetryText}"/>
                                         <GridViewColumn Header="CPU 負載" Width="110" DisplayMemberBinding="{Binding CpuUsageText}"/>
                                         <GridViewColumn Header="獨顯負載" Width="110" DisplayMemberBinding="{Binding DgpuUsageText}"/>
                                         <GridViewColumn Header="螢幕功耗" Width="110" DisplayMemberBinding="{Binding ScreenPowerText}"/>

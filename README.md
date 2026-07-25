@@ -62,34 +62,45 @@ $$\text{AC 變壓器插座總供電瓦數} = \text{電池充電瓦數 (+W)} + \t
 
 ---
 
-## 📥 下載與執行 (Download & Execution)
+## 📥 下載與發行版本 (Download & Releases)
 
-### 免安裝單一執行檔 (Portable Executable)
-您可直接下載編譯好的單一免安裝執行檔（約 3.1 MB），雙擊即可於任何 Windows 10 / 11 電腦執行：
+WinBat Lens 提供安裝版與免安裝版（單一執行檔/ZIP 壓縮包）供選擇：
 
-👉 **[下載 WinBatLens.exe (v1.0.0 Release Build)](./publish/WinBatLens.exe)**
+### 📦 1. 安裝版 (Setup Installer Version)
+- **檔案**：`WinBatLens_v1.0.1_Setup_x64.exe`
+- **特點**：包含標準 Windows 安裝精靈、開始功能表與桌面捷徑設定、開機自動啟動選項、版本無縫覆蓋更新，以及完整的移除安裝程式 (`unins000.exe`)。
+- **適用對象**：希望完整整合至 Windows 系統的個人電腦與筆記型電腦使用者。
+
+### 🎒 2. 免安裝隨身版 (Portable Version)
+- **檔案**：
+  - **單一執行檔**：`WinBatLens_v1.0.1_Portable_x64.exe`（直接雙擊即可執行，無須解壓）
+  - **ZIP 壓縮包**：`WinBatLens_v1.0.1_Portable_x64.zip`
+- **特點**：無需安裝與系統管理員權限，單一獨立 executable 內含完整 .NET 運行庫，免除了安裝步驟與系統改動。
+- **適用對象**：隨身碟攜帶使用、免安裝權限電腦或臨時檢測需求。
 
 ---
 
-## 🛠️ 開發與編譯指南 (Building from Source)
+## 🛠️ 開發與編譯指南 (Building & Packaging)
 
 ### 系統需求 (Prerequisites)
 - **作業系統**：Windows 10 / 11 (64-bit)
-- **開發環境**：Visual Studio 2022 (建議安裝 .NET 桌面開發工作負載) 或 .NET 8.0 SDK
+- **開發環境**：Visual Studio 2022 或 .NET 8.0 SDK
+- **打包工具**：Inno Setup 6 (用於生成 Installer Setup.exe，若未安裝則自動僅生成 Portable 檔案)
 
-### 編譯步驟 (Build Steps)
+### 一鍵發行與打包指令 (1-Click Release & Build)
 
-```bash
-# 1. 複製專案儲存庫 (Clone repository)
-git clone https://github.com/nojackno2-ctrl/WinBat-Lens.git
-cd WinBat-Lens
+本專案提供 PowerShell 自動化打包腳本 `build-release.ps1`：
 
-# 2. 建置專案 (Build project)
-dotnet build WinBatLens.csproj -c Release
-
-# 3. 發布單一免安裝執行檔 (Publish Single-File Executable)
-dotnet publish WinBatLens.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o ./publish/
+```powershell
+# 執行一鍵建置與打包 (一鍵生成安裝版 Setup.exe、免安裝單一執行檔與 Portable.zip)
+powershell -ExecutionPolicy Bypass -File .\build-release.ps1
 ```
+
+生成的發行檔案將自動儲存於 `dist/` 資料夾：
+- `dist/WinBatLens_v1.0.1_Setup_x64.exe`
+- `dist/WinBatLens_v1.0.1_Portable_x64.exe`
+- `dist/WinBatLens_v1.0.1_Portable_x64.zip`
+
 
 ---
 

@@ -33,7 +33,11 @@ namespace WinBatLens.Services
                             return (false, string.Empty, "無法啟動 powercfg 行程。");
                         }
 
-                        process.WaitForExit(10000); // 10s timeout
+                        if (!process.WaitForExit(10000)) // 10s timeout
+                        {
+                            try { process.Kill(); } catch { }
+                            return (false, string.Empty, "powercfg 執行逾時（超過 10 秒），已強制結束。");
+                        }
 
                         if (File.Exists(tempFile))
                         {

@@ -7,8 +7,19 @@ namespace WinBatLens
 {
     public partial class App : System.Windows.Application
     {
+        private static System.Threading.Mutex? _singleInstanceMutex;
+
         protected override void OnStartup(StartupEventArgs e)
         {
+            bool createdNew;
+            _singleInstanceMutex = new System.Threading.Mutex(true, "WinBatLens_SingleInstance_Mutex", out createdNew);
+            if (!createdNew)
+            {
+                // App is already running; close duplicate instance
+                Shutdown();
+                return;
+            }
+
             base.OnStartup(e);
 
             AppDomain.CurrentDomain.UnhandledException += (s, args) =>
