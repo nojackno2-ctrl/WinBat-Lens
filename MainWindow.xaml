@@ -236,8 +236,8 @@
                                     <!-- Live Battery Hardware Telemetry Card -->
                                     <Border Grid.Column="2" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="10" Padding="16" Margin="6,0,0,0">
                                         <StackPanel>
-                                            <TextBlock x:Name="TxtCardTelemetry" Text="🔋 電池物理狀態 (電壓/電流/溫度)" FontSize="13" Foreground="{StaticResource TextMuted}"/>
-                                            <TextBlock x:Name="TxtLiveBatteryTelemetry" Text="-- V | -- A | -- °C" FontSize="20" FontWeight="Bold" Foreground="{StaticResource AccentAmber}" Margin="0,10,0,8"/>
+                                            <TextBlock x:Name="TxtCardTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流)" FontSize="13" Foreground="{StaticResource TextMuted}"/>
+                                            <TextBlock x:Name="TxtLiveBatteryTelemetry" Text="-- V | -- A" FontSize="20" FontWeight="Bold" Foreground="{StaticResource AccentAmber}" Margin="0,10,0,8"/>
                                             <TextBlock x:Name="TxtLiveBatteryTelemetrySub" Text="WMI &amp; ACPI 即時硬體感測" FontSize="12" Foreground="{StaticResource TextMuted}"/>
                                         </StackPanel>
                                     </Border>
@@ -312,10 +312,10 @@
                                                     <ColumnDefinition Width="160"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwBatteryTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流 / 溫度)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
+                                                    <TextBlock x:Name="LblHwBatteryTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="13"/>
                                                     <TextBlock x:Name="TxtTelemetrySub" Text="WMI &amp; ACPI 即時電氣感測" Foreground="{StaticResource AccentAmber}" FontSize="11" Margin="0,2,0,0"/>
                                                 </StackPanel>
-                                                <TextBlock x:Name="TxtHwTelemetryVal" Grid.Column="1" Text="-- V  |  -- A  |  -- °C" Foreground="{StaticResource AccentAmber}" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" Margin="10,0"/>
+                                                <TextBlock x:Name="TxtHwTelemetryVal" Grid.Column="1" Text="-- V  |  -- A" Foreground="{StaticResource AccentAmber}" FontWeight="Bold" FontSize="13" VerticalAlignment="Center" Margin="10,0"/>
                                                 <TextBlock Text="ACPI 感測器運作中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
@@ -562,7 +562,7 @@
                                         <GridViewColumn Header="事件類型" Width="130" DisplayMemberBinding="{Binding EventType}"/>
                                         <GridViewColumn Header="放電/充電功率" Width="120" DisplayMemberBinding="{Binding DischargeRateText}"/>
                                         <GridViewColumn Header="電量 (%)" Width="100" DisplayMemberBinding="{Binding BatteryPercentText}"/>
-                                        <GridViewColumn Header="電池狀態 (V/A/°C)" Width="170" DisplayMemberBinding="{Binding TelemetryText}"/>
+                                        <GridViewColumn Header="電池狀態 (V / A)" Width="170" DisplayMemberBinding="{Binding TelemetryText}"/>
                                         <GridViewColumn Header="CPU 負載" Width="110" DisplayMemberBinding="{Binding CpuUsageText}"/>
                                         <GridViewColumn Header="獨顯負載" Width="110" DisplayMemberBinding="{Binding DgpuUsageText}"/>
                                         <GridViewColumn Header="螢幕功耗" Width="110" DisplayMemberBinding="{Binding ScreenPowerText}"/>

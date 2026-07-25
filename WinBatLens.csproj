@@ -13,9 +13,9 @@
     <Company>WinBat Lens</Company>
     <Product>WinBat Lens</Product>
     <Description>Windows 電池健康度視覺化儀表板與 powercfg /batteryreport 解析工具</Description>
-    <Version>1.0.2</Version>
-    <AssemblyVersion>1.0.2.0</AssemblyVersion>
-    <FileVersion>1.0.2.0</FileVersion>
+    <Version>1.0.3</Version>
+    <AssemblyVersion>1.0.3.0</AssemblyVersion>
+    <FileVersion>1.0.3.0</FileVersion>
 
     <!-- Memory tuning for a long-running background tray app -->
     <!-- Workstation (non-server) GC keeps a single small heap instead of one per CPU core -->
@@ -42,7 +42,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Management" Version="8.0.0" />
+    <!-- Real hardware sensors (CPU package power via RAPL, GPU power via NVML/ADL).
+         Pulls System.Management >= 10.0.2, so ours is pinned to match. -->
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="System.Management" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup>

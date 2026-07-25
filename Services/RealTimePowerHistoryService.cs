@@ -42,7 +42,6 @@ namespace WinBatLens.Services
                     ScreenPowerW = state.ScreenPowerW,
                     BatteryVoltageV = state.BatteryVoltageV,
                     BatteryCurrentA = state.BatteryCurrentA,
-                    BatteryTemperatureC = state.BatteryTemperatureC,
                     SummaryText = summary
                 });
             }
@@ -84,7 +83,6 @@ namespace WinBatLens.Services
                     ScreenPowerW = state.ScreenPowerW,
                     BatteryVoltageV = state.BatteryVoltageV,
                     BatteryCurrentA = state.BatteryCurrentA,
-                    BatteryTemperatureC = state.BatteryTemperatureC,
                     SummaryText = summary
                 });
             }
@@ -121,11 +119,11 @@ namespace WinBatLens.Services
             try
             {
                 var sb = new StringBuilder();
-                sb.AppendLine("時間戳記,事件類型,總放電功率(W),目前電量(%),電壓(V),電流(A),溫度(°C),CPU負載(%),獨顯負載(%),螢幕功耗(W),詳細狀態");
+                sb.AppendLine("時間戳記,事件類型,總放電功率(W),目前電量(%),電壓(V),電流(A),CPU負載(%),獨顯負載(%),螢幕功耗(W),詳細狀態");
 
                 foreach (var r in _records)
                 {
-                    sb.AppendLine($"{Csv(r.TimestampText)},{Csv(r.EventType)},{r.DischargeRateW},{r.BatteryPercent},{r.BatteryVoltageV},{r.BatteryCurrentA},{r.BatteryTemperatureC},{r.CpuUsagePercent},{r.DgpuUsagePercent},{r.ScreenPowerW},{Csv(r.SummaryText)}");
+                    sb.AppendLine($"{Csv(r.TimestampText)},{Csv(r.EventType)},{r.DischargeRateW},{r.BatteryPercent},{r.BatteryVoltageV},{r.BatteryCurrentA},{r.CpuUsagePercent},{r.DgpuUsagePercent},{r.ScreenPowerW},{Csv(r.SummaryText)}");
                 }
 
                 File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
