@@ -1,6 +1,6 @@
 ; WinBat Lens Inno Setup Script
 #define MyAppName "WinBat Lens"
-#define MyAppVersion "1.0.7"
+#define MyAppVersion "1.0.8"
 #define MyAppPublisher "WinBat Lens Team"
 #define MyAppExeName "WinBatLens.exe"
 #define MyAppId "{{D2B3F0E1-8E4B-4D2A-9A2C-5F1B3E7A902A}"

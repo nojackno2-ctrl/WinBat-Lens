@@ -251,17 +251,18 @@
                                             
                                             <!-- Legend -->
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                <Border Width="12" Height="3" Background="{StaticResource AccentCyan}" Margin="0,0,4,0"/>
-                                                <TextBlock x:Name="TxtLegendDischarge" Text="放電 (W)" FontSize="11" Foreground="{StaticResource AccentCyan}" Margin="0,0,10,0"/>
+                                                <!-- Discharge is amber and charge is emerald everywhere in
+                                                     the app — headline number, chart, legend and tray icon.
+                                                     The dGPU line moved to cyan so it no longer shares
+                                                     amber with discharge. -->
+                                                <Border Width="12" Height="3" Background="{StaticResource AccentAmber}" Margin="0,0,4,0"/>
+                                                <TextBlock x:Name="TxtLegendDischarge" Text="放電 (W)" FontSize="11" Foreground="{StaticResource AccentAmber}" Margin="0,0,10,0"/>
 
                                                 <Border Width="12" Height="3" Background="{StaticResource AccentEmerald}" Margin="0,0,4,0"/>
                                                 <TextBlock x:Name="TxtLegendCharge" Text="充電 (+W)" FontSize="11" Foreground="{StaticResource AccentEmerald}" Margin="0,0,10,0"/>
 
-                                                <Border Width="12" Height="3" Background="{StaticResource AccentPurple}" Margin="0,0,4,0"/>
-                                                
-                                                
-                                                <Border Width="12" Height="3" Background="{StaticResource AccentAmber}" Margin="0,0,4,0"/>
-                                                <TextBlock x:Name="TxtLegendGpu" Text="獨顯 (W)" FontSize="11" Foreground="{StaticResource AccentAmber}"/>
+                                                <Border Width="12" Height="3" Background="{StaticResource AccentCyan}" Margin="0,0,4,0"/>
+                                                <TextBlock x:Name="TxtLegendGpu" Text="獨顯 (W)" FontSize="11" Foreground="{StaticResource AccentCyan}"/>
                                             </StackPanel>
                                         </Grid>
 
@@ -289,10 +290,11 @@
                                                 </Grid>
 
                                                 <!-- Separate Polylines for Discharge (Cyan), Charge (Emerald), CPU (Purple), GPU (Amber) -->
-                                                <Polyline x:Name="PolylineDischarge" Stroke="{StaticResource AccentCyan}" StrokeThickness="2" StrokeLineJoin="Round"/>
+                                                <Polyline x:Name="PolylineDischarge" Stroke="{StaticResource AccentAmber}" StrokeThickness="2" StrokeLineJoin="Round"/>
                                                 <Polyline x:Name="PolylineCharge" Stroke="{StaticResource AccentEmerald}" StrokeThickness="2.5" StrokeLineJoin="Round"/>
-                                                <Polyline x:Name="PolylineCpu" Stroke="{StaticResource AccentPurple}" StrokeThickness="1.5" StrokeLineJoin="Round" StrokeDashArray="4 2"/>
-                                                <Polyline x:Name="PolylineGpu" Stroke="{StaticResource AccentAmber}" StrokeThickness="1.5" StrokeLineJoin="Round"/>
+                                                <!-- The CPU polyline was removed along with CPU wattage: it
+                                                     had been pinned flat at zero since that value went away. -->
+                                                <Polyline x:Name="PolylineGpu" Stroke="{StaticResource AccentCyan}" StrokeThickness="1.5" StrokeLineJoin="Round"/>
                                             </Grid>
                                         </Border>
                                     </StackPanel>
