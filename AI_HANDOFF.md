@@ -48,7 +48,7 @@ Measured on this machine (Ryzen + RTX 3060 Laptop), unelevated:
 | NVIDIA GPU package power | ✅ real, 11–19 W tracking (NVML is userspace) |
 | GPU core / hot-spot temp | ✅ real |
 | Battery pack voltage | ✅ 15.83 V |
-| CPU package power | ❌ 0 W — RAPL needs a Ring0 driver, i.e. elevation |
+| CPU package power | ❌ 0 W — SMU owned by Armoury Crate; elevation does not help (tested) |
 | AMD iGPU power | ❌ no such sensor exists |
 | Battery charge/discharge W | ❌ EC does not report it (long-standing) |
 
@@ -72,13 +72,32 @@ Three non-obvious things this cost, all verified by measurement:
 `MainWindow.FormatPower` renders `18.8 W (實測)` for sensor values and
 `~6.6 W (推估)` for formula values, so the two can never be confused.
 
-### Open: CPU power needs elevation
-Unelevated the CPU figure is still the old formula. Making it real requires
-running elevated, which costs a UAC prompt on every launch and complicates the
-HKCU autostart entry. Not done — it is a product decision, not a code one.
-The elevated probe could not be run from the agent sandbox, so *whether* RAPL
-actually populates on this specific AMD part is untested; the sensors exist and
-read 0.00, which is the signature of a driver that did not load.
+### Closed: CPU power cannot be read on this machine, elevated or not
+The user ran the sensor probe elevated. **Elevation does not help.** On an
+AMD Ryzen 9 5900HS every SMU sensor still reports zero:
+
+```
+系統管理員權限: 是 ✔
+[Cpu] AMD Ryzen 9 5900HS with Radeon Graphics
+    Power       Core #1..#8 (SMU) = 0.00 W
+    Power       Package           = 0.00 W
+    Temperature Core (Tctl/Tdie)  = 0.00 °C
+[GpuNvidia] NVIDIA GeForce RTX 3060 Laptop GPU
+    Power       GPU Package       = 10.84 W    <-- works fine
+```
+
+CPU *temperature* reads zero too, and it shares the SMU mailbox with power —
+so this is not a privilege problem, the whole SMU channel is unreachable.
+Cause confirmed by process/service enumeration: `ArmouryCrateService`,
+`ArmouryCrateControlInterface` and `ASUSOptimization` are running, and ASUS's
+driver takes exclusive ownership of the AMD SMU mailbox. This is the standard
+reason third-party tools read zero for AMD sensors on ROG laptops — Armoury
+Crate can show CPU watts precisely because it is the one holding the channel.
+
+**Do not build an elevation path.** It was tested and does not work, and the
+only workaround would be asking the user to quit their OEM software. The CPU
+figure stays a clearly-labelled estimate. Probe source kept at
+`scratchpad/probe/` if another machine ever needs checking.
 
 ## Icon fix + startup/installer session (v1.0.2)
 
@@ -281,7 +300,7 @@ Verified on a live AMD iGPU + NVIDIA RTX 3060 dGPU laptop.
   1 Hz forever is what forces the repeated working-set trims. Dropping to ~5 s
   while hidden would cut background CPU ~80%; the tray wattage number would just
   update less often. Not done because it changes observable behaviour.
-- **CPU package power still needs elevation.** Unelevated, RAPL reports 0 W and the CPU figure falls back to the `2.5 + u*22.5` formula (labelled 推估). Making it real means running the app elevated — UAC on every launch, and the HKCU autostart entry gets messy. Product decision, not a code one.
+- **CPU package power is unavailable on ASUS ROG / AMD hardware** and stays a labelled estimate. Verified elevated: every SMU sensor reads 0 because Armoury Crate owns the SMU mailbox. Not fixable from this side — see the v1.0.3 section.
   headline wattage is still a formula estimate, not a measurement. A proper fix
   reads `IOCTL_BATTERY_QUERY_STATUS` against the battery device directly.
 - **500-record history cap is memory-only** — nothing is persisted, so closing the
