@@ -169,7 +169,6 @@ namespace WinBatLens
             TxtWaveformTitle.Text = LocalizationService.Get("WaveformTitle");
             TxtLegendDischarge.Text = LocalizationService.Get("LegendDischarge");
             TxtLegendCharge.Text = LocalizationService.Get("LegendCharge");
-            TxtLegendCpu.Text = LocalizationService.Get("LegendCpu");
             TxtLegendGpu.Text = LocalizationService.Get("LegendGpu");
 
             TxtHardwareTitle.Text = LocalizationService.Get("HardwareTitle");
@@ -180,7 +179,6 @@ namespace WinBatLens
             LblHwWifi.Text = LocalizationService.Get("HwWifi");
             LblHwDisk.Text = LocalizationService.Get("HwDisk");
             LblHwRam.Text = LocalizationService.Get("HwRam");
-            LblHwMotherboard.Text = LocalizationService.Get("HwMotherboard");
             TxtGpuListTitle.Text = LocalizationService.Get("GpuListTitle");
 
             TxtHistoryLogHeader.Text = LocalizationService.Get("HistoryLogHeader");
@@ -249,10 +247,15 @@ namespace WinBatLens
 
         private void UpdateWaveformChart(RealTimePowerState state)
         {
-            double disW = state.IsAcOnline ? 0.0 : state.DischargeRateW;
-            double chgW = state.IsCharging ? state.ChargingRateW : 0.0;
+            // Only plot values that were actually measured; an unavailable
+            // reading contributes 0 rather than a fabricated curve.
+            double disW = (!state.IsAcOnline && state.IsDischargeRateMeasured) ? state.DischargeRateW : 0.0;
+            double chgW = (state.IsCharging && state.IsChargeRateMeasured) ? state.ChargingRateW : 0.0;
+            double gpuW = state.IsDgpuPowerMeasured ? state.DgpuPowerW : 0.0;
 
-            _chartHistory.Enqueue((disW, chgW, state.CpuPowerW, state.DgpuPowerW));
+            // The CPU series is gone: its wattage was a formula over
+            // utilisation, and CPU package power is unreadable on this hardware.
+            _chartHistory.Enqueue((disW, chgW, 0.0, gpuW));
             while (_chartHistory.Count > MAX_CHART_POINTS)
             {
                 _chartHistory.Dequeue();
@@ -686,25 +689,28 @@ namespace WinBatLens
                 TxtHwTelemetryVal.Text = state.BatteryTelemetryText;
                 TxtHwPowerPlanVal.Text = state.PowerPlanName;
 
-                // CPU Load & Power
+                // Per-component rows below report utilisation, throughput and
+                // brightness — all really measured. The only per-component
+                // wattage that exists is the dGPU's, read over NVML.
+
+                // CPU load
                 PbCpuUsage.Value = state.CpuUsagePercent;
                 TxtCpuUsageVal.Text = $"{state.CpuUsagePercent:F1}%";
-                TxtCpuPowerW.Text = FormatPower(state.CpuPowerW, state.IsCpuPowerMeasured);
 
-                // Discrete GPU (dGPU) Load & Power
+                // Discrete GPU (dGPU) load and real package power
                 TxtDgpuName.Text = $"🎮 {state.DgpuName}";
                 PbDgpuUsage.Value = state.DgpuUsagePercent;
                 TxtDgpuUsageVal.Text = state.DgpuStatusText;
-                TxtDgpuPowerW.Text = FormatPower(state.DgpuPowerW, state.IsDgpuPowerMeasured);
+                TxtDgpuPowerW.Text = state.IsDgpuPowerMeasured
+                    ? $"{state.DgpuPowerW:F1} W"
+                    : "-- W";
 
-                // Integrated GPU (iGPU) Load & Power. No consumer iGPU exposes a
-                // package-power sensor, so this one is always an estimate.
+                // Integrated GPU (iGPU) load
                 TxtIgpuName.Text = $"🖼️ {state.IgpuName}";
                 PbIgpuUsage.Value = state.IgpuUsagePercent;
                 TxtIgpuUsageVal.Text = $"{state.IgpuUsagePercent:F1}%";
-                TxtIgpuPowerW.Text = FormatPower(state.IgpuPowerW, false);
 
-                // Screen Display & Backlight Power. Panels that do not expose
+                // Screen brightness. Panels that do not expose
                 // WmiMonitorBrightness show "--" rather than a fallback number.
                 PbScreenBrightness.Value = state.ScreenBrightnessPercent;
                 if (state.IsBrightnessMeasured)
@@ -719,61 +725,66 @@ namespace WinBatLens
                         ? "-- (not reported)"
                         : "-- (無法讀取)";
                 }
-                TxtScreenPowerW.Text = $"~{state.ScreenPowerW:F1} W";
 
-                // Wi-Fi Wireless Power
+                // Wi-Fi throughput
                 TxtWifiSpeedVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
                     ? $"Network Traffic: {state.WifiThroughputKbps:N0} KB/s"
                     : $"即時傳輸流量: {state.WifiThroughputKbps:N0} KB/s";
-                TxtWifiPowerW.Text = $"~{state.WifiPowerW:F1} W";
 
-                // Disk Load & Power
+                // Disk load and throughput
                 PbDiskUsage.Value = state.DiskUsagePercent;
                 TxtDiskUsageVal.Text = $"{state.DiskUsagePercent:F1}%";
                 TxtDiskStatusText.Text = $"{state.DiskReadWriteMbps:F1} MB/s";
-                TxtDiskPowerW.Text = $"~{state.DiskPowerW:F1} W";
 
-                // RAM Usage & Bus Power
+                // RAM usage
                 PbRamUsage.Value = state.RamUsagePercent;
                 TxtRamUsageVal.Text = $"{state.RamUsageGB:F1} GB / {state.TotalRamGB:F1} GB ({state.RamUsagePercent:F1}%)";
-                TxtRamPowerW.Text = $"~{state.RamPowerW:F1} W";
-
-                // Motherboard Base Power
-                TxtMotherboardPowerW.Text = $"~{state.MotherboardPowerW:F1} W";
 
                 // Power Load Rating
                 TxtPowerLoadStatus.Text = state.SystemPowerLoadStatus;
 
-                // Live Dynamic Tips
+                // Live tips. Every wattage quoted here is a real reading; when
+                // nothing real is available the tip says so rather than
+                // inventing a figure.
+                string dgpuPart = state.IsDgpuPowerMeasured
+                    ? (en ? $" Discrete GPU {state.DgpuPowerW:F1} W." : $" 獨顯實測 {state.DgpuPowerW:F1} W。")
+                    : string.Empty;
+
                 if (state.IsAcOnline)
                 {
-                    if (state.IsCharging)
+                    if (state.IsCharging && state.IsChargeRateMeasured)
                     {
-                        TxtLivePowerTip.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                            ? $"🔌 AC Adapter Input: {state.AcTotalInputW:F1} W (Battery Charging +{state.ChargingRateW:F1} W, Hardware Power {state.TotalSystemHardwareW:F1} W). {state.EstimatedTimeRemainingText}."
-                            : $"🔌 AC 變壓器目前總供電 {state.AcTotalInputW:F1} W（包含電池充電 +{state.ChargingRateW:F1} W 與全系統硬體運作耗電 {state.TotalSystemHardwareW:F1} W）。{state.EstimatedTimeRemainingText}。";
+                        TxtLivePowerTip.Text = en
+                            ? $"🔌 On AC. Battery charging at {state.ChargingRateW:F1} W (measured at the pack). {state.EstimatedTimeRemainingText}.{dgpuPart}"
+                            : $"🔌 市電供電中，電池充電功率 {state.ChargingRateW:F1} W（電池實測）。{state.EstimatedTimeRemainingText}。{dgpuPart}";
                     }
                     else
                     {
-                        TxtLivePowerTip.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                            ? $"💡 Battery fully charged (100%). AC Adapter input: {state.AcTotalInputW:F1} W directly powering hardware."
-                            : $"💡 電池已充滿 (100%)。目前 AC 變壓器總供電 {state.AcTotalInputW:F1} W (市電直接供給全系統硬體運做)，已自動啟用滿電過充保護。";
+                        TxtLivePowerTip.Text = en
+                            ? $"🔌 On AC, no current flowing to or from the battery — there is no measurable system wattage in this state. Adapter input is not exposed by Windows.{dgpuPart}"
+                            : $"🔌 市電直供中，電池無充放電電流，此狀態下沒有可量測的系統功率（變壓器輸入功率 Windows 並未提供）。{dgpuPart}";
+                    }
+                }
+                else if (state.IsDischargeRateMeasured)
+                {
+                    if (state.DischargeRateW > 20.0 || state.DgpuUsagePercent > 40.0)
+                    {
+                        TxtLivePowerTip.Text = en
+                            ? $"⚠️ High draw: {state.DischargeRateW:F1} W measured at the battery — the whole machine.{dgpuPart} Lowering screen brightness (now {state.ScreenBrightnessPercent}%) extends runtime."
+                            : $"⚠️ 目前放電 {state.DischargeRateW:F1} W（電池實測，為整機真實耗電）。{dgpuPart}建議調低螢幕亮度（目前 {state.ScreenBrightnessPercent}%）以延長續航。";
+                    }
+                    else
+                    {
+                        TxtLivePowerTip.Text = en
+                            ? $"💡 On battery: {state.DischargeRateW:F1} W measured at the pack — the whole machine's real draw.{dgpuPart}"
+                            : $"💡 電池供電中，實測放電 {state.DischargeRateW:F1} W（量測自電池，即整機真實耗電）。{dgpuPart}";
                     }
                 }
                 else
                 {
-                    if (state.DischargeRateW > 20.0 || state.DgpuUsagePercent > 40.0)
-                    {
-                        TxtLivePowerTip.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                            ? $"⚠️ High discharge rate: {state.DischargeRateW:F1} W. Discrete GPU is active (~{state.DgpuPowerW:F1}W)."
-                            : $"⚠️ 注意：目前放電速率高達 {state.DischargeRateW:F1} W。獨立顯卡正進行高負載渲染 (功耗 ~{state.DgpuPowerW:F1}W)，建議調低螢幕亮度 (目前 {state.ScreenBrightnessPercent}%) 以延長續航。";
-                    }
-                    else
-                    {
-                        TxtLivePowerTip.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                            ? $"💡 Discharging on battery power (~{state.DischargeRateW:F1} W total)."
-                            : $"💡 目前正使用電池放電中，系統總功率約 {state.DischargeRateW:F1} W (CPU ~{state.CpuPowerW:F1}W | 獨顯 ~{state.DgpuPowerW:F1}W | 螢幕 ~{state.ScreenPowerW:F1}W)，功耗控制良好。";
-                    }
+                    TxtLivePowerTip.Text = en
+                        ? $"💡 On battery. This machine's battery does not report a discharge rate, so no wattage can be shown.{dgpuPart}"
+                        : $"💡 電池供電中。此裝置的電池未回報放電功率，因此無法顯示瓦數。{dgpuPart}";
                 }
             }
             catch (Exception ex)

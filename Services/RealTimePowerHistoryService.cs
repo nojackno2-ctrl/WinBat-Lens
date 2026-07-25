@@ -39,7 +39,7 @@ namespace WinBatLens.Services
                     BatteryPercent = state.BatteryPercent,
                     CpuUsagePercent = state.CpuUsagePercent,
                     DgpuUsagePercent = state.DgpuUsagePercent,
-                    ScreenPowerW = state.ScreenPowerW,
+                    DgpuPowerW = state.IsDgpuPowerMeasured ? state.DgpuPowerW : 0.0,
                     BatteryVoltageV = state.BatteryVoltageV,
                     BatteryCurrentA = state.BatteryCurrentA,
                     SummaryText = summary
@@ -68,7 +68,7 @@ namespace WinBatLens.Services
                 }
 
                 string summary = isAc
-                    ? $"市電正常 | 電壓: {state.BatteryVoltageV:F2}V | CPU: {state.CpuUsagePercent:F0}% | 螢幕: {state.ScreenBrightnessPercent}% ({state.ScreenPowerW:F1}W)"
+                    ? $"市電正常 | 電壓: {state.BatteryVoltageV:F2}V | CPU: {state.CpuUsagePercent:F0}% | 螢幕亮度: {state.ScreenBrightnessPercent}%"
                     : $"放電中 ({state.DischargeRateW:F1}W) | {state.BatteryTelemetryText} | CPU: {state.CpuUsagePercent:F0}% | 獨顯: {state.DgpuStatusText}";
 
                 AddRecord(new PowerHistoryRecord
@@ -80,7 +80,7 @@ namespace WinBatLens.Services
                     BatteryPercent = state.BatteryPercent,
                     CpuUsagePercent = state.CpuUsagePercent,
                     DgpuUsagePercent = state.DgpuUsagePercent,
-                    ScreenPowerW = state.ScreenPowerW,
+                    DgpuPowerW = state.IsDgpuPowerMeasured ? state.DgpuPowerW : 0.0,
                     BatteryVoltageV = state.BatteryVoltageV,
                     BatteryCurrentA = state.BatteryCurrentA,
                     SummaryText = summary
@@ -119,11 +119,11 @@ namespace WinBatLens.Services
             try
             {
                 var sb = new StringBuilder();
-                sb.AppendLine("時間戳記,事件類型,總放電功率(W),目前電量(%),電壓(V),電流(A),CPU負載(%),獨顯負載(%),螢幕功耗(W),詳細狀態");
+                sb.AppendLine("時間戳記,事件類型,電池放電功率(W),目前電量(%),電壓(V),電流(A),CPU負載(%),獨顯負載(%),獨顯功耗(W),詳細狀態");
 
                 foreach (var r in _records)
                 {
-                    sb.AppendLine($"{Csv(r.TimestampText)},{Csv(r.EventType)},{r.DischargeRateW},{r.BatteryPercent},{r.BatteryVoltageV},{r.BatteryCurrentA},{r.CpuUsagePercent},{r.DgpuUsagePercent},{r.ScreenPowerW},{Csv(r.SummaryText)}");
+                    sb.AppendLine($"{Csv(r.TimestampText)},{Csv(r.EventType)},{r.DischargeRateW},{r.BatteryPercent},{r.BatteryVoltageV},{r.BatteryCurrentA},{r.CpuUsagePercent},{r.DgpuUsagePercent},{r.DgpuPowerW},{Csv(r.SummaryText)}");
                 }
 
                 File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);

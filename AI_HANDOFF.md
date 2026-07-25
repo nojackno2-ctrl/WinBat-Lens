@@ -1,6 +1,52 @@
 # Project State & Handoff
 
-## Real battery charge/discharge power (latest, v1.0.4)
+## All estimated wattage deleted (latest, v1.0.5)
+
+User decision, stated plainly: *"我不要推估的東西，如果真的沒辦法抓到真實的數據
+就刪掉該功能"* — no estimates; if a real value cannot be obtained, remove the
+feature. Every formula-derived wattage is now gone from the codebase rather
+than being shown with a disclaimer.
+
+### Deleted outright
+| removed | what it was |
+|---|---|
+| `CpuPowerW` | `2.5 + usage*22.5` — unreadable here (OEM owns the AMD SMU) |
+| `IgpuPowerW` | `1.0 + usage*12.0` — no consumer iGPU exposes package power |
+| `ScreenPowerW` | `1.0 + brightness*5.5` |
+| `DiskPowerW` | `0.4 + usage*3.2` |
+| `WifiPowerW` | `0.6 + throughput-scaled` |
+| `RamPowerW` | `0.8 + usage*1.7` |
+| `MotherboardPowerW` | hard-coded `2.5` — no data source whatsoever |
+| `TotalSystemHardwareW` | the sum of the above |
+| `AcTotalInputW` | `charge + total` — Windows has no adapter-input API |
+| `IsCpuPowerMeasured`, `IsTotalPowerMeasured` | no longer meaningful |
+
+The motherboard/USB **row was removed from the UI entirely** (nothing real
+remained in it), as was the CPU (W) series from the waveform chart and its
+legend. The hardware-breakdown rows for CPU, iGPU, screen, disk, Wi-Fi and RAM
+were **kept** — their utilisation, throughput, brightness and GB figures are
+genuinely measured; only the wattage line was stripped out of each.
+
+### What still shows a wattage, and why it is trustworthy
+- **Battery discharge** — `IOCTL_BATTERY_QUERY_STATUS`. Verified live at
+  **48.9 W** on battery. This is the whole machine's real draw.
+- **Battery charge** — same IOCTL.
+- **dGPU package power** — NVML, works unelevated.
+
+Nothing else. When no real figure exists the UI shows `-- W` and the tip text
+says why, e.g. on AC with a full pack: "此狀態下沒有可量測的系統功率（變壓器輸入
+功率 Windows 並未提供）".
+
+### Consequence worth knowing
+**On AC there is now no system wattage at all.** That is correct rather than a
+regression: the pack passes no current, and adapter input is vendor-EC
+territory. The old screen filled that gap with an invented number.
+
+`SystemPowerLoadStatus` is now derived from utilisation thresholds only; it
+previously mixed in `TotalSystemHardwareW`. The CSV export swapped its
+`螢幕功耗(W)` column (an estimate) for `獨顯功耗(W)` (real NVML).
+
+## Real battery charge/discharge power (v1.0.4)
 
 **The app was falling back to an estimate while the battery was reporting a
 real figure the whole time.** `RealTimePowerService` read
