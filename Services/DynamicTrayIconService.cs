@@ -14,6 +14,8 @@ namespace WinBatLens.Services
         private static extern bool DestroyIcon(IntPtr handle);
 
         private static Icon? _currentCreatedIcon = null;
+        private static string? _lastDrawnText;
+        private static bool _lastDrawnIsAc;
 
         public static void UpdateTrayIcon(NotifyIcon notifyIcon, RealTimePowerState state)
         {
@@ -37,6 +39,15 @@ namespace WinBatLens.Services
                     int wattVal = (int)Math.Round(state.DischargeRateW);
                     textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
                     textColor = Color.FromArgb(255, 239, 68, 68); // #EF4444 Crimson Red
+                }
+
+                // The rounded wattage usually repeats between ticks; skip the
+                // whole bitmap/font/icon regeneration when nothing changed.
+                if (_currentCreatedIcon != null &&
+                    textToDraw == _lastDrawnText &&
+                    state.IsAcOnline == _lastDrawnIsAc)
+                {
+                    return;
                 }
 
                 // Generate 32x32 transparent bitmap with EXTRA LARGE rounded integer digits
@@ -90,6 +101,8 @@ namespace WinBatLens.Services
                     }
 
                     _currentCreatedIcon = newIcon;
+                    _lastDrawnText = textToDraw;
+                    _lastDrawnIsAc = state.IsAcOnline;
                 }
             }
             catch (Exception ex)

@@ -43,24 +43,50 @@ namespace WinBatLens.Services
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
 
+        [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PowerGetActiveScheme(IntPtr UserPowerKey, out IntPtr ActivePolicyGuid);
+
+        [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PowerReadFriendlyName(
+            IntPtr RootPowerKey,
+            ref Guid SchemeGuid,
+            IntPtr SubGroupOfPowerSettingsGuid,
+            IntPtr PowerSettingGuid,
+            IntPtr Buffer,
+            ref uint BufferSize);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr LocalFree(IntPtr hMem);
+
         private static PerformanceCounter? _cpuCounter;
         private static PerformanceCounter? _diskTimeCounter;
         private static PerformanceCounter? _diskBytesCounter;
         private static List<GpuInfo> _cachedGpus = new List<GpuInfo>();
         private static long _lastNetBytes = 0;
-        private static DateTime _lastNetTime = DateTime.MinValue;
+        private static long _lastNetSampleTick = 0;
+        private static double _cachedWifiKbps = 0;
 
         // WMI (System.Management) queries are memory-heavy and allocate COM
         // objects on every call. The UI ticks once per second, but brightness
         // and battery charge/discharge rates change slowly, so these values are
         // cached and only refreshed from WMI every few seconds.
-        private const double WmiRefreshSeconds = 4.0;
+        // Throttling uses Environment.TickCount64 (a single cheap read, immune
+        // to wall-clock changes) instead of DateTime.Now.
+        private const long WmiRefreshMs = 4000;
         private static int _cachedBrightness = 75;
-        private static DateTime _lastBrightnessTime = DateTime.MinValue;
+        private static bool _brightnessMeasured;
+        private static long _lastBrightnessTick;
         private static double _cachedChargeMw = 0;
-        private static DateTime _lastChargeTime = DateTime.MinValue;
+        private static long _lastChargeTick;
         private static double _cachedDischargeMw = 0;
-        private static DateTime _lastDischargeTime = DateTime.MinValue;
+        private static long _lastDischargeTick;
+        private static double _cachedVoltageV = 0;
+        private static bool _voltageMeasured;
+        private static double _cachedTempC = 0;
+        private static bool _tempMeasured;
+        private static long _lastTelemetryTick;
+        private static string _cachedPowerPlan = "平衡 (Balanced)";
+        private static long _lastPowerPlanTick;
 
         // Persistent GPU Engine counters, keyed by instance name. GPU utilization
         // counters need two samples taken over an interval to produce a non-zero
@@ -112,6 +138,33 @@ namespace WinBatLens.Services
             catch { }
         }
 
+        /// <summary>
+        /// GPU list discovered once at startup (WMI). Exposed so the UI can
+        /// reuse it instead of issuing a second Win32_VideoController query.
+        /// </summary>
+        public static IReadOnlyList<GpuInfo> InstalledGpus => _cachedGpus;
+
+        /// <summary>
+        /// Warms up everything the first monitoring tick would otherwise pay
+        /// for on the UI thread: the static constructor (PerformanceCounter and
+        /// GPU WMI enumeration), the GPU Engine counter category, and the slow
+        /// WMI caches. Intended to be called once from a background thread
+        /// before the 1-second timer starts.
+        /// </summary>
+        public static void Initialize()
+        {
+            try
+            {
+                GetDualGpuUsage();
+                GetScreenBrightnessPercent();
+                GetWmiChargeRateMw();
+                GetWmiDischargeRateMw();
+                GetWmiBatteryTelemetry();
+                GetActivePowerPlanName();
+            }
+            catch { }
+        }
+
         public static RealTimePowerState GetCurrentPowerState()
         {
             var state = new RealTimePowerState();
@@ -133,21 +186,18 @@ namespace WinBatLens.Services
                 state.DgpuName = "無獨立顯示卡";
             }
 
-            // 1. CPU Usage & Power
+            // 1. CPU Usage & Power. When the counter is unavailable report 0
+            // rather than a fabricated value.
             try
             {
                 if (_cpuCounter != null)
                 {
                     state.CpuUsagePercent = Math.Round(_cpuCounter.NextValue(), 1);
                 }
-                else
-                {
-                    state.CpuUsagePercent = 12.5;
-                }
             }
             catch
             {
-                state.CpuUsagePercent = 12.5;
+                state.CpuUsagePercent = 0.0;
             }
             state.CpuPowerW = Math.Round(2.5 + (state.CpuUsagePercent / 100.0) * 22.5, 1);
 
@@ -201,14 +251,15 @@ namespace WinBatLens.Services
             }
             catch
             {
-                state.DiskUsagePercent = 2.0;
-                state.DiskReadWriteMbps = 0.5;
-                state.DiskStatusText = "即時吞吐量: 0.5 MB/s";
+                state.DiskUsagePercent = 0.0;
+                state.DiskReadWriteMbps = 0.0;
+                state.DiskStatusText = "即時吞吐量: --";
             }
             state.DiskPowerW = Math.Round(0.4 + (state.DiskUsagePercent / 100.0) * 3.2, 1);
 
             // 4. Screen Brightness & Display Power
             state.ScreenBrightnessPercent = GetScreenBrightnessPercent();
+            state.IsBrightnessMeasured = _brightnessMeasured;
             state.ScreenPowerW = Math.Round(1.0 + (state.ScreenBrightnessPercent / 100.0) * 5.5, 1);
 
             // 5. Wi-Fi Wireless Adapter & Traffic Power
@@ -225,9 +276,9 @@ namespace WinBatLens.Services
             }
             catch
             {
-                state.TotalRamGB = 16.0;
-                state.RamUsageGB = 8.0;
-                state.RamUsagePercent = 50.0;
+                state.TotalRamGB = 0.0;
+                state.RamUsageGB = 0.0;
+                state.RamUsagePercent = 0.0;
             }
             state.RamPowerW = Math.Round(0.8 + (state.RamUsagePercent / 100.0) * 1.7, 1);
 
@@ -349,14 +400,39 @@ namespace WinBatLens.Services
                 state.SystemPowerLoadStatus = "輕度省電";
             }
 
+            // 11. Battery Physical Telemetry (Voltage, Current, Temperature)
+            var (volts, tempC) = GetWmiBatteryTelemetry();
+            state.BatteryVoltageV = volts;
+            state.IsVoltageMeasured = _voltageMeasured;
+            state.BatteryTemperatureC = tempC;
+            state.IsTemperatureMeasured = _tempMeasured;
+
+            double activePowerW = state.IsAcOnline ? state.ChargingRateW : state.DischargeRateW;
+            if (volts > 0 && activePowerW > 0)
+            {
+                state.BatteryCurrentA = Math.Round(activePowerW / volts, 2);
+            }
+            else
+            {
+                state.BatteryCurrentA = 0.0;
+            }
+
+            string voltText = state.IsVoltageMeasured ? $"{state.BatteryVoltageV:F2} V" : "-- V";
+            string currText = state.BatteryCurrentA > 0 ? $"{state.BatteryCurrentA:F2} A" : "-- A";
+            string tempText = state.IsTemperatureMeasured ? $"{state.BatteryTemperatureC:F1} °C" : "-- °C";
+            state.BatteryTelemetryText = $"{voltText} | {currText} | {tempText}";
+
+            // 12. Windows Active Power Plan (PowrProf.dll)
+            state.PowerPlanName = GetActivePowerPlanName();
+
             return state;
         }
 
         private static double GetWmiChargeRateMw()
         {
-            if ((DateTime.Now - _lastChargeTime).TotalSeconds < WmiRefreshSeconds)
+            if (Environment.TickCount64 - _lastChargeTick < WmiRefreshMs)
                 return _cachedChargeMw;
-            _lastChargeTime = DateTime.Now;
+            _lastChargeTick = Environment.TickCount64;
             _cachedChargeMw = QueryWmiChargeRateMw();
             return _cachedChargeMw;
         }
@@ -384,13 +460,20 @@ namespace WinBatLens.Services
 
         private static int GetScreenBrightnessPercent()
         {
-            if ((DateTime.Now - _lastBrightnessTime).TotalSeconds < WmiRefreshSeconds)
+            if (Environment.TickCount64 - _lastBrightnessTick < WmiRefreshMs)
                 return _cachedBrightness;
-            _lastBrightnessTime = DateTime.Now;
-            _cachedBrightness = QueryScreenBrightnessPercent();
+            _lastBrightnessTick = Environment.TickCount64;
+
+            int measured = QueryScreenBrightnessPercent();
+            _brightnessMeasured = measured >= 0;
+            // Desktop monitors and many external panels do not implement
+            // WmiMonitorBrightness; fall back to 75 for the power estimate but
+            // flag it so the UI does not present it as a real reading.
+            _cachedBrightness = _brightnessMeasured ? measured : 75;
             return _cachedBrightness;
         }
 
+        // Returns -1 when brightness cannot be read.
         private static int QueryScreenBrightnessPercent()
         {
             try
@@ -406,17 +489,25 @@ namespace WinBatLens.Services
             }
             catch { }
 
-            return 75; // Default estimate
+            return -1;
         }
 
+        // Enumerating every network interface and reading its IP statistics is
+        // the heaviest remaining per-tick call, so it is throttled like the WMI
+        // queries. The reported value is the average over the sampling window,
+        // which also smooths out the second-to-second spikes.
         private static double GetWifiThroughputKbps()
         {
+            long nowTick = Environment.TickCount64;
+            if (_lastNetSampleTick != 0 && nowTick - _lastNetSampleTick < WmiRefreshMs)
+                return _cachedWifiKbps;
+
             try
             {
                 long currentBytes = 0;
                 foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
                 {
-                    if (ni.OperationalStatus == OperationalStatus.Up && 
+                    if (ni.OperationalStatus == OperationalStatus.Up &&
                        (ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet))
                     {
                         var stats = ni.GetIPStatistics();
@@ -424,28 +515,28 @@ namespace WinBatLens.Services
                     }
                 }
 
-                DateTime now = DateTime.Now;
                 double speedKbps = 0;
-                if (_lastNetTime != DateTime.MinValue && _lastNetBytes > 0 && now > _lastNetTime)
+                if (_lastNetSampleTick != 0 && _lastNetBytes > 0)
                 {
-                    double seconds = (now - _lastNetTime).TotalSeconds;
-                    if (seconds > 0)
+                    double seconds = (nowTick - _lastNetSampleTick) / 1000.0;
+                    long diffBytes = currentBytes - _lastNetBytes;
+                    if (seconds > 0 && diffBytes > 0)
                     {
-                        long diffBytes = currentBytes - _lastNetBytes;
-                        if (diffBytes > 0)
-                        {
-                            speedKbps = Math.Round((diffBytes / 1024.0) / seconds, 1);
-                        }
+                        speedKbps = Math.Round((diffBytes / 1024.0) / seconds, 1);
                     }
                 }
 
                 _lastNetBytes = currentBytes;
-                _lastNetTime = now;
-                return speedKbps;
+                _lastNetSampleTick = nowTick;
+                _cachedWifiKbps = speedKbps;
             }
-            catch { }
+            catch
+            {
+                _lastNetSampleTick = nowTick;
+                _cachedWifiKbps = 0.0;
+            }
 
-            return 120.0;
+            return _cachedWifiKbps;
         }
 
         // Maps each GPU's LUID token to its per-engine-type utilization sums for
@@ -599,9 +690,9 @@ namespace WinBatLens.Services
 
         private static double GetWmiDischargeRateMw()
         {
-            if ((DateTime.Now - _lastDischargeTime).TotalSeconds < WmiRefreshSeconds)
+            if (Environment.TickCount64 - _lastDischargeTick < WmiRefreshMs)
                 return _cachedDischargeMw;
-            _lastDischargeTime = DateTime.Now;
+            _lastDischargeTick = Environment.TickCount64;
             _cachedDischargeMw = QueryWmiDischargeRateMw();
             return _cachedDischargeMw;
         }
@@ -642,6 +733,172 @@ namespace WinBatLens.Services
             }
 
             return (8.0, 16.0);
+        }
+
+        private static (double VoltageV, double TempC) GetWmiBatteryTelemetry()
+        {
+            if (Environment.TickCount64 - _lastTelemetryTick < WmiRefreshMs)
+                return (_cachedVoltageV, _cachedTempC);
+            _lastTelemetryTick = Environment.TickCount64;
+
+            double voltageV = 0;
+            double tempC = 0;
+
+            // 1. Query Battery Voltage (mV -> V)
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT Voltage FROM BatteryStatus"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        var vObj = obj["Voltage"];
+                        if (vObj != null)
+                        {
+                            double mv = Convert.ToDouble(vObj);
+                            if (mv > 0)
+                            {
+                                voltageV = Math.Round(mv / 1000.0, 2);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            if (voltageV <= 0)
+            {
+                try
+                {
+                    using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT DesignVoltage FROM Win32_Battery"))
+                    {
+                        foreach (ManagementObject obj in searcher.Get())
+                        {
+                            var dvObj = obj["DesignVoltage"];
+                            if (dvObj != null)
+                            {
+                                double mv = Convert.ToDouble(dvObj);
+                                if (mv > 0)
+                                {
+                                    voltageV = Math.Round(mv / 1000.0, 2);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // 2. Query System / Thermal Zone Temperature (°C)
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT HighPrecisionTemperature, Temperature FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation"))
+                {
+                    foreach (ManagementObject obj in searcher.Get())
+                    {
+                        var hpObj = obj["HighPrecisionTemperature"];
+                        if (hpObj != null)
+                        {
+                            double val = Convert.ToDouble(hpObj);
+                            if (val > 2500 && val < 4500)
+                            {
+                                tempC = Math.Round((val / 10.0) - 273.15, 1);
+                                break;
+                            }
+                        }
+
+                        var tObj = obj["Temperature"];
+                        if (tObj != null)
+                        {
+                            double kelvin = Convert.ToDouble(tObj);
+                            if (kelvin > 250 && kelvin < 400)
+                            {
+                                tempC = Math.Round(kelvin - 273.15, 1);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            if (tempC <= 0)
+            {
+                try
+                {
+                    using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT CurrentTemperature FROM MSThermal_ThermalZoneTemperature"))
+                    {
+                        foreach (ManagementObject obj in searcher.Get())
+                        {
+                            var ctObj = obj["CurrentTemperature"];
+                            if (ctObj != null)
+                            {
+                                double val = Convert.ToDouble(ctObj);
+                                if (val > 2500 && val < 4500)
+                                {
+                                    tempC = Math.Round((val / 10.0) - 273.15, 1);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // Many laptops' embedded controllers expose neither value. Keep a
+            // nominal figure so the derived current/power math stays sane, but
+            // record that it was not measured so the UI can show "--".
+            _voltageMeasured = voltageV > 0;
+            _tempMeasured = tempC > 0;
+            _cachedVoltageV = _voltageMeasured ? voltageV : 15.4;
+            _cachedTempC = _tempMeasured ? tempC : 0.0;
+
+            return (_cachedVoltageV, _cachedTempC);
+        }
+
+        private static string GetActivePowerPlanName()
+        {
+            if (Environment.TickCount64 - _lastPowerPlanTick < WmiRefreshMs)
+                return _cachedPowerPlan;
+            _lastPowerPlanTick = Environment.TickCount64;
+
+            try
+            {
+                if (PowerGetActiveScheme(IntPtr.Zero, out IntPtr pGuid) == 0 && pGuid != IntPtr.Zero)
+                {
+                    try
+                    {
+                        Guid schemeGuid = Marshal.PtrToStructure<Guid>(pGuid);
+                        uint bufferSize = 256;
+                        IntPtr pBuffer = Marshal.AllocHGlobal((int)bufferSize);
+                        try
+                        {
+                            if (PowerReadFriendlyName(IntPtr.Zero, ref schemeGuid, IntPtr.Zero, IntPtr.Zero, pBuffer, ref bufferSize) == 0)
+                            {
+                                string name = Marshal.PtrToStringUni(pBuffer) ?? string.Empty;
+                                if (!string.IsNullOrWhiteSpace(name))
+                                {
+                                    _cachedPowerPlan = name;
+                                    return _cachedPowerPlan;
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            Marshal.FreeHGlobal(pBuffer);
+                        }
+                    }
+                    finally
+                    {
+                        LocalFree(pGuid);
+                    }
+                }
+            }
+            catch { }
+
+            return _cachedPowerPlan;
         }
     }
 }

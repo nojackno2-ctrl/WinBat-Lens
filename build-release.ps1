@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = $PSScriptRoot
 Set-Location $ProjectRoot
 
-$Version = "1.0.1"
+$Version = "1.0.2"
 $DistDir = Join-Path $ProjectRoot "dist"
 $PortableDirName = "WinBatLens_v$Version`_Portable_x64"
 $PortableDir = Join-Path $DistDir $PortableDirName
@@ -26,7 +26,9 @@ New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
 
 # 2. Dotnet Publish Single-File Self-Contained Release
 Write-Host "[2/5] Publishing .NET 8 WPF Single-File Executable..." -ForegroundColor Yellow
-dotnet publish WinBatLens.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true
+# Packaging flags (single-file, self-contained, ReadyToRun, compression) all
+# live in WinBatLens.csproj so this script and a plain `dotnet publish` agree.
+dotnet publish WinBatLens.csproj -c Release
 
 $PublishExePath = Join-Path $ProjectRoot "bin\Release\net8.0-windows\win-x64\publish\WinBatLens.exe"
 if (-not (Test-Path $PublishExePath)) {

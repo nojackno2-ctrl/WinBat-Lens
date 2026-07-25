@@ -28,10 +28,21 @@ namespace WinBatLens
     {
         private BatteryReportData? _currentReport;
         private DispatcherTimer? _livePowerTimer;
+
+        // Working-set re-trim cadence while hidden, in 1-second timer ticks.
+        private const int TrimIntervalTicks = 60;
+        private int _hiddenTickCount;
         private NotifyIcon? _notifyIcon;
         private bool _isExitRequested = false;
+        private bool _trayBalloonShown = false;
 
-        private readonly Queue<(double DischargeW, double ChargeW, double CpuPct, double GpuPct)> _chartHistory =
+        // Tray menu items kept as fields so ApplyLanguage can relabel them.
+        private ToolStripMenuItem? _trayItemShow;
+        private ToolStripMenuItem? _trayItemCheck;
+        private ToolStripMenuItem? _trayItemAutoStart;
+        private ToolStripMenuItem? _trayItemExit;
+
+        private readonly Queue<(double DischargeW, double ChargeW, double CpuW, double GpuW)> _chartHistory =
             new Queue<(double, double, double, double)>();
         private const int MAX_CHART_POINTS = 60;
 
@@ -81,6 +92,11 @@ namespace WinBatLens
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            // Warm up PerformanceCounters, GPU enumeration and WMI caches on a
+            // background thread. Without this the first monitoring tick pays
+            // the whole cost (potentially seconds) on the UI thread.
+            var warmup = Task.Run(RealTimePowerService.Initialize);
+
             // Apply Initial Language
             ApplyLanguage();
 
@@ -91,11 +107,13 @@ namespace WinBatLens
             InitSystemTrayIcon();
             InitAutoStartState();
 
-            // Bind GPU Specs List
-            LoadGpuSpecs();
-
             // Draw Background Gridlines
             DrawChartGridlines();
+
+            await warmup;
+
+            // Bind GPU Specs List (reuses the list discovered during warmup)
+            LoadGpuSpecs();
 
             // Start live power monitoring timer (1s interval)
             StartLivePowerMonitoring();
@@ -147,6 +165,7 @@ namespace WinBatLens
 
             TxtCardTotalPower.Text = LocalizationService.Get("CardTotalPower");
             TxtCardEstTime.Text = LocalizationService.Get("CardEstTime");
+            TxtCardTelemetry.Text = LocalizationService.Get("CardTelemetry");
             TxtWaveformTitle.Text = LocalizationService.Get("WaveformTitle");
             TxtLegendDischarge.Text = LocalizationService.Get("LegendDischarge");
             TxtLegendCharge.Text = LocalizationService.Get("LegendCharge");
@@ -154,6 +173,8 @@ namespace WinBatLens
             TxtLegendGpu.Text = LocalizationService.Get("LegendGpu");
 
             TxtHardwareTitle.Text = LocalizationService.Get("HardwareTitle");
+            LblHwBatteryTelemetry.Text = LocalizationService.Get("HwBatteryTelemetry");
+            LblHwPowerPlan.Text = LocalizationService.Get("HwPowerPlan");
             LblHwCpu.Text = LocalizationService.Get("HwCpu");
             LblHwScreen.Text = LocalizationService.Get("HwScreen");
             LblHwWifi.Text = LocalizationService.Get("HwWifi");
@@ -165,6 +186,12 @@ namespace WinBatLens
             TxtHistoryLogHeader.Text = LocalizationService.Get("HistoryLogHeader");
             BtnExportPowerCsv.Content = LocalizationService.Get("BtnExportCsv");
             BtnClearPowerHistory.Content = LocalizationService.Get("BtnClearHistory");
+
+            // System tray menu follows the same language as the window.
+            if (_trayItemShow != null) _trayItemShow.Text = LocalizationService.Get("TrayShow");
+            if (_trayItemCheck != null) _trayItemCheck.Text = LocalizationService.Get("TrayCheck");
+            if (_trayItemAutoStart != null) _trayItemAutoStart.Text = LocalizationService.Get("TrayAutoStart");
+            if (_trayItemExit != null) _trayItemExit.Text = LocalizationService.Get("TrayExit");
         }
 
         private void GridChartContainer_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -225,13 +252,15 @@ namespace WinBatLens
             double disW = state.IsAcOnline ? 0.0 : state.DischargeRateW;
             double chgW = state.IsCharging ? state.ChargingRateW : 0.0;
 
-            _chartHistory.Enqueue((disW, chgW, state.CpuUsagePercent, state.DgpuUsagePercent));
+            _chartHistory.Enqueue((disW, chgW, state.CpuPowerW, state.DgpuPowerW));
             while (_chartHistory.Count > MAX_CHART_POINTS)
             {
                 _chartHistory.Dequeue();
             }
 
-            RedrawWaveformChart();
+            // Keep collecting history while minimized to tray, but skip the
+            // expensive redraw when nobody can see the chart.
+            if (IsVisible) RedrawWaveformChart();
         }
 
         private void RedrawWaveformChart()
@@ -253,7 +282,7 @@ namespace WinBatLens
                 double peakPower = 0.0;
                 foreach (var item in _chartHistory)
                 {
-                    double p = Math.Max(item.DischargeW, item.ChargeW);
+                    double p = Math.Max(Math.Max(item.DischargeW, item.ChargeW), Math.Max(item.CpuW, item.GpuW));
                     if (p > peakPower) peakPower = p;
                 }
                 double maxPowerW = Math.Max(35.0, peakPower * 1.15);
@@ -273,8 +302,8 @@ namespace WinBatLens
                     // Y values (0 at bottom, Height at top)
                     double yDischarge = h - Math.Min(h, Math.Max(0, (item.DischargeW / maxPowerW) * h));
                     double yCharge = h - Math.Min(h, Math.Max(0, (item.ChargeW / maxPowerW) * h));
-                    double yCpu = h - Math.Min(h, Math.Max(0, (item.CpuPct / 100.0) * h));
-                    double yGpu = h - Math.Min(h, Math.Max(0, (item.GpuPct / 100.0) * h));
+                    double yCpu = h - Math.Min(h, Math.Max(0, (item.CpuW / maxPowerW) * h));
+                    double yGpu = h - Math.Min(h, Math.Max(0, (item.GpuW / maxPowerW) * h));
 
                     dischargePoints.Add(new WpfPoint(x, yDischarge));
                     chargePoints.Add(new WpfPoint(x, yCharge));
@@ -359,46 +388,46 @@ namespace WinBatLens
                     _notifyIcon.Icon = System.Drawing.SystemIcons.Application;
                 }
 
-                _notifyIcon.Text = "WinBat Lens - 電池健康度與即時耗電監測";
+                _notifyIcon.Text = LocalizationService.Get("TrayTooltip");
                 _notifyIcon.Visible = true;
 
                 _notifyIcon.DoubleClick += (s, args) => RestoreFromTray();
 
                 // Context Menu for System Tray
                 var contextMenu = new ContextMenuStrip();
-                
-                var itemShow = new ToolStripMenuItem("⚡ 開啟 WinBat Lens 主畫面", null, (s, args) => RestoreFromTray());
-                itemShow.Font = new System.Drawing.Font(itemShow.Font, System.Drawing.FontStyle.Bold);
 
-                var itemCheck = new ToolStripMenuItem("🔄 執行電池健康檢測", null, async (s, args) => {
+                _trayItemShow = new ToolStripMenuItem(LocalizationService.Get("TrayShow"), null, (s, args) => RestoreFromTray());
+                _trayItemShow.Font = new System.Drawing.Font(_trayItemShow.Font, System.Drawing.FontStyle.Bold);
+
+                _trayItemCheck = new ToolStripMenuItem(LocalizationService.Get("TrayCheck"), null, async (s, args) => {
                     RestoreFromTray();
                     await RunBatteryCheckAsync();
                 });
 
-                var itemAutoStart = new ToolStripMenuItem("🚀 開機自動啟動");
-                itemAutoStart.Checked = StartupService.IsAutoStartEnabled();
-                itemAutoStart.Click += (s, args) => {
-                    bool newState = !itemAutoStart.Checked;
+                _trayItemAutoStart = new ToolStripMenuItem(LocalizationService.Get("TrayAutoStart"));
+                _trayItemAutoStart.Checked = StartupService.IsAutoStartEnabled();
+                _trayItemAutoStart.Click += (s, args) => {
+                    bool newState = !_trayItemAutoStart!.Checked;
                     if (StartupService.SetAutoStart(newState))
                     {
-                        itemAutoStart.Checked = newState;
+                        _trayItemAutoStart.Checked = newState;
                         ChkAutoStart.IsChecked = newState;
                     }
                 };
 
-                var itemExit = new ToolStripMenuItem("❌ 結束程式", null, (s, args) => {
+                _trayItemExit = new ToolStripMenuItem(LocalizationService.Get("TrayExit"), null, (s, args) => {
                     _isExitRequested = true;
                     _notifyIcon.Visible = false;
                     _notifyIcon.Dispose();
                     Application.Current.Shutdown();
                 });
 
-                contextMenu.Items.Add(itemShow);
-                contextMenu.Items.Add(itemCheck);
+                contextMenu.Items.Add(_trayItemShow);
+                contextMenu.Items.Add(_trayItemCheck);
                 contextMenu.Items.Add(new ToolStripSeparator());
-                contextMenu.Items.Add(itemAutoStart);
+                contextMenu.Items.Add(_trayItemAutoStart);
                 contextMenu.Items.Add(new ToolStripSeparator());
-                contextMenu.Items.Add(itemExit);
+                contextMenu.Items.Add(_trayItemExit);
 
                 _notifyIcon.ContextMenuStrip = contextMenu;
             }
@@ -422,7 +451,21 @@ namespace WinBatLens
             {
                 e.Cancel = true;
                 HideToTray();
+                return;
             }
+
+            // Real exit: Unloaded is not reliably raised for a top-level
+            // Window, so release the timer and tray icon here.
+            _livePowerTimer?.Stop();
+            try
+            {
+                if (_notifyIcon != null)
+                {
+                    _notifyIcon.Visible = false;
+                    _notifyIcon.Dispose();
+                }
+            }
+            catch { }
         }
 
         [DllImport("psapi.dll")]
@@ -431,9 +474,16 @@ namespace WinBatLens
         private void HideToTray()
         {
             this.Hide();
-            if (_notifyIcon != null)
+
+            // Only explain the tray behaviour the first time; after that the
+            // balloon is just noise on every minimize.
+            if (_notifyIcon != null && !_trayBalloonShown)
             {
-                _notifyIcon.ShowBalloonTip(2000, "WinBat Lens 已縮小至托盤", "程式將在背景持續為您進行即時耗電與電池狀態監測。", ToolTipIcon.Info);
+                _trayBalloonShown = true;
+                _notifyIcon.ShowBalloonTip(2000,
+                    LocalizationService.Get("TrayBalloonTitle"),
+                    LocalizationService.Get("TrayBalloonText"),
+                    ToolTipIcon.Info);
             }
 
             // The app spends most of its life minimized in the tray. Once the
@@ -459,14 +509,19 @@ namespace WinBatLens
             this.Show();
             this.WindowState = WindowState.Normal;
             this.Activate();
+
+            // Visual updates are skipped while hidden; refresh everything now
+            // so the window doesn't show stale values for up to a second.
+            UpdateLivePowerUI();
         }
 
         private void LoadGpuSpecs()
         {
             try
             {
-                var gpus = GpuInfoService.GetInstalledGpus();
-                IcGpuList.ItemsSource = gpus;
+                // The service already enumerated GPUs via WMI at startup;
+                // reuse that list instead of running the query a second time.
+                IcGpuList.ItemsSource = RealTimePowerService.InstalledGpus;
             }
             catch (Exception ex)
             {
@@ -499,6 +554,23 @@ namespace WinBatLens
         private void LivePowerTimer_Tick(object? sender, EventArgs e)
         {
             UpdateLivePowerUI();
+
+            // Trimming once on minimize is not enough: the OS pages the app
+            // back in as it keeps sampling, so the working set climbs back to
+            // roughly its windowed size within a few minutes. Re-trim on a slow
+            // cadence for as long as the window stays hidden.
+            if (!IsVisible)
+            {
+                if (++_hiddenTickCount >= TrimIntervalTicks)
+                {
+                    _hiddenTickCount = 0;
+                    TrimWorkingSet();
+                }
+            }
+            else
+            {
+                _hiddenTickCount = 0;
+            }
         }
 
         private void UpdateLivePowerUI()
@@ -517,7 +589,15 @@ namespace WinBatLens
                 if (_notifyIcon != null)
                 {
                     DynamicTrayIconService.UpdateTrayIcon(_notifyIcon, state);
+
+                    string powerStatusStr = state.IsAcOnline ? $"AC Input: {state.AcTotalInputW:F1}W" : $"-{state.DischargeRateW:F1}W Discharging";
+                    _notifyIcon.Text = $"WinBat Lens - {state.PowerStatusText}\nLevel: {state.BatteryPercent}% | {powerStatusStr}";
                 }
+
+                // While hidden in the tray only the icon, tooltip and history
+                // need refreshing — skip every visual control update so the
+                // background working set and per-tick allocations stay minimal.
+                if (!IsVisible) return;
 
                 // Charge / Discharge Wattage & Status Display
                 if (state.IsAcOnline)
@@ -561,12 +641,10 @@ namespace WinBatLens
                     ? $"Current Battery Level: {state.BatteryPercent}%"
                     : $"目前電池剩餘電量: {state.BatteryPercent}%";
 
-                // Update System Tray Tooltip Text
-                if (_notifyIcon != null)
-                {
-                    string powerStatusStr = state.IsAcOnline ? $"AC Input: {state.AcTotalInputW:F1}W" : $"-{state.DischargeRateW:F1}W Discharging";
-                    _notifyIcon.Text = $"WinBat Lens - {state.PowerStatusText}\nLevel: {state.BatteryPercent}% | {powerStatusStr}";
-                }
+                // Battery Hardware Telemetry (Voltage, Current, Temperature)
+                TxtLiveBatteryTelemetry.Text = state.BatteryTelemetryText;
+                TxtHwTelemetryVal.Text = state.BatteryTelemetryText;
+                TxtHwPowerPlanVal.Text = state.PowerPlanName;
 
                 // CPU Load & Power
                 PbCpuUsage.Value = state.CpuUsagePercent;
@@ -585,11 +663,21 @@ namespace WinBatLens
                 TxtIgpuUsageVal.Text = $"{state.IgpuUsagePercent:F1}%";
                 TxtIgpuPowerW.Text = $"~{state.IgpuPowerW:F1} W";
 
-                // Screen Display & Backlight Power
+                // Screen Display & Backlight Power. Panels that do not expose
+                // WmiMonitorBrightness show "--" rather than a fallback number.
                 PbScreenBrightness.Value = state.ScreenBrightnessPercent;
-                TxtScreenBrightnessVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                    ? $"{state.ScreenBrightnessPercent}% Brightness"
-                    : $"{state.ScreenBrightnessPercent}% 亮度";
+                if (state.IsBrightnessMeasured)
+                {
+                    TxtScreenBrightnessVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                        ? $"{state.ScreenBrightnessPercent}% Brightness"
+                        : $"{state.ScreenBrightnessPercent}% 亮度";
+                }
+                else
+                {
+                    TxtScreenBrightnessVal.Text = LocalizationService.CurrentLanguage == AppLanguage.English
+                        ? "-- (not reported)"
+                        : "-- (無法讀取)";
+                }
                 TxtScreenPowerW.Text = $"~{state.ScreenPowerW:F1} W";
 
                 // Wi-Fi Wireless Power
@@ -704,7 +792,9 @@ namespace WinBatLens
 
                 if (result.Success && !string.IsNullOrWhiteSpace(result.HtmlContent))
                 {
-                    var parsed = BatteryReportParser.Parse(result.HtmlContent);
+                    // The report HTML can exceed 1 MB and parsing is regex
+                    // heavy — keep it off the UI thread.
+                    var parsed = await Task.Run(() => BatteryReportParser.Parse(result.HtmlContent));
                     DisplayReport(parsed);
                 }
                 else
