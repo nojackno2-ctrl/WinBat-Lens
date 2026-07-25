@@ -1,6 +1,86 @@
 # Project State & Handoff
 
-## Icon fix + startup/installer session (latest)
+## Real hardware sensors + temperature removal (latest, v1.0.3)
+
+Triggered by the user noticing WinBat Lens disagreed with Armoury Crate during
+a 3DMark run. It did, and the reasons were real.
+
+### Every wattage was a formula, not a measurement
+Verified by reverse-computing the on-screen numbers from the user's screenshot:
+`dGPU 3.0 + 0.869*35.0 = 33.4 W` and `CPU 2.5 + 0.184*22.5 = 6.6 W` — both
+matched the display exactly. The formulas also had hard ceilings that made
+correct full-load readings impossible on this class of machine:
+
+| component | old formula | ceiling |
+|---|---|---|
+| CPU | `2.5 + u*22.5` | 25.0 W |
+| dGPU | `3.0 + u*35.0` | **38.0 W** |
+| six others | — | 30.5 W |
+| **total** | | **93.5 W** |
+
+An RTX 3060 Laptop alone runs to 115 W TGP (Armoury Crate showed 60 W at that
+moment against the app's 33.4 W). Worse, the estimate reported **0 W at idle**
+while `nvidia-smi` measured **18.76 W**.
+
+### "Battery temperature" was the CPU thermal zone
+`GetWmiBatteryTelemetry` read `Win32_PerfFormattedData_Counters_ThermalZone
+Information` — on this machine the only zone is `\_TZ.THRM`, measured at
+90.9 °C — and stored it in `BatteryTemperatureC`, which the UI labelled
+"電池物理狀態 (電壓/電流/溫度)" with the subtitle "WMI & ACPI 即時電氣感測".
+The screenshot showed "battery" 81.1 °C while Armoury Crate showed CPU 81 °C.
+A lithium pack at 81 °C would be a fire. Real battery-temperature sources
+(`MSAcpi_ThermalZoneTemperature`, `MSBatteryClass`) are inaccessible here
+(access denied / general failure).
+
+**Per the user's decision, temperature was removed entirely** — model, UI
+cards, ListView column, CSV column, and both localization dictionaries. Both
+thermal-zone WMI queries are gone, which also drops two per-cycle WMI calls.
+
+### New `Services/HardwareSensorService.cs`
+Wraps LibreHardwareMonitorLib 0.9.6 (this forced `System.Management` 8.0.0 →
+10.0.2). Every reading is a `double?`; `null` means the machine genuinely does
+not report it, and the caller falls back to the formula **and says so**.
+
+Measured on this machine (Ryzen + RTX 3060 Laptop), unelevated:
+
+| sensor | result |
+|---|---|
+| NVIDIA GPU package power | ✅ real, 11–19 W tracking (NVML is userspace) |
+| GPU core / hot-spot temp | ✅ real |
+| Battery pack voltage | ✅ 15.83 V |
+| CPU package power | ❌ 0 W — RAPL needs a Ring0 driver, i.e. elevation |
+| AMD iGPU power | ❌ no such sensor exists |
+| Battery charge/discharge W | ❌ EC does not report it (long-standing) |
+
+Three non-obvious things this cost, all verified by measurement:
+
+1. **A full sweep took 85–256 ms.** That cannot sit on the 1 s UI tick. Polling
+   moved to a background `System.Threading.Timer` with `Interlocked` re-entry
+   guard; the UI now only reads cached fields — **0.003 ms**.
+2. **Updating CPU hardware is the most expensive part of a sweep**, and is
+   pointless when RAPL reports nothing, so `_cpu` is nulled after
+   `IsCpuPowerAvailable` comes back false.
+3. **Every `ISensor` retains a day of value history by default.** Polling ~40
+   sensors at 1 Hz grew private bytes 139 → 159 MB in three minutes. Fixed by
+   setting `ISensor.ValuesTimeWindow = TimeSpan.Zero` + `ClearValues()` on all
+   sensors after open. Note this is on **ISensor, not Computer** — `Computer`
+   has no such property in 0.9.6. Private bytes are now flat at ~139 MB and the
+   tray working set trims to **23.8 MB** (better than the 26.4 MB pre-sensor
+   baseline). Warm start moved only ~373 → ~383 ms because `Initialize()`
+   (~1.0 s) runs on the existing warmup thread, off the first-paint path.
+
+`MainWindow.FormatPower` renders `18.8 W (實測)` for sensor values and
+`~6.6 W (推估)` for formula values, so the two can never be confused.
+
+### Open: CPU power needs elevation
+Unelevated the CPU figure is still the old formula. Making it real requires
+running elevated, which costs a UAC prompt on every launch and complicates the
+HKCU autostart entry. Not done — it is a product decision, not a code one.
+The elevated probe could not be run from the agent sandbox, so *whether* RAPL
+actually populates on this specific AMD part is untested; the sensors exist and
+read 0.00, which is the signature of a driver that did not load.
+
+## Icon fix + startup/installer session (v1.0.2)
 
 ### The app icon never appeared — root cause found and fixed
 `app_icon.ico` was **not an ICO file**. It was a JPEG with a hand-written 22-byte
@@ -201,7 +281,7 @@ Verified on a live AMD iGPU + NVIDIA RTX 3060 dGPU laptop.
   1 Hz forever is what forces the repeated working-set trims. Dropping to ~5 s
   while hidden would cut background CPU ~80%; the tray wattage number would just
   update less often. Not done because it changes observable behaviour.
-- **`Win32_Battery.ChargeRate`/`DischargeRate` are blank on this laptop**, so the
+- **CPU package power still needs elevation.** Unelevated, RAPL reports 0 W and the CPU figure falls back to the `2.5 + u*22.5` formula (labelled 推估). Making it real means running the app elevated — UAC on every launch, and the HKCU autostart entry gets messy. Product decision, not a code one.
   headline wattage is still a formula estimate, not a measurement. A proper fix
   reads `IOCTL_BATTERY_QUERY_STATUS` against the battery device directly.
 - **500-record history cap is memory-only** — nothing is persisted, so closing the

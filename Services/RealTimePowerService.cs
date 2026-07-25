@@ -82,8 +82,6 @@ namespace WinBatLens.Services
         private static long _lastDischargeTick;
         private static double _cachedVoltageV = 0;
         private static bool _voltageMeasured;
-        private static double _cachedTempC = 0;
-        private static bool _tempMeasured;
         private static long _lastTelemetryTick;
         private static string _cachedPowerPlan = "平衡 (Balanced)";
         private static long _lastPowerPlanTick;
@@ -159,7 +157,10 @@ namespace WinBatLens.Services
                 GetScreenBrightnessPercent();
                 GetWmiChargeRateMw();
                 GetWmiDischargeRateMw();
-                GetWmiBatteryTelemetry();
+                // Opening the sensor stack can load a kernel driver, so it must
+                // happen here on the warmup thread, never on the first UI tick.
+                HardwareSensorService.Initialize();
+                GetWmiBatteryVoltage();
                 GetActivePowerPlanName();
             }
             catch { }
@@ -199,17 +200,38 @@ namespace WinBatLens.Services
             {
                 state.CpuUsagePercent = 0.0;
             }
-            state.CpuPowerW = Math.Round(2.5 + (state.CpuUsagePercent / 100.0) * 22.5, 1);
+            // Prefer the real RAPL/NVML reading; the linear formula is only a
+            // last resort and is flagged as such so the UI can label it. The
+            // sensor values are refreshed on their own background timer, so
+            // reading them here costs nothing.
+            double? cpuMeasuredW = HardwareSensorService.CpuPackageW;
+            state.IsCpuPowerMeasured = cpuMeasuredW.HasValue;
+            state.CpuPowerW = cpuMeasuredW ?? Math.Round(2.5 + (state.CpuUsagePercent / 100.0) * 22.5, 1);
 
             // 2. GPU (iGPU & dGPU) Usage & Power
             var (iGpuVal, dGpuVal) = GetDualGpuUsage();
             state.IgpuUsagePercent = iGpuVal;
-            state.IgpuPowerW = Math.Round(1.0 + (iGpuVal / 100.0) * 12.0, 1);
+            state.IgpuPowerW = HardwareSensorService.IgpuPackageW
+                               ?? Math.Round(1.0 + (iGpuVal / 100.0) * 12.0, 1);
 
             if (state.HasDiscreteGpu)
             {
                 state.DgpuUsagePercent = dGpuVal;
-                if (dGpuVal > 0)
+
+                // A real GPU draws real watts even at 0% utilisation (measured
+                // ~19 W idle on an RTX 3060 Laptop), so the sensor value is used
+                // whatever the load says. Only the estimate zeroes out at idle.
+                double? dGpuMeasuredW = HardwareSensorService.DgpuPackageW;
+                state.IsDgpuPowerMeasured = dGpuMeasuredW.HasValue;
+
+                if (dGpuMeasuredW.HasValue)
+                {
+                    state.DgpuPowerW = dGpuMeasuredW.Value;
+                    state.DgpuStatusText = dGpuVal > 0
+                        ? $"{dGpuVal:F1}% (高效能運算中)"
+                        : $"{dGpuVal:F1}% (待機)";
+                }
+                else if (dGpuVal > 0)
                 {
                     state.DgpuPowerW = Math.Round(3.0 + (dGpuVal / 100.0) * 35.0, 1);
                     state.DgpuStatusText = $"{dGpuVal:F1}% (高效能運算中)";
@@ -285,11 +307,15 @@ namespace WinBatLens.Services
             // 7. Motherboard Base Power
             state.MotherboardPowerW = 2.5;
 
-            // Calculate Total System Hardware Power W
+            // Calculate Total System Hardware Power W. The total is only called
+            // "measured" when both of the two dominant consumers (CPU and dGPU)
+            // came from real sensors — the remaining terms are small estimates.
             state.TotalSystemHardwareW = Math.Round(
-                state.CpuPowerW + state.IgpuPowerW + state.DgpuPowerW + 
-                state.ScreenPowerW + state.DiskPowerW + state.WifiPowerW + 
+                state.CpuPowerW + state.IgpuPowerW + state.DgpuPowerW +
+                state.ScreenPowerW + state.DiskPowerW + state.WifiPowerW +
                 state.RamPowerW + state.MotherboardPowerW, 1);
+            state.IsTotalPowerMeasured = state.IsCpuPowerMeasured &&
+                                         (!state.HasDiscreteGpu || state.IsDgpuPowerMeasured);
 
             // 8. Get Windows System Power Status & Calculate AC Input W
             if (GetSystemPowerStatus(out var status))
@@ -401,11 +427,9 @@ namespace WinBatLens.Services
             }
 
             // 11. Battery Physical Telemetry (Voltage, Current, Temperature)
-            var (volts, tempC) = GetWmiBatteryTelemetry();
+            double volts = GetWmiBatteryVoltage();
             state.BatteryVoltageV = volts;
             state.IsVoltageMeasured = _voltageMeasured;
-            state.BatteryTemperatureC = tempC;
-            state.IsTemperatureMeasured = _tempMeasured;
 
             double activePowerW = state.IsAcOnline ? state.ChargingRateW : state.DischargeRateW;
             if (volts > 0 && activePowerW > 0)
@@ -419,8 +443,7 @@ namespace WinBatLens.Services
 
             string voltText = state.IsVoltageMeasured ? $"{state.BatteryVoltageV:F2} V" : "-- V";
             string currText = state.BatteryCurrentA > 0 ? $"{state.BatteryCurrentA:F2} A" : "-- A";
-            string tempText = state.IsTemperatureMeasured ? $"{state.BatteryTemperatureC:F1} °C" : "-- °C";
-            state.BatteryTelemetryText = $"{voltText} | {currText} | {tempText}";
+            state.BatteryTelemetryText = $"{voltText} | {currText}";
 
             // 12. Windows Active Power Plan (PowrProf.dll)
             state.PowerPlanName = GetActivePowerPlanName();
@@ -735,49 +758,33 @@ namespace WinBatLens.Services
             return (8.0, 16.0);
         }
 
-        private static (double VoltageV, double TempC) GetWmiBatteryTelemetry()
+        /// <summary>
+        /// Reads live battery pack voltage. Temperature is deliberately not read
+        /// here: the only zone Windows exposes on a typical laptop is the
+        /// CPU/system thermal zone, which this method used to return and the UI
+        /// used to present as the battery's own temperature.
+        /// </summary>
+        private static double GetWmiBatteryVoltage()
         {
             if (Environment.TickCount64 - _lastTelemetryTick < WmiRefreshMs)
-                return (_cachedVoltageV, _cachedTempC);
+                return _cachedVoltageV;
             _lastTelemetryTick = Environment.TickCount64;
 
-            double voltageV = 0;
-            double tempC = 0;
-
-            // 1. Query Battery Voltage (mV -> V)
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT Voltage FROM BatteryStatus"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        var vObj = obj["Voltage"];
-                        if (vObj != null)
-                        {
-                            double mv = Convert.ToDouble(vObj);
-                            if (mv > 0)
-                            {
-                                voltageV = Math.Round(mv / 1000.0, 2);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
+            // The sensor stack already reads pack voltage when it opened OK.
+            double voltageV = HardwareSensorService.BatteryVoltageV ?? 0;
 
             if (voltageV <= 0)
             {
                 try
                 {
-                    using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT DesignVoltage FROM Win32_Battery"))
+                    using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT Voltage FROM BatteryStatus"))
                     {
                         foreach (ManagementObject obj in searcher.Get())
                         {
-                            var dvObj = obj["DesignVoltage"];
-                            if (dvObj != null)
+                            var vObj = obj["Voltage"];
+                            if (vObj != null)
                             {
-                                double mv = Convert.ToDouble(dvObj);
+                                double mv = Convert.ToDouble(vObj);
                                 if (mv > 0)
                                 {
                                     voltageV = Math.Round(mv / 1000.0, 2);
@@ -790,72 +797,13 @@ namespace WinBatLens.Services
                 catch { }
             }
 
-            // 2. Query System / Thermal Zone Temperature (°C)
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT HighPrecisionTemperature, Temperature FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        var hpObj = obj["HighPrecisionTemperature"];
-                        if (hpObj != null)
-                        {
-                            double val = Convert.ToDouble(hpObj);
-                            if (val > 2500 && val < 4500)
-                            {
-                                tempC = Math.Round((val / 10.0) - 273.15, 1);
-                                break;
-                            }
-                        }
-
-                        var tObj = obj["Temperature"];
-                        if (tObj != null)
-                        {
-                            double kelvin = Convert.ToDouble(tObj);
-                            if (kelvin > 250 && kelvin < 400)
-                            {
-                                tempC = Math.Round(kelvin - 273.15, 1);
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            catch { }
-
-            if (tempC <= 0)
-            {
-                try
-                {
-                    using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT CurrentTemperature FROM MSThermal_ThermalZoneTemperature"))
-                    {
-                        foreach (ManagementObject obj in searcher.Get())
-                        {
-                            var ctObj = obj["CurrentTemperature"];
-                            if (ctObj != null)
-                            {
-                                double val = Convert.ToDouble(ctObj);
-                                if (val > 2500 && val < 4500)
-                                {
-                                    tempC = Math.Round((val / 10.0) - 273.15, 1);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            // Many laptops' embedded controllers expose neither value. Keep a
-            // nominal figure so the derived current/power math stays sane, but
-            // record that it was not measured so the UI can show "--".
+            // Many laptops' embedded controllers do not expose live voltage.
+            // Keep a nominal figure so the I = P / V maths stays sane, but
+            // record that it was not measured so the UI shows "--".
             _voltageMeasured = voltageV > 0;
-            _tempMeasured = tempC > 0;
             _cachedVoltageV = _voltageMeasured ? voltageV : 15.4;
-            _cachedTempC = _tempMeasured ? tempC : 0.0;
 
-            return (_cachedVoltageV, _cachedTempC);
+            return _cachedVoltageV;
         }
 
         private static string GetActivePowerPlanName()

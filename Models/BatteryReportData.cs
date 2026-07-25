@@ -93,13 +93,21 @@ namespace WinBatLens.Models
         // Battery Physical Telemetry. The *Measured flags are false when the
         // hardware/firmware does not expose the value, so the UI can show "--"
         // instead of presenting a fallback constant as a real reading.
+        //
+        // Temperature is deliberately absent: the only thermal zone Windows
+        // exposes here is the CPU/system zone, which was previously displayed
+        // as if it were the battery's own temperature.
         public double BatteryVoltageV { get; set; }
         public bool IsVoltageMeasured { get; set; }
         public double BatteryCurrentA { get; set; }
-        public double BatteryTemperatureC { get; set; }
-        public bool IsTemperatureMeasured { get; set; }
-        public string BatteryTelemetryText { get; set; } = "-- V | -- A | -- °C";
+        public string BatteryTelemetryText { get; set; } = "-- V | -- A";
         public string PowerPlanName { get; set; } = "平衡 (Balanced)";
+
+        // True when the corresponding *PowerW below came from a real hardware
+        // sensor rather than the utilisation-based estimate.
+        public bool IsCpuPowerMeasured { get; set; }
+        public bool IsDgpuPowerMeasured { get; set; }
+        public bool IsTotalPowerMeasured { get; set; }
         
         // CPU
         public double CpuUsagePercent { get; set; }

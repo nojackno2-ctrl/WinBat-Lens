@@ -29,10 +29,9 @@ namespace WinBatLens.Models
         public double BatteryCurrentA { get; set; }
         public string CurrentText => BatteryCurrentA > 0 ? $"{BatteryCurrentA:F2} A" : "-- A";
 
-        public double BatteryTemperatureC { get; set; }
-        public string TemperatureText => BatteryTemperatureC > 0 ? $"{BatteryTemperatureC:F1} °C" : "-- °C";
-
-        public string TelemetryText => $"{VoltageText} | {CurrentText} | {TemperatureText}";
+        // No temperature column: the value previously logged here was the
+        // CPU/system thermal zone, not the battery's temperature.
+        public string TelemetryText => $"{VoltageText} | {CurrentText}";
 
         public string SummaryText { get; set; } = string.Empty;
     }

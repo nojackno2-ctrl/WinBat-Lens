@@ -455,8 +455,9 @@ namespace WinBatLens
             }
 
             // Real exit: Unloaded is not reliably raised for a top-level
-            // Window, so release the timer and tray icon here.
+            // Window, so release the timer, sensors and tray icon here.
             _livePowerTimer?.Stop();
+            try { HardwareSensorService.Shutdown(); } catch { }
             try
             {
                 if (_notifyIcon != null)
@@ -573,6 +574,19 @@ namespace WinBatLens
             }
         }
 
+        /// <summary>
+        /// Renders a wattage and says plainly where it came from. A real sensor
+        /// reading gets an exact value; anything derived from a utilisation
+        /// curve is prefixed with ~ and labelled, so the two are never confused.
+        /// </summary>
+        private static string FormatPower(double watts, bool measured)
+        {
+            bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
+            return measured
+                ? $"{watts:F1} W ({(en ? "measured" : "實測")})"
+                : $"~{watts:F1} W ({(en ? "estimated" : "推估")})";
+        }
+
         private void UpdateLivePowerUI()
         {
             try
@@ -641,7 +655,7 @@ namespace WinBatLens
                     ? $"Current Battery Level: {state.BatteryPercent}%"
                     : $"目前電池剩餘電量: {state.BatteryPercent}%";
 
-                // Battery Hardware Telemetry (Voltage, Current, Temperature)
+                // Battery Hardware Telemetry (Voltage / Current)
                 TxtLiveBatteryTelemetry.Text = state.BatteryTelemetryText;
                 TxtHwTelemetryVal.Text = state.BatteryTelemetryText;
                 TxtHwPowerPlanVal.Text = state.PowerPlanName;
@@ -649,19 +663,20 @@ namespace WinBatLens
                 // CPU Load & Power
                 PbCpuUsage.Value = state.CpuUsagePercent;
                 TxtCpuUsageVal.Text = $"{state.CpuUsagePercent:F1}%";
-                TxtCpuPowerW.Text = $"~{state.CpuPowerW:F1} W";
+                TxtCpuPowerW.Text = FormatPower(state.CpuPowerW, state.IsCpuPowerMeasured);
 
                 // Discrete GPU (dGPU) Load & Power
                 TxtDgpuName.Text = $"🎮 {state.DgpuName}";
                 PbDgpuUsage.Value = state.DgpuUsagePercent;
                 TxtDgpuUsageVal.Text = state.DgpuStatusText;
-                TxtDgpuPowerW.Text = $"~{state.DgpuPowerW:F1} W";
+                TxtDgpuPowerW.Text = FormatPower(state.DgpuPowerW, state.IsDgpuPowerMeasured);
 
-                // Integrated GPU (iGPU) Load & Power
+                // Integrated GPU (iGPU) Load & Power. No consumer iGPU exposes a
+                // package-power sensor, so this one is always an estimate.
                 TxtIgpuName.Text = $"🖼️ {state.IgpuName}";
                 PbIgpuUsage.Value = state.IgpuUsagePercent;
                 TxtIgpuUsageVal.Text = $"{state.IgpuUsagePercent:F1}%";
-                TxtIgpuPowerW.Text = $"~{state.IgpuPowerW:F1} W";
+                TxtIgpuPowerW.Text = FormatPower(state.IgpuPowerW, false);
 
                 // Screen Display & Backlight Power. Panels that do not expose
                 // WmiMonitorBrightness show "--" rather than a fallback number.
