@@ -76,10 +76,6 @@ namespace WinBatLens.Services
         private static int _cachedBrightness = 75;
         private static bool _brightnessMeasured;
         private static long _lastBrightnessTick;
-        private static double _cachedChargeMw = 0;
-        private static long _lastChargeTick;
-        private static double _cachedDischargeMw = 0;
-        private static long _lastDischargeTick;
         private static double _cachedVoltageV = 0;
         private static bool _voltageMeasured;
         private static long _lastTelemetryTick;
@@ -155,11 +151,10 @@ namespace WinBatLens.Services
             {
                 GetDualGpuUsage();
                 GetScreenBrightnessPercent();
-                GetWmiChargeRateMw();
-                GetWmiDischargeRateMw();
                 // Opening the sensor stack can load a kernel driver, so it must
                 // happen here on the warmup thread, never on the first UI tick.
                 HardwareSensorService.Initialize();
+                BatteryTelemetryService.Initialize();
                 GetWmiBatteryVoltage();
                 GetActivePowerPlanName();
             }
@@ -317,64 +312,71 @@ namespace WinBatLens.Services
             state.IsTotalPowerMeasured = state.IsCpuPowerMeasured &&
                                          (!state.HasDiscreteGpu || state.IsDgpuPowerMeasured);
 
-            // 8. Get Windows System Power Status & Calculate AC Input W
+            // 8. Windows power status + the battery's own charge/discharge rate.
+            bool haveBatt = BatteryTelemetryService.TryRead(out var batt);
+
             if (GetSystemPowerStatus(out var status))
             {
                 state.IsAcOnline = status.ACLineStatus == 1;
                 state.BatteryPercent = status.BatteryLifePercent <= 100 ? status.BatteryLifePercent : 0;
 
+                // The driver's own flag decides whether current is flowing into
+                // the pack. Inferring it from a percentage threshold is wrong on
+                // any laptop with a charge limit — this ASUS stops at ~95% by
+                // design, which the old `>= 98` test reported as still charging.
+                state.IsCharging = haveBatt
+                    ? batt.IsCharging
+                    : state.IsAcOnline && state.BatteryPercent < 98;
+
                 if (state.IsAcOnline)
                 {
-                    if (state.BatteryPercent >= 98)
+                    if (state.IsCharging)
                     {
-                        state.IsCharging = false;
-                        state.ChargingRateW = 0.0;
-                        state.AcTotalInputW = state.TotalSystemHardwareW;
-                        state.PowerStatusText = "市電供電中 (已充滿)";
-                        state.ChargingStatusText = $"市電直供硬體 ({state.TotalSystemHardwareW:F1}W) | 電池滿電保護中 (0 W 充電)";
-                        state.EstimatedTimeRemainingText = "電量已充滿 100%";
+                        if (haveBatt && batt.IsRateKnown && batt.ChargeW > 0)
+                        {
+                            state.ChargingRateW = batt.ChargeW;
+                            state.IsChargeRateMeasured = true;
+                        }
+                        else
+                        {
+                            // No invented constant here: an unknown charge rate
+                            // is reported as unknown, not as a plausible number.
+                            state.ChargingRateW = 0.0;
+                            state.IsChargeRateMeasured = false;
+                        }
+
+                        state.PowerStatusText = "AC 充電中";
+                        state.AcTotalInputW = Math.Round(state.ChargingRateW + state.TotalSystemHardwareW, 1);
                         state.DischargeRateText = $"{state.AcTotalInputW:F1} W (AC 變壓器總供電)";
+
+                        string chargeStr = state.IsChargeRateMeasured
+                            ? $"充電 +{state.ChargingRateW:F1}W"
+                            : "充電 +--W";
+                        state.ChargingStatusText =
+                            $"AC 總輸出 ~{state.AcTotalInputW:F1}W ({chargeStr} + 硬體 ~{state.TotalSystemHardwareW:F1}W 推估)";
+
+                        if (state.IsChargeRateMeasured && state.ChargingRateW > 0)
+                        {
+                            double remainWh = (100 - state.BatteryPercent) / 100.0 * 56.0;
+                            TimeSpan chargeTime = TimeSpan.FromHours(remainWh / state.ChargingRateW);
+                            state.EstimatedTimeRemainingText = $"預估 {chargeTime.Hours}小時{chargeTime.Minutes}分 充飽";
+                        }
+                        else
+                        {
+                            state.EstimatedTimeRemainingText = "充電中...";
+                        }
                     }
                     else
                     {
-                        state.IsCharging = true;
-                        
-                        // Calculate AC charging wattage
-                        double wmiChargeMw = GetWmiChargeRateMw();
-                        if (wmiChargeMw > 0)
-                        {
-                            state.ChargingRateW = Math.Round(wmiChargeMw / 1000.0, 1);
-                        }
-                        else
-                        {
-                            if (state.BatteryPercent >= 90) state.ChargingRateW = 12.5;
-                            else if (state.BatteryPercent >= 75) state.ChargingRateW = 28.0;
-                            else state.ChargingRateW = 45.0;
-                        }
-
-                        // Total AC Input W = Charging W + Hardware W
-                        state.AcTotalInputW = Math.Round(state.ChargingRateW + state.TotalSystemHardwareW, 1);
-                        state.PowerStatusText = "AC 充電中";
+                        state.ChargingRateW = 0.0;
+                        state.AcTotalInputW = state.TotalSystemHardwareW;
+                        state.PowerStatusText = "市電供電中 (未充電)";
+                        state.ChargingStatusText =
+                            $"市電直供硬體 (~{state.TotalSystemHardwareW:F1}W 推估) | 電池未充電 (0 W)";
+                        state.EstimatedTimeRemainingText = state.BatteryPercent >= 98
+                            ? "電量已充滿 100%"
+                            : $"電量 {state.BatteryPercent}% (電池保養未充電)";
                         state.DischargeRateText = $"{state.AcTotalInputW:F1} W (AC 變壓器總供電)";
-
-                        if (state.BatteryPercent >= 90)
-                        {
-                            state.ChargingStatusText = $"AC 總輸出 {state.AcTotalInputW:F1}W (充電 +{state.ChargingRateW:F1}W + 硬體 {state.TotalSystemHardwareW:F1}W)";
-                        }
-                        else if (state.BatteryPercent >= 75)
-                        {
-                            state.ChargingStatusText = $"AC 總輸出 {state.AcTotalInputW:F1}W (充電 +{state.ChargingRateW:F1}W + 硬體 {state.TotalSystemHardwareW:F1}W)";
-                        }
-                        else
-                        {
-                            state.ChargingStatusText = $"⚡ AC 總輸出 {state.AcTotalInputW:F1}W (充電 +{state.ChargingRateW:F1}W + 硬體 {state.TotalSystemHardwareW:F1}W)";
-                        }
-
-                        // Estimate time to full charge
-                        int remainPct = 100 - state.BatteryPercent;
-                        double estHours = (remainPct / 100.0 * 56.0) / Math.Max(10.0, state.ChargingRateW);
-                        TimeSpan chargeTime = TimeSpan.FromHours(estHours);
-                        state.EstimatedTimeRemainingText = $"預估 {chargeTime.Hours}小時{chargeTime.Minutes}分 充飽";
                     }
                 }
                 else
@@ -384,6 +386,7 @@ namespace WinBatLens.Services
                     state.AcTotalInputW = 0.0;
                     state.PowerStatusText = "電池放電中";
                     state.ChargingStatusText = "使用電池供電";
+
                     if (status.BatteryLifeTime > 0 && status.BatteryLifeTime < 86400)
                     {
                         TimeSpan t = TimeSpan.FromSeconds(status.BatteryLifeTime);
@@ -396,19 +399,22 @@ namespace WinBatLens.Services
                 }
             }
 
-            // 9. Total Discharge Rate W for Battery mode
+            // 9. Discharge rate. On battery this is the single most valuable
+            // number the app has: it is the whole machine's real power draw,
+            // measured at the pack, with no per-component estimation involved.
             if (!state.IsAcOnline)
             {
-                double dischargeRateMw = GetWmiDischargeRateMw();
-                if (dischargeRateMw > 0)
+                if (haveBatt && batt.IsRateKnown && batt.DischargeW > 0)
                 {
-                    state.DischargeRateW = Math.Round(dischargeRateMw / 1000.0, 1);
-                    state.DischargeRateText = $"-{state.DischargeRateW:F1} W ({dischargeRateMw:N0} mW)";
+                    state.DischargeRateW = batt.DischargeW;
+                    state.IsDischargeRateMeasured = true;
+                    state.DischargeRateText = $"-{state.DischargeRateW:F1} W (電池實測)";
                 }
                 else
                 {
                     state.DischargeRateW = state.TotalSystemHardwareW;
-                    state.DischargeRateText = $"-{state.DischargeRateW:F1} W (即時全硬體估算)";
+                    state.IsDischargeRateMeasured = false;
+                    state.DischargeRateText = $"-{state.DischargeRateW:F1} W (全硬體推估)";
                 }
             }
 
@@ -451,35 +457,11 @@ namespace WinBatLens.Services
             return state;
         }
 
-        private static double GetWmiChargeRateMw()
-        {
-            if (Environment.TickCount64 - _lastChargeTick < WmiRefreshMs)
-                return _cachedChargeMw;
-            _lastChargeTick = Environment.TickCount64;
-            _cachedChargeMw = QueryWmiChargeRateMw();
-            return _cachedChargeMw;
-        }
-
-        private static double QueryWmiChargeRateMw()
-        {
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT ChargeRate FROM Win32_Battery"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        var rateObj = obj["ChargeRate"];
-                        if (rateObj != null)
-                        {
-                            double val = Convert.ToDouble(rateObj);
-                            if (val > 0) return val;
-                        }
-                    }
-                }
-            }
-            catch { }
-            return 0;
-        }
+        // Charge/discharge rates come from BatteryTelemetryService via
+        // IOCTL_BATTERY_QUERY_STATUS. The Win32_Battery ChargeRate and
+        // DischargeRate properties formerly read here are blank on a great many
+        // laptops (this one included), which is why the app fell back to a
+        // utilisation estimate while the pack was reporting a real figure.
 
         private static int GetScreenBrightnessPercent()
         {
@@ -711,36 +693,6 @@ namespace WinBatLens.Services
             return source.Substring(s, e - s);
         }
 
-        private static double GetWmiDischargeRateMw()
-        {
-            if (Environment.TickCount64 - _lastDischargeTick < WmiRefreshMs)
-                return _cachedDischargeMw;
-            _lastDischargeTick = Environment.TickCount64;
-            _cachedDischargeMw = QueryWmiDischargeRateMw();
-            return _cachedDischargeMw;
-        }
-
-        private static double QueryWmiDischargeRateMw()
-        {
-            try
-            {
-                using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT DischargeRate, BatteryStatus FROM Win32_Battery"))
-                {
-                    foreach (ManagementObject obj in searcher.Get())
-                    {
-                        var rateObj = obj["DischargeRate"];
-                        if (rateObj != null)
-                        {
-                            double val = Convert.ToDouble(rateObj);
-                            if (val > 0) return val;
-                        }
-                    }
-                }
-            }
-            catch { }
-            return 0;
-        }
-
         private static (double UsedGb, double TotalGb) GetSystemRamInfo()
         {
             // Native GlobalMemoryStatusEx avoids the heavy per-tick WMI/COM
@@ -770,8 +722,13 @@ namespace WinBatLens.Services
                 return _cachedVoltageV;
             _lastTelemetryTick = Environment.TickCount64;
 
-            // The sensor stack already reads pack voltage when it opened OK.
-            double voltageV = HardwareSensorService.BatteryVoltageV ?? 0;
+            // The battery IOCTL returns voltage in the same call the rate comes
+            // from, so prefer it; the sensor stack is the next best source.
+            double voltageV = 0;
+            if (BatteryTelemetryService.TryRead(out var bt) && bt.VoltageV > 0)
+                voltageV = bt.VoltageV;
+            if (voltageV <= 0)
+                voltageV = HardwareSensorService.BatteryVoltageV ?? 0;
 
             if (voltageV <= 0)
             {

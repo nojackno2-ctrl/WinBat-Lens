@@ -1,6 +1,68 @@
 # Project State & Handoff
 
-## Real hardware sensors + temperature removal (latest, v1.0.3)
+## Real battery charge/discharge power (latest, v1.0.4)
+
+**The app was falling back to an estimate while the battery was reporting a
+real figure the whole time.** `RealTimePowerService` read
+`Win32_Battery.DischargeRate` (`root\CIMV2`), which is blank on this laptop and
+on many others. `root\WMI BatteryStatus` and the underlying
+`IOCTL_BATTERY_QUERY_STATUS` both work fine.
+
+### The earlier "the EC does not report rate" conclusion was wrong
+Every previous check ran with `RemainingCapacity == FullChargedCapacity` and
+the charger plugged in — a full pack on AC passes no current, so **0 mW was the
+correct answer** and was misread as "unsupported". The tell was that the driver
+returned a real `0` rather than `BATTERY_UNKNOWN_RATE` (`0x80000000`), which is
+the value the spec reserves for genuine unavailability.
+
+Confirmed by unplugging while polling:
+
+```
+21:54:24  電池  放電中   -5.51 W    idle, just unplugged
+21:54:38  電池  放電中  -22.29 W
+21:54:57  電池  放電中  -30.91 W
+21:58:45  電池  放電中  -39.90 W    under load
+21:58:51  市電  ...      0.00 W     replugged
+```
+
+### New `Services/BatteryTelemetryService.cs`
+Reads the battery class driver directly over
+`IOCTL_BATTERY_QUERY_STATUS` (SetupDi enumeration of
+`GUID_DEVCLASS_BATTERY` → `CreateFile` → `IOCTL_BATTERY_QUERY_TAG`).
+
+- **No elevation, no WMI/COM.** Measured **0.4 ms average / 1.2 ms max** per
+  read, so unlike the WMI path it is cheap enough to poll every second on the
+  UI thread. (Contrast the LibreHardwareMonitor sweep at 85–256 ms, which had
+  to be moved to a background timer.)
+- Returns voltage in the same call, so the separate voltage WMI query is gone.
+- `IsRateKnown` distinguishes a true `0` from `BATTERY_UNKNOWN_RATE`. **Do not
+  treat 0 W as failure** — that is the bug this section exists to document.
+- Direction comes from the `BATTERY_CHARGING`/`BATTERY_DISCHARGING` state flags
+  with `Math.Abs` on the rate, because not every driver honours the
+  negative-means-discharging convention.
+- Re-queries the battery tag once on failure (the tag invalidates when a pack
+  is swapped) before giving up.
+
+### On battery, the headline number is now a real measurement
+`DischargeRateW` with `IsDischargeRateMeasured` set is the **whole machine's
+actual power draw, measured at the pack** — no per-component estimation, and it
+neatly sidesteps the Armoury-Crate-owns-the-SMU problem that makes CPU package
+power unreadable (see v1.0.3). This is the app's core metric.
+
+### Two other fabrications removed while in here
+- Charging wattage fell back to hard-coded `12.5 / 28.0 / 45.0 W` chosen by
+  battery percentage. Now reports `--` when unknown.
+- `IsCharging` was inferred from `BatteryPercent >= 98`. Wrong on any laptop
+  with a charge limit — this ASUS stops around 95%, which the old test called
+  "still charging". The driver's own `BATTERY_CHARGING` flag is now used.
+
+### AC adapter input is still an estimate, and always will be
+Windows exposes no API for adapter input wattage; it is vendor-EC territory
+(hence Armoury Crate can show it). It stays `charge rate + hardware estimate`
+and is rendered with a leading `~`. A USB-C PD machine could read the
+negotiated contract over UCSI, but this laptop uses a barrel connector.
+
+## Real hardware sensors + temperature removal (v1.0.3)
 
 Triggered by the user noticing WinBat Lens disagreed with Armoury Crate during
 a 3DMark run. It did, and the reasons were real.
