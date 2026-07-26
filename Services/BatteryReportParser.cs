@@ -373,8 +373,13 @@ namespace WinBatLens.Services
         private static string StripTags(string input)
         {
             if (string.IsNullOrWhiteSpace(input)) return string.Empty;
-            string clean = Regex.Replace(input, @"<[^>]+>", " ").Trim();
-            return System.Net.WebUtility.HtmlDecode(clean);
+            string clean = Regex.Replace(input, @"<[^>]+>", " ");
+            clean = System.Net.WebUtility.HtmlDecode(clean);
+            // powercfg splits date ranges across source lines, e.g.
+            // "2026-07-12\n - 2026-07-18". Those newlines survive into the cell
+            // text and make a TextBlock render two lines, so collapse every run
+            // of whitespace into a single space.
+            return Regex.Replace(clean, @"\s+", " ").Trim();
         }
 
         private static int ExtractNumber(string str)

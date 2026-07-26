@@ -1,6 +1,63 @@
 # Project State & Handoff
 
-## One colour per meaning (latest, v1.0.8)
+## Compact UI pass (latest, on top of v1.0.8)
+
+The dashboard was sized for a much larger window than it needed. Shrunk it to
+**1200x780** (was 1380x960; minimum 980x620, was 1060x800) by taking the space
+out of padding, margins and corner radii rather than out of type.
+
+The constraint given was that text must stay legible, so nothing is smaller than
+11px, and several previously-tiny labels were made **larger**: the health-%
+badges in the capacity table (9/10px -> 10/11px), the report timestamp (10 ->
+11px) and the header subtitle (10 -> 11px). Body text sits at 12px, card titles
+at 13px. What actually shrank: card padding 16 -> 11,9; card gaps 16 -> 9; outer
+window margin 18 -> 10; right-panel padding 20 -> 12; health ring 115 -> 84px;
+chart 160 -> 136px tall; button padding 16,8 -> 11,5; tab padding 14,10 -> 10,6.
+
+Two structural fixes came out of it:
+
+**The sidebar could not align with the right panel.** It was a `StackPanel`
+inside a `ScrollViewer`, so its height was whatever the three cards summed to —
+unrelated to the right panel's height, which stretches. The bottom edges never
+matched and the last history row was clipped mid-row. The sidebar is now a
+3-row `Grid` (`Auto` / `Auto` / `*`) with the capacity-history card in the `*`
+row, so it fills the leftover height and both columns end on the same line. The
+card's inner `MaxHeight="164"` went away with it; the list now grows with the
+window.
+
+**powercfg embeds newlines in date ranges.** `StripTags` only did `.Trim()`, so
+the interior newline in
+
+```
+<td class="dateTime">2026-07-12
+      - 2026-07-19</td>
+```
+
+survived into the cell text and a `TextBlock` rendered it as two lines, with the
+second line clipped by the column width. `StripTags` now collapses every
+whitespace run to a single space. This is shared by every parsed field, so all
+of them are normalised, and `ExtractNumber` strips non-digits anyway.
+
+Worth knowing for anyone confused by that first row: **powercfg keeps only the
+last 7 days at daily granularity and merges everything older into one aggregated
+row.** Verified by diffing two reports from consecutive days — 07-25's report
+listed 07-12, 07-13, 07-14 ... individually; 07-26's report collapsed 07-12 to
+07-19 into a single row reading 55,950 mWh, which is not any single day's value
+(those were 55,811 / 55,929 / 55,969). The exact averaging powercfg uses is
+undocumented and was not reverse-engineered. The range row will keep growing;
+the daily rows stay a rolling 7.
+
+The capacity table's header and data grids are now width-matched on purpose: the
+data list's scrollbar is pinned visible and the header carries a 17px right
+margin (`SystemParameters.VerticalScrollBarWidth`), so both grids get the same
+305px and the columns line up in every state. Previously the header shifted by
+the scrollbar width whenever the list happened to scroll.
+
+Sizing note for future edits: the right panel's tab strip needs ~750px. At a
+1200px window that leaves the sidebar about 20px of room to grow before the tabs
+wrap — widen the window at the same time if the sidebar needs more.
+
+## One colour per meaning (v1.0.8)
 
 Discharge was being drawn in three different colours depending on where you
 looked, and the dGPU shared a colour with it:
