@@ -1,6 +1,190 @@
 # Project State & Handoff
 
-## One colour per meaning (latest, v1.0.8)
+## IOCTL_BATTERY_QUERY_INFORMATION: the third battery IOCTL (latest)
+
+`BatteryTelemetryService` only ever used two of the battery class driver's
+IOCTLs — `QUERY_TAG` and `QUERY_STATUS`. `QUERY_INFORMATION` was untouched, and
+it holds most of what the driver knows. It is now wired in, along with the
+`Capacity` field of `BATTERY_STATUS`, which was being read into the struct and
+then thrown away.
+
+Everything here is a direct device IOCTL on the handle the service already
+holds: no elevation, no WMI, no COM.
+
+### What this machine actually reports (ASUS ROG, unelevated)
+
+| level | result |
+|---|---|
+| `BatteryInformation` — design/full capacity | ✅ 75,998 / **56,032** mWh |
+| `BatteryInformation` — chemistry | ✅ `LIon` |
+| `BatteryInformation` — cycle count | ❌ 0, firmware does not keep the tally |
+| `BatteryDeviceName` / `BatteryManufactureName` | ✅ `ASUS Battery` / `ASUSTeK` |
+| `BatteryManufactureDate` | ❌ not implemented |
+| `BatteryTemperature` | ❌ not implemented |
+| `BatteryEstimatedTime` | ❌ unknown on AC (untested on battery) |
+| `BATTERY_STATUS.Capacity` | ✅ 56,032 mWh, real resolution |
+
+`BatteryUniqueID` (level 7) is deliberately **not** queried: this firmware
+answers with `ASUSTeKASUS Battery`, its manufacturer and device name
+concatenated rather than a serial number, and nothing in the UI wants it.
+
+Levels that fail three times in a row are given up on (`MaxLevelFailures`), so
+an unimplemented one costs three IOCTLs at start-up and nothing afterwards.
+The counters and the cached pack info reset on device re-open, since a
+different pack may implement a different set. Pack information is re-read once
+a minute (`PackInfoRefreshMs`) because capacities and cycle count drift over
+hours; the strings and the manufacture date are carried over rather than
+re-queried, as those never change for a given pack.
+
+### The report's capacities were stale, and the driver's are not
+
+The full-charge capacity in the powercfg report is a snapshot Windows logged
+earlier. Measured side by side: **report 55,969 mWh, driver 56,032 mWh.**
+`BatteryReportParser.Parse` now takes an optional `PackInfo` and prefers the
+driver's figures, which moved the health score from 73.6% to 73.7% and the
+capacity loss from 20,029 to 19,966 mWh. It also means a machine whose report
+is empty or unparseable still gets a real health score instead of being
+reported as having no battery at all.
+
+Two guards on the overlay: a `BATTERY_CAPACITY_RELATIVE` pack reports
+capacities in its own arbitrary units, and a report in mAh cannot be mixed with
+the driver's mWh — in both cases the report's own numbers are left alone. And
+`BtnOpenReport_Click` passes **no** pack info, because a hand-picked HTML report
+may well come from another machine, where this machine's pack would be
+describing someone else's battery.
+
+### A hard-coded 56 Wh pack size is gone
+
+Time-to-full was `(100 - percent) / 100 * 56.0 / chargeRate` — this laptop's
+capacity baked into the formula and wrong on every other machine. It is now
+`(FullChargedCapacity - Capacity) / chargeRate`, both terms measured.
+
+Remaining runtime gained two fallbacks behind Windows' own forecast, which
+reports nothing for the first minute or so after unplugging and used to leave
+the card stuck on "估算中...": the driver's `BatteryEstimatedTime`, then
+remaining watt-hours over the present draw. The second is arithmetic on two
+pack measurements, not a utilisation curve.
+
+State of charge now comes from `Capacity / FullChargedCapacity` where it used
+to be an integer percentage from `GetSystemPowerStatus`, so a charge limit that
+stops at 95% reads as 95.0% rather than being rounded into "full".
+
+### Temperature, honestly this time
+
+An earlier version displayed the CPU thermal zone as the battery's temperature
+(see the v1.0.3 notes below). `BatteryTemperature` is the pack's own sensor and
+is now read properly — converted from tenths of a degree Kelvin, with values
+outside -40..80 °C rejected, since firmware that does not really implement the
+level tends to answer 0 and would otherwise render as a plausible -273 °C.
+
+**This machine does not implement it.** The code stays because it is correct
+and nearly free on hardware that does. Nothing shows a permanent "--": the
+telemetry card's subtitle carries the temperature when it exists and says
+"此電池未回報溫度" when it does not. Same rule for the manufacture-date row and
+the new energy row — both hide themselves rather than occupying the UI with
+placeholders.
+
+### UI
+
+- **Specs card**: a 出廠日期 row (date plus age in years), collapsed unless the
+  driver supplies one. Design/full capacity, chemistry and cycle count now fall
+  back to (in fact prefer) driver values. Cycle count was hard-coded Chinese
+  "次" even in English mode; localised.
+- **Remaining-time card**: the level line appends real energy —
+  `目前電池剩餘電量: 100% · 56.0 / 56.0 Wh`.
+- **Telemetry card**: subtitle now states where the voltage came from, and
+  carries pack temperature when available.
+- **Hardware breakdown**: new 電池蓄電量 row — `56.0 / 56.0 Wh`, `真實 SoC
+  100.0%`, subtitle `滿電 56.0 / 76.0 Wh，健康度 73.7%`. The neighbouring
+  telemetry row's subtitle claimed "WMI & ACPI"; voltage comes from the IOCTL,
+  so it now says so.
+- **Diagnostics**: a blank cycle count now gets an explicit item saying the
+  firmware does not implement the field rather than that the read failed, and a
+  battery-age item appears when the manufacture date exists.
+
+### Verification
+
+Values above were read from a probe project compiling `BatteryTelemetryService`,
+`BatteryReportParser` and the models directly, and the rendered UI text was read
+out of the running app's UI Automation tree. **Not exercised on this hardware:**
+the charge-time formula and both runtime fallbacks need the machine on battery
+or charging; their inputs are all confirmed readable.
+
+### Two fixes that came out of looking at the running app
+
+**The chart had one axis for two very different quantities.** A loaded discrete
+GPU draws an order of magnitude more than the pack — 76 W against a handful of
+watts — and `maxPowerW` was the maximum across all three series, so whenever the
+GPU woke up the Y axis jumped to 92 W and pressed the charge and discharge lines
+flat onto the floor. Battery and dGPU are now scaled independently: the left
+axis is `Math.Max(35, batteryPeak * 1.15)` as before but battery-only, and the
+dGPU series is plotted against its own maximum with a cyan right-hand axis
+matching the cyan line and legend entry. The right axis is hidden outright when
+no GPU wattage is being measured. Verified live: left axis back to `35 W (100%)`
+where it had been reading 92 W, right axis reading `獨顯 92 W`.
+
+**Whole-number health percentages did not line up.** `CapacityHistoryItem.
+HealthPercent` is a double, so 74.0 rendered as `74` in a column of `73.6`s. The
+binding now carries `StringFormat={}{0:F1}`.
+
+## Compact UI pass (on top of v1.0.8)
+
+The dashboard was sized for a much larger window than it needed. Shrunk it to
+**1200x780** (was 1380x960; minimum 980x620, was 1060x800) by taking the space
+out of padding, margins and corner radii rather than out of type.
+
+The constraint given was that text must stay legible, so nothing is smaller than
+11px, and several previously-tiny labels were made **larger**: the health-%
+badges in the capacity table (9/10px -> 10/11px), the report timestamp (10 ->
+11px) and the header subtitle (10 -> 11px). Body text sits at 12px, card titles
+at 13px. What actually shrank: card padding 16 -> 11,9; card gaps 16 -> 9; outer
+window margin 18 -> 10; right-panel padding 20 -> 12; health ring 115 -> 84px;
+chart 160 -> 136px tall; button padding 16,8 -> 11,5; tab padding 14,10 -> 10,6.
+
+Two structural fixes came out of it:
+
+**The sidebar could not align with the right panel.** It was a `StackPanel`
+inside a `ScrollViewer`, so its height was whatever the three cards summed to —
+unrelated to the right panel's height, which stretches. The bottom edges never
+matched and the last history row was clipped mid-row. The sidebar is now a
+3-row `Grid` (`Auto` / `Auto` / `*`) with the capacity-history card in the `*`
+row, so it fills the leftover height and both columns end on the same line. The
+card's inner `MaxHeight="164"` went away with it; the list now grows with the
+window.
+
+**powercfg embeds newlines in date ranges.** `StripTags` only did `.Trim()`, so
+the interior newline in
+
+```
+<td class="dateTime">2026-07-12
+      - 2026-07-19</td>
+```
+
+survived into the cell text and a `TextBlock` rendered it as two lines, with the
+second line clipped by the column width. `StripTags` now collapses every
+whitespace run to a single space. This is shared by every parsed field, so all
+of them are normalised, and `ExtractNumber` strips non-digits anyway.
+
+Worth knowing for anyone confused by that first row: **powercfg keeps only the
+last 7 days at daily granularity and merges everything older into one aggregated
+row.** Verified by diffing two reports from consecutive days — 07-25's report
+listed 07-12, 07-13, 07-14 ... individually; 07-26's report collapsed 07-12 to
+07-19 into a single row reading 55,950 mWh, which is not any single day's value
+(those were 55,811 / 55,929 / 55,969). The exact averaging powercfg uses is
+undocumented and was not reverse-engineered. The range row will keep growing;
+the daily rows stay a rolling 7.
+
+The capacity table's header and data grids are now width-matched on purpose: the
+data list's scrollbar is pinned visible and the header carries a 17px right
+margin (`SystemParameters.VerticalScrollBarWidth`), so both grids get the same
+305px and the columns line up in every state. Previously the header shifted by
+the scrollbar width whenever the list happened to scroll.
+
+Sizing note for future edits: the right panel's tab strip needs ~750px. At a
+1200px window that leaves the sidebar about 20px of room to grow before the tabs
+wrap — widen the window at the same time if the sidebar needs more.
+
+## One colour per meaning (v1.0.8)
 
 Discharge was being drawn in three different colours depending on where you
 looked, and the dGPU shared a colour with it:

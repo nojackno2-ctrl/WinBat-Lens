@@ -5,8 +5,10 @@ using System.Runtime.InteropServices;
 namespace WinBatLens.Services
 {
     /// <summary>
-    /// Live charge/discharge rate and pack voltage read straight from the
-    /// battery class driver with <c>IOCTL_BATTERY_QUERY_STATUS</c>.
+    /// Everything the battery class driver will tell us about the pack, read
+    /// with <c>IOCTL_BATTERY_QUERY_STATUS</c> (instantaneous state) and
+    /// <c>IOCTL_BATTERY_QUERY_INFORMATION</c> (the pack's own identity, its
+    /// capacities, its temperature and its runtime estimate).
     /// </summary>
     /// <remarks>
     /// This replaces <c>Win32_Battery.DischargeRate</c>, which is blank on a
@@ -21,6 +23,11 @@ namespace WinBatLens.Services
     ///
     /// Being a direct device IOCTL this needs no elevation and no WMI/COM, so
     /// unlike the WMI path it is cheap enough to poll every second.
+    ///
+    /// Not every firmware implements every information level. Levels that fail
+    /// repeatedly are given up on (see <see cref="MaxLevelFailures"/>) so an
+    /// unsupported one costs nothing after the first few ticks, and the caller
+    /// is told the value is absent rather than handed a substitute.
     /// </remarks>
     public static class BatteryTelemetryService
     {
@@ -41,6 +48,83 @@ namespace WinBatLens.Services
 
             /// <summary>Pack voltage, or 0 when the driver does not report it.</summary>
             public double VoltageV { get; init; }
+
+            /// <summary>
+            /// Energy still in the pack, in mWh. Unlike the integer percentage
+            /// from GetSystemPowerStatus this has real resolution, and paired
+            /// with <see cref="PackInfo.FullChargedCapacityMWh"/> it gives a
+            /// time-to-full that needs no assumed pack size.
+            /// </summary>
+            public int RemainingCapacityMWh { get; init; }
+            public bool IsCapacityKnown { get; init; }
+
+            /// <summary>
+            /// The pack's own temperature in °C — the battery's, not the CPU
+            /// thermal zone that an earlier version mislabelled as the
+            /// battery's. Hardware-dependent: plenty of ACPI batteries do not
+            /// implement the level at all, hence the companion flag.
+            /// </summary>
+            public double TemperatureC { get; init; }
+            public bool IsTemperatureKnown { get; init; }
+
+            /// <summary>
+            /// The driver's own estimate of remaining runtime at the present
+            /// rate, in seconds. Unknown while charging or on AC.
+            /// </summary>
+            public int EstimatedRuntimeSeconds { get; init; }
+            public bool IsEstimatedRuntimeKnown { get; init; }
+        }
+
+        /// <summary>
+        /// What the driver knows about the pack rather than its momentary
+        /// state. Capacities and cycle count do drift, so this is re-read on a
+        /// slow cadence rather than cached forever.
+        /// </summary>
+        public sealed class PackInfo
+        {
+            public static readonly PackInfo None = new PackInfo();
+
+            /// <summary>False on a desktop, or if the driver refused the query.</summary>
+            public bool IsValid { get; init; }
+
+            /// <summary>
+            /// True when the driver reports capacities in its own arbitrary
+            /// units instead of mWh (BATTERY_CAPACITY_RELATIVE). Health as a
+            /// ratio is still meaningful; energy in Wh is not, and must not be
+            /// shown as though it were.
+            /// </summary>
+            public bool IsCapacityRelative { get; init; }
+
+            /// <summary>Driver advertises BATTERY_SET_CHARGE_SUPPORTED.</summary>
+            public bool SupportsChargeControl { get; init; }
+
+            /// <summary>Four ASCII characters from the pack, e.g. "LION".</summary>
+            public string Chemistry { get; init; } = string.Empty;
+
+            public int DesignedCapacityMWh { get; init; }
+            public int FullChargedCapacityMWh { get; init; }
+
+            /// <summary>Null when the pack does not count cycles (0 is reported as absent).</summary>
+            public int? CycleCount { get; init; }
+
+            public string DeviceName { get; init; } = string.Empty;
+            public string ManufactureName { get; init; } = string.Empty;
+
+            /// <summary>
+            /// Date the cells were made. powercfg's report does not carry this
+            /// at all, and it is the only way to tell a pack that has aged
+            /// badly in two years from one that has aged well in six.
+            /// </summary>
+            public DateTime? ManufactureDate { get; init; }
+
+            /// <summary>Health as full-charge over design capacity, capped at 100%.</summary>
+            public double? HealthPercent => DesignedCapacityMWh > 0 && FullChargedCapacityMWh > 0
+                ? Math.Min(100.0, Math.Round(FullChargedCapacityMWh / (double)DesignedCapacityMWh * 100.0, 1))
+                : null;
+
+            public double? AgeYears => ManufactureDate.HasValue
+                ? Math.Round((DateTime.Now - ManufactureDate.Value).TotalDays / 365.25, 1)
+                : null;
         }
 
         private const uint BATTERY_POWER_ON_LINE = 0x00000001;
@@ -48,9 +132,40 @@ namespace WinBatLens.Services
         private const uint BATTERY_CHARGING = 0x00000004;
         private const int BATTERY_UNKNOWN_RATE = unchecked((int)0x80000000);
         private const uint BATTERY_UNKNOWN_VOLTAGE = 0xFFFFFFFF;
+        private const uint BATTERY_UNKNOWN_CAPACITY = 0xFFFFFFFF;
+        private const uint BATTERY_UNKNOWN_TIME = 0xFFFFFFFF;
+
+        private const uint BATTERY_CAPACITY_RELATIVE = 0x40000000;
+        private const uint BATTERY_SET_CHARGE_SUPPORTED = 0x00000001;
 
         private const uint IOCTL_BATTERY_QUERY_TAG = 0x294040;
+        private const uint IOCTL_BATTERY_QUERY_INFORMATION = 0x294044;
         private const uint IOCTL_BATTERY_QUERY_STATUS = 0x29404C;
+
+        // BATTERY_QUERY_INFORMATION_LEVEL
+        private const uint LevelBatteryInformation = 0;
+        private const uint LevelTemperature = 2;
+        private const uint LevelEstimatedTime = 3;
+        private const uint LevelDeviceName = 4;
+        private const uint LevelManufactureDate = 5;
+        private const uint LevelManufactureName = 6;
+        // BatteryUniqueID (level 7) is deliberately not queried: on the pack
+        // this was developed against the driver answers with its manufacturer
+        // and device name concatenated rather than a serial number, and nothing
+        // in the UI has a use for it.
+
+        /// <summary>
+        /// How many consecutive IOCTL failures mark an information level as
+        /// unimplemented by this firmware. A handful of retries rides out a
+        /// transient failure during start-up; after that we stop asking.
+        /// </summary>
+        private const int MaxLevelFailures = 3;
+
+        /// <summary>
+        /// Capacities and cycle count change over hours, not seconds, so the
+        /// pack information is re-read once a minute rather than every tick.
+        /// </summary>
+        private const long PackInfoRefreshMs = 60_000;
 
         private static Guid _batteryClassGuid = new("72631e54-78a4-11d0-bcf7-00aa00b7b32a");
 
@@ -58,6 +173,11 @@ namespace WinBatLens.Services
         private static IntPtr _handle = InvalidHandle;
         private static uint _tag;
         private static bool _initialized;
+
+        private static PackInfo _packInfo = PackInfo.None;
+        private static long _lastPackInfoTick;
+        private static int _temperatureFailures;
+        private static int _estimatedTimeFailures;
 
         private static IntPtr InvalidHandle => new IntPtr(-1);
 
@@ -71,6 +191,28 @@ namespace WinBatLens.Services
                 if (_initialized) return;
                 _initialized = true;
                 OpenFirstBattery();
+                RefreshPackInfo();
+            }
+        }
+
+        /// <summary>
+        /// The pack's identity, capacities and cycle count, re-read at most
+        /// once a minute. Returns <see cref="PackInfo.None"/> on a machine with
+        /// no battery, so callers can test <c>IsValid</c> instead of null.
+        /// </summary>
+        public static PackInfo GetPackInfo()
+        {
+            lock (_sync)
+            {
+                if (!_initialized) { _initialized = true; OpenFirstBattery(); }
+
+                long now = Environment.TickCount64;
+                if (!_packInfo.IsValid || now - _lastPackInfoTick >= PackInfoRefreshMs)
+                {
+                    RefreshPackInfo();
+                }
+
+                return _packInfo;
             }
         }
 
@@ -105,6 +247,11 @@ namespace WinBatLens.Services
                 // take the magnitude.
                 double watts = rateKnown ? Math.Abs(st.Rate) / 1000.0 : 0.0;
 
+                bool capacityKnown = st.Capacity != BATTERY_UNKNOWN_CAPACITY;
+
+                bool tempKnown = TryQueryTemperature(out double tempC);
+                bool etaKnown = TryQueryEstimatedRuntime(out int etaSeconds);
+
                 reading = new Reading
                 {
                     IsOnAc = (st.PowerState & BATTERY_POWER_ON_LINE) != 0,
@@ -116,6 +263,12 @@ namespace WinBatLens.Services
                     VoltageV = st.Voltage == BATTERY_UNKNOWN_VOLTAGE || st.Voltage == 0
                         ? 0.0
                         : Math.Round(st.Voltage / 1000.0, 2),
+                    RemainingCapacityMWh = capacityKnown ? (int)st.Capacity : 0,
+                    IsCapacityKnown = capacityKnown,
+                    TemperatureC = tempKnown ? tempC : 0.0,
+                    IsTemperatureKnown = tempKnown,
+                    EstimatedRuntimeSeconds = etaKnown ? etaSeconds : 0,
+                    IsEstimatedRuntimeKnown = etaKnown,
                 };
                 return true;
             }
@@ -139,6 +292,14 @@ namespace WinBatLens.Services
                 _handle = InvalidHandle;
             }
             _tag = 0;
+
+            // Everything below was learned about the device behind that handle:
+            // a different pack may implement a different set of levels, so both
+            // the cached information and the give-up counters start over.
+            _packInfo = PackInfo.None;
+            _lastPackInfoTick = 0;
+            _temperatureFailures = 0;
+            _estimatedTimeFailures = 0;
         }
 
         private static bool TryQueryStatus(out BATTERY_STATUS status)
@@ -169,6 +330,237 @@ namespace WinBatLens.Services
             {
                 Marshal.FreeHGlobal(inBuf);
                 Marshal.FreeHGlobal(outBuf);
+            }
+        }
+
+        /// <summary>
+        /// Pack temperature, converted from the driver's tenths of a degree
+        /// Kelvin. Values outside -40..80 °C are rejected: firmware that does
+        /// not really implement the level tends to answer 0, which would
+        /// otherwise render as a plausible-looking -273 °C.
+        /// </summary>
+        private static bool TryQueryTemperature(out double celsius)
+        {
+            celsius = 0.0;
+            if (_temperatureFailures >= MaxLevelFailures) return false;
+
+            if (!TryQueryInfoUInt32(LevelTemperature, out uint tenthsKelvin))
+            {
+                _temperatureFailures++;
+                return false;
+            }
+
+            _temperatureFailures = 0;
+
+            double c = tenthsKelvin / 10.0 - 273.15;
+            if (c < -40.0 || c > 80.0) return false;
+
+            celsius = Math.Round(c, 1);
+            return true;
+        }
+
+        /// <summary>
+        /// The driver's own runtime estimate at the present rate. Reported as
+        /// BATTERY_UNKNOWN_TIME whenever the pack is not discharging, which is
+        /// an ordinary answer rather than a failed level — so it does not count
+        /// towards giving up on the query.
+        /// </summary>
+        private static bool TryQueryEstimatedRuntime(out int seconds)
+        {
+            seconds = 0;
+            if (_estimatedTimeFailures >= MaxLevelFailures) return false;
+
+            // AtRate 0 means "at the rate the pack is draining right now".
+            if (!TryQueryInfoUInt32(LevelEstimatedTime, out uint value, atRate: 0))
+            {
+                _estimatedTimeFailures++;
+                return false;
+            }
+
+            _estimatedTimeFailures = 0;
+
+            if (value == BATTERY_UNKNOWN_TIME || value == 0) return false;
+
+            // A day or more is the firmware saying "no idea", not a forecast.
+            if (value >= 86400) return false;
+
+            seconds = (int)value;
+            return true;
+        }
+
+        private static void RefreshPackInfo()
+        {
+            _lastPackInfoTick = Environment.TickCount64;
+
+            if (_handle == InvalidHandle)
+            {
+                _packInfo = PackInfo.None;
+                return;
+            }
+
+            if (!TryQueryBatteryInformation(out BATTERY_INFORMATION bi))
+            {
+                _packInfo = PackInfo.None;
+                return;
+            }
+
+            bool relative = (bi.Capabilities & BATTERY_CAPACITY_RELATIVE) != 0;
+
+            // Strings and the manufacture date never change for a given pack,
+            // so they are carried over instead of re-read every refresh.
+            bool reuseIdentity = _packInfo.IsValid;
+
+            _packInfo = new PackInfo
+            {
+                IsValid = true,
+                IsCapacityRelative = relative,
+                SupportsChargeControl = (bi.Capabilities & BATTERY_SET_CHARGE_SUPPORTED) != 0,
+                Chemistry = ReadChemistry(bi),
+                DesignedCapacityMWh = bi.DesignedCapacity == BATTERY_UNKNOWN_CAPACITY ? 0 : (int)bi.DesignedCapacity,
+                FullChargedCapacityMWh = bi.FullChargedCapacity == BATTERY_UNKNOWN_CAPACITY ? 0 : (int)bi.FullChargedCapacity,
+                CycleCount = bi.CycleCount > 0 ? (int)bi.CycleCount : null,
+                DeviceName = reuseIdentity ? _packInfo.DeviceName : QueryString(LevelDeviceName),
+                ManufactureName = reuseIdentity ? _packInfo.ManufactureName : QueryString(LevelManufactureName),
+                ManufactureDate = reuseIdentity ? _packInfo.ManufactureDate : QueryManufactureDate(),
+            };
+        }
+
+        private static string ReadChemistry(BATTERY_INFORMATION bi)
+        {
+            // Four ASCII bytes, not null-terminated: "LION", "LiP", "NiMH"…
+            var chars = new[] { bi.Chemistry0, bi.Chemistry1, bi.Chemistry2, bi.Chemistry3 };
+            var sb = new System.Text.StringBuilder(4);
+            foreach (byte b in chars)
+            {
+                if (b == 0) break;
+                if (b < 0x20 || b > 0x7E) continue;
+                sb.Append((char)b);
+            }
+            return sb.ToString().Trim();
+        }
+
+        private static bool TryQueryBatteryInformation(out BATTERY_INFORMATION info)
+        {
+            info = default;
+
+            int outSize = Marshal.SizeOf<BATTERY_INFORMATION>();
+            IntPtr outBuf = Marshal.AllocHGlobal(outSize);
+            try
+            {
+                if (!QueryInfoLevel(LevelBatteryInformation, 0, outBuf, outSize, out _)) return false;
+                info = Marshal.PtrToStructure<BATTERY_INFORMATION>(outBuf);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(outBuf);
+            }
+        }
+
+        private static DateTime? QueryManufactureDate()
+        {
+            int outSize = Marshal.SizeOf<BATTERY_MANUFACTURE_DATE>();
+            IntPtr outBuf = Marshal.AllocHGlobal(outSize);
+            try
+            {
+                if (!QueryInfoLevel(LevelManufactureDate, 0, outBuf, outSize, out _)) return null;
+
+                var date = Marshal.PtrToStructure<BATTERY_MANUFACTURE_DATE>(outBuf);
+                if (date.Year < 1990 || date.Year > 2100) return null;
+                if (date.Month < 1 || date.Month > 12) return null;
+                if (date.Day < 1 || date.Day > 31) return null;
+
+                return new DateTime(date.Year, date.Month, date.Day);
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(outBuf);
+            }
+        }
+
+        private static string QueryString(uint level)
+        {
+            // 256 wide characters is far more than any of these fields uses,
+            // and one allocation is cheaper than probing for the exact size.
+            const int outSize = 512;
+            IntPtr outBuf = Marshal.AllocHGlobal(outSize);
+            try
+            {
+                if (!QueryInfoLevel(level, 0, outBuf, outSize, out uint returned)) return string.Empty;
+                if (returned == 0) return string.Empty;
+
+                return (Marshal.PtrToStringUni(outBuf) ?? string.Empty).Trim();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(outBuf);
+            }
+        }
+
+        private static bool TryQueryInfoUInt32(uint level, out uint value, int atRate = 0)
+        {
+            value = 0;
+
+            IntPtr outBuf = Marshal.AllocHGlobal(4);
+            try
+            {
+                if (!QueryInfoLevel(level, atRate, outBuf, 4, out _)) return false;
+                value = (uint)Marshal.ReadInt32(outBuf);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(outBuf);
+            }
+        }
+
+        /// <summary>
+        /// One IOCTL_BATTERY_QUERY_INFORMATION call. Callers hold _sync and have
+        /// already checked that the handle is open.
+        /// </summary>
+        private static bool QueryInfoLevel(uint level, int atRate, IntPtr outBuf, int outSize, out uint bytesReturned)
+        {
+            bytesReturned = 0;
+            if (_handle == InvalidHandle) return false;
+
+            var query = new BATTERY_QUERY_INFORMATION
+            {
+                BatteryTag = _tag,
+                InformationLevel = level,
+                AtRate = atRate,
+            };
+
+            int inSize = Marshal.SizeOf<BATTERY_QUERY_INFORMATION>();
+            IntPtr inBuf = Marshal.AllocHGlobal(inSize);
+            try
+            {
+                Marshal.StructureToPtr(query, inBuf, false);
+                return DeviceIoControl(_handle, IOCTL_BATTERY_QUERY_INFORMATION, inBuf, (uint)inSize,
+                                       outBuf, (uint)outSize, out bytesReturned, IntPtr.Zero);
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(inBuf);
             }
         }
 
@@ -289,6 +681,44 @@ namespace WinBatLens.Services
             public uint Capacity;
             public uint Voltage;
             public int Rate;        // signed milliwatts
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BATTERY_QUERY_INFORMATION
+        {
+            public uint BatteryTag;
+            public uint InformationLevel;   // BATTERY_QUERY_INFORMATION_LEVEL
+            public int AtRate;              // mW to assume; 0 means the present rate
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BATTERY_INFORMATION
+        {
+            public uint Capabilities;
+            public byte Technology;
+            // UCHAR Reserved[3] and UCHAR Chemistry[4], spelled out one byte at
+            // a time so the struct marshals without a fixed-size-array attribute.
+            public byte Reserved0;
+            public byte Reserved1;
+            public byte Reserved2;
+            public byte Chemistry0;
+            public byte Chemistry1;
+            public byte Chemistry2;
+            public byte Chemistry3;
+            public uint DesignedCapacity;
+            public uint FullChargedCapacity;
+            public uint DefaultAlert1;
+            public uint DefaultAlert2;
+            public uint CriticalBias;
+            public uint CycleCount;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BATTERY_MANUFACTURE_DATE
+        {
+            public byte Day;
+            public byte Month;
+            public ushort Year;
         }
 
         [StructLayout(LayoutKind.Sequential)]

@@ -145,6 +145,7 @@ namespace WinBatLens
             LblSpecName.Text = LocalizationService.Get("SpecName");
             LblSpecMfg.Text = LocalizationService.Get("SpecMfg");
             LblSpecChem.Text = LocalizationService.Get("SpecChem");
+            LblSpecMade.Text = LocalizationService.Get("SpecMade");
             LblSpecDesign.Text = LocalizationService.Get("SpecDesign");
             LblSpecFull.Text = LocalizationService.Get("SpecFull");
             LblSpecLoss.Text = LocalizationService.Get("SpecLoss");
@@ -173,6 +174,7 @@ namespace WinBatLens
 
             TxtHardwareTitle.Text = LocalizationService.Get("HardwareTitle");
             LblHwBatteryTelemetry.Text = LocalizationService.Get("HwBatteryTelemetry");
+            LblHwEnergy.Text = LocalizationService.Get("HwEnergy");
             LblHwPowerPlan.Text = LocalizationService.Get("HwPowerPlan");
 
             TxtHistoryLogHeader.Text = LocalizationService.Get("HistoryLogHeader");
@@ -273,13 +275,22 @@ namespace WinBatLens
 
                 // Iterate the queue directly (oldest→newest) instead of
                 // materialising a List and running a LINQ Max each tick.
-                double peakPower = 0.0;
+                //
+                // Battery and dGPU are scaled separately. A loaded discrete GPU
+                // draws an order of magnitude more than the pack — 76 W against
+                // a handful of watts — and a shared axis pressed the charge and
+                // discharge lines flat onto the floor whenever the GPU woke up.
+                double batteryPeak = 0.0;
+                double gpuPeak = 0.0;
                 foreach (var item in _chartHistory)
                 {
-                    double p = Math.Max(Math.Max(item.DischargeW, item.ChargeW), item.GpuW);
-                    if (p > peakPower) peakPower = p;
+                    double b = Math.Max(item.DischargeW, item.ChargeW);
+                    if (b > batteryPeak) batteryPeak = b;
+                    if (item.GpuW > gpuPeak) gpuPeak = item.GpuW;
                 }
-                double maxPowerW = Math.Max(35.0, peakPower * 1.15);
+
+                double maxPowerW = Math.Max(35.0, batteryPeak * 1.15);
+                double maxGpuW = gpuPeak > 0.0 ? Math.Max(35.0, gpuPeak * 1.15) : 0.0;
 
                 // Update Y-Axis Scale Coordinates Text
                 TxtYAxis100.Text = $"{maxPowerW:F0} W (100%)";
@@ -288,15 +299,37 @@ namespace WinBatLens
                 TxtYAxis25.Text = $"{(maxPowerW * 0.25):F0} W (25%)";
                 TxtYAxis0.Text = "0 W (0%)";
 
+                // The right-hand scale exists only while a GPU wattage is
+                // actually being measured; with none there is nothing for it to
+                // label and it would just be a second set of numbers.
+                if (maxGpuW > 0.0)
+                {
+                    GridGpuAxis.Visibility = Visibility.Visible;
+                    bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
+
+                    TxtGpuAxis100.Text = en ? $"dGPU {maxGpuW:F0} W" : $"獨顯 {maxGpuW:F0} W";
+                    TxtGpuAxis75.Text = $"{(maxGpuW * 0.75):F0} W";
+                    TxtGpuAxis50.Text = $"{(maxGpuW * 0.50):F0} W";
+                    TxtGpuAxis25.Text = $"{(maxGpuW * 0.25):F0} W";
+                    TxtGpuAxis0.Text = "0 W";
+                }
+                else
+                {
+                    GridGpuAxis.Visibility = Visibility.Collapsed;
+                }
+
                 int i = 0;
                 foreach (var item in _chartHistory)
                 {
                     double x = (i / (double)(MAX_CHART_POINTS - 1)) * w;
 
-                    // Y values (0 at bottom, Height at top)
+                    // Y values (0 at bottom, Height at top). The GPU series is
+                    // plotted against its own maximum, hence the right-hand axis.
                     double yDischarge = h - Math.Min(h, Math.Max(0, (item.DischargeW / maxPowerW) * h));
                     double yCharge = h - Math.Min(h, Math.Max(0, (item.ChargeW / maxPowerW) * h));
-                    double yGpu = h - Math.Min(h, Math.Max(0, (item.GpuW / maxPowerW) * h));
+                    double yGpu = maxGpuW > 0.0
+                        ? h - Math.Min(h, Math.Max(0, (item.GpuW / maxGpuW) * h))
+                        : h;
 
                     dischargePoints.Add(new WpfPoint(x, yDischarge));
                     chargePoints.Add(new WpfPoint(x, yCharge));
@@ -661,16 +694,53 @@ namespace WinBatLens
                     }
                 }
 
-                // Battery Remaining Time & Level
+                // Battery Remaining Time & Level. The watt-hour figure is the
+                // pack's own reading, which has real resolution where the
+                // Windows percentage is a rounded integer.
                 TxtLiveRemainingTime.Text = state.EstimatedTimeRemainingText;
-                TxtLiveBatteryPercent.Text = LocalizationService.CurrentLanguage == AppLanguage.English
-                    ? $"Current Battery Level: {state.BatteryPercent}%"
-                    : $"目前電池剩餘電量: {state.BatteryPercent}%";
+
+                string energyPart = state.IsEnergyMeasured ? $" · {state.BatteryEnergyText}" : string.Empty;
+                TxtLiveBatteryPercent.Text = en
+                    ? $"Current Battery Level: {state.BatteryPercent}%{energyPart}"
+                    : $"目前電池剩餘電量: {state.BatteryPercent}%{energyPart}";
 
                 // Battery Hardware Telemetry (Voltage / Current)
                 TxtLiveBatteryTelemetry.Text = state.BatteryTelemetryText;
                 TxtHwTelemetryVal.Text = state.BatteryTelemetryText;
                 TxtHwPowerPlanVal.Text = state.PowerPlanName;
+
+                // Pack temperature, asked of the battery driver itself. Shown
+                // only where the firmware implements the query; where it does
+                // not, the subtitle says so instead of displaying a "--" that
+                // looks like a failed read.
+                TxtLiveBatteryTelemetrySub.Text = state.IsBatteryTemperatureMeasured
+                    ? (en
+                        ? $"Pack temperature {state.BatteryTemperatureC:F1} °C (battery driver)"
+                        : $"電池溫度 {state.BatteryTemperatureC:F1} °C（電池驅動實測）")
+                    : (en
+                        ? "Voltage read from the battery driver; this pack reports no temperature"
+                        : "電壓讀自電池驅動；此電池未回報溫度");
+
+                // Energy in the pack, and its full-charge capacity against the
+                // factory design figure — the live version of the health score.
+                if (state.IsEnergyMeasured)
+                {
+                    RowHwEnergy.Visibility = Visibility.Visible;
+                    TxtHwEnergyVal.Text = state.BatteryEnergyText;
+                    TxtHwEnergyRight.Text = en
+                        ? $"SoC {state.TrueSocPercent:F1}%"
+                        : $"真實 SoC {state.TrueSocPercent:F1}%";
+
+                    TxtHwEnergySub.Text = state.DriverHealthPercent > 0
+                        ? (en
+                            ? $"Full charge {state.BatteryCapacityHealthText} — health {state.DriverHealthPercent:F1}%"
+                            : $"滿電 {state.BatteryCapacityHealthText}，健康度 {state.DriverHealthPercent:F1}%")
+                        : (en ? "Measured by the battery driver" : "電池驅動實測容量");
+                }
+                else
+                {
+                    RowHwEnergy.Visibility = Visibility.Collapsed;
+                }
 
                 // The discrete GPU is the only component with a real power
                 // sensor, so it is the only component row left on this page.
@@ -783,8 +853,13 @@ namespace WinBatLens
                 if (result.Success && !string.IsNullOrWhiteSpace(result.HtmlContent))
                 {
                     // The report HTML can exceed 1 MB and parsing is regex
-                    // heavy — keep it off the UI thread.
-                    var parsed = await Task.Run(() => BatteryReportParser.Parse(result.HtmlContent));
+                    // heavy — keep it off the UI thread. The live pack info is
+                    // merged in during parsing: the report's capacities are a
+                    // snapshot Windows logged earlier, while the driver's are
+                    // current, and the driver also carries fields powercfg has
+                    // no column for.
+                    var parsed = await Task.Run(() =>
+                        BatteryReportParser.Parse(result.HtmlContent, BatteryTelemetryService.GetPackInfo()));
                     DisplayReport(parsed);
                 }
                 else
@@ -811,6 +886,10 @@ namespace WinBatLens
             {
                 try
                 {
+                    // Parsed on its own, with no live driver data merged in: a
+                    // hand-picked report may well come from another machine,
+                    // and this machine's pack would then be describing someone
+                    // else's battery.
                     string html = File.ReadAllText(openDialog.FileName);
                     var parsed = BatteryReportParser.Parse(html);
                     DisplayReport(parsed);
@@ -877,7 +956,28 @@ namespace WinBatLens
             TxtSpecDesign.Text = specs.DesignCapacity > 0 ? $"{specs.DesignCapacity:N0} {specs.Unit}" : dash;
             TxtSpecFull.Text = specs.FullChargeCapacity > 0 ? $"{specs.FullChargeCapacity:N0} {specs.Unit}" : dash;
             TxtSpecLoss.Text = metrics.HasBattery ? $"{metrics.CapacityLoss:N0} {specs.Unit} ({metrics.WearPercent}%)" : dash;
-            TxtSpecCycles.Text = specs.CycleCount.HasValue ? $"{specs.CycleCount.Value} 次" : naText;
+            TxtSpecCycles.Text = specs.CycleCount.HasValue
+                ? (isEn ? $"{specs.CycleCount.Value} cycles" : $"{specs.CycleCount.Value} 次")
+                : naText;
+
+            // The manufacture date exists only when the battery driver supplied
+            // one, so the row appears and disappears with it rather than
+            // occupying the card with a permanent "N/A".
+            if (specs.ManufactureDate.HasValue)
+            {
+                string age = specs.AgeYears.HasValue
+                    ? (isEn ? $"  ({specs.AgeYears.Value:F1} yrs old)" : $"（約 {specs.AgeYears.Value:F1} 年）")
+                    : string.Empty;
+
+                TxtSpecMade.Text = $"{specs.ManufactureDate.Value:yyyy-MM-dd}{age}";
+                RowSpecMade.Visibility = Visibility.Visible;
+                SepSpecMade.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                RowSpecMade.Visibility = Visibility.Collapsed;
+                SepSpecMade.Visibility = Visibility.Collapsed;
+            }
 
             TxtReportTime.Text = string.IsNullOrWhiteSpace(report.SystemInfo.ReportTime) 
                 ? $"{DateTime.Now:yyyy-MM-dd HH:mm}" 

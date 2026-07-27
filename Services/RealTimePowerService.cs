@@ -280,6 +280,39 @@ namespace WinBatLens.Services
             // 8. Windows power status + the battery's own charge/discharge rate.
             bool haveBatt = BatteryTelemetryService.TryRead(out var batt);
 
+            // 8a. Energy in the pack and the health that follows from it, both
+            // read from the battery driver. A relative-capacity pack reports
+            // capacities in its own arbitrary units, so it is excluded here
+            // rather than having those numbers presented as watt-hours.
+            var pack = BatteryTelemetryService.GetPackInfo();
+            bool energyUsable = haveBatt && batt.IsCapacityKnown
+                && pack.IsValid && !pack.IsCapacityRelative
+                && pack.FullChargedCapacityMWh > 0;
+
+            if (energyUsable)
+            {
+                state.IsEnergyMeasured = true;
+                state.RemainingCapacityMWh = batt.RemainingCapacityMWh;
+                state.FullChargedCapacityMWh = pack.FullChargedCapacityMWh;
+                state.DesignedCapacityMWh = pack.DesignedCapacityMWh;
+                state.TrueSocPercent = Math.Round(
+                    Math.Min(100.0, batt.RemainingCapacityMWh / (double)pack.FullChargedCapacityMWh * 100.0), 1);
+                state.DriverHealthPercent = pack.HealthPercent ?? 0.0;
+
+                state.BatteryEnergyText =
+                    $"{batt.RemainingCapacityMWh / 1000.0:F1} / {pack.FullChargedCapacityMWh / 1000.0:F1} Wh";
+                state.BatteryCapacityHealthText = pack.DesignedCapacityMWh > 0
+                    ? $"{pack.FullChargedCapacityMWh / 1000.0:F1} / {pack.DesignedCapacityMWh / 1000.0:F1} Wh"
+                    : $"{pack.FullChargedCapacityMWh / 1000.0:F1} Wh";
+            }
+
+            // Real pack temperature, when the firmware implements the level.
+            if (haveBatt && batt.IsTemperatureKnown)
+            {
+                state.IsBatteryTemperatureMeasured = true;
+                state.BatteryTemperatureC = batt.TemperatureC;
+            }
+
             if (GetSystemPowerStatus(out var status))
             {
                 state.IsAcOnline = status.ACLineStatus == 1;
@@ -325,11 +358,21 @@ namespace WinBatLens.Services
                             state.ChargingStatusText = "電池充電中 (充電功率無法讀取)";
                         }
 
-                        if (state.IsChargeRateMeasured && state.ChargingRateW > 0)
+                        // Time to full, from the energy still missing and the
+                        // measured charge rate. The pack's own capacity is used
+                        // here; the previous version assumed a 56 Wh battery,
+                        // which was this machine's size hard-coded into the
+                        // formula and wrong everywhere else.
+                        if (state.IsChargeRateMeasured && state.ChargingRateW > 0
+                            && state.IsEnergyMeasured
+                            && state.FullChargedCapacityMWh > state.RemainingCapacityMWh)
                         {
-                            double remainWh = (100 - state.BatteryPercent) / 100.0 * 56.0;
-                            TimeSpan chargeTime = TimeSpan.FromHours(remainWh / state.ChargingRateW);
-                            state.EstimatedTimeRemainingText = $"預估 {chargeTime.Hours}小時{chargeTime.Minutes}分 充飽";
+                            double missingWh = (state.FullChargedCapacityMWh - state.RemainingCapacityMWh) / 1000.0;
+                            TimeSpan chargeTime = TimeSpan.FromHours(missingWh / state.ChargingRateW);
+
+                            state.EstimatedTimeRemainingText = chargeTime.TotalHours < 24
+                                ? $"預估 {chargeTime.Hours}小時{chargeTime.Minutes}分 充飽"
+                                : "充電中...";
                         }
                         else
                         {
@@ -344,9 +387,23 @@ namespace WinBatLens.Services
                         state.ChargingRateW = 0.0;
                         state.PowerStatusText = "市電供電中 (未充電)";
                         state.ChargingStatusText = "市電直供 | 電池未充放電 (無可量測功率)";
-                        state.EstimatedTimeRemainingText = state.BatteryPercent >= 98
-                            ? "電量已充滿 100%"
-                            : $"電量 {state.BatteryPercent}% (電池保養未充電)";
+
+                        // The pack's own state of charge, where the Windows
+                        // percentage is a rounded integer. A charge limit that
+                        // stops at 95% now reads as 95.0%, not as "full".
+                        if (state.IsEnergyMeasured)
+                        {
+                            state.EstimatedTimeRemainingText = state.TrueSocPercent >= 99.0
+                                ? $"電量已充滿 ({state.TrueSocPercent:F1}%)"
+                                : $"電量 {state.TrueSocPercent:F1}% (電池保養未充電)";
+                        }
+                        else
+                        {
+                            state.EstimatedTimeRemainingText = state.BatteryPercent >= 98
+                                ? "電量已充滿 100%"
+                                : $"電量 {state.BatteryPercent}% (電池保養未充電)";
+                        }
+
                         state.DischargeRateText = "-- W";
                     }
                 }
@@ -357,10 +414,30 @@ namespace WinBatLens.Services
                     state.PowerStatusText = "電池放電中";
                     state.ChargingStatusText = "使用電池供電";
 
+                    // Three sources, best first. Windows' own forecast is
+                    // preferred because it smooths the rate over time; the two
+                    // fallbacks exist because it reports nothing at all for the
+                    // first minute or so after unplugging, which used to leave
+                    // the card stuck on "估算中...".
                     if (status.BatteryLifeTime > 0 && status.BatteryLifeTime < 86400)
                     {
                         TimeSpan t = TimeSpan.FromSeconds(status.BatteryLifeTime);
                         state.EstimatedTimeRemainingText = $"{t.Hours} 小時 {t.Minutes} 分鐘";
+                    }
+                    else if (haveBatt && batt.IsEstimatedRuntimeKnown)
+                    {
+                        TimeSpan t = TimeSpan.FromSeconds(batt.EstimatedRuntimeSeconds);
+                        state.EstimatedTimeRemainingText = $"{t.Hours} 小時 {t.Minutes} 分鐘 (電池驅動估算)";
+                    }
+                    else if (energyUsable && batt.IsRateKnown && batt.DischargeW > 0)
+                    {
+                        // Remaining watt-hours over the present draw. Both terms
+                        // are measured at the pack, so this is arithmetic on real
+                        // readings rather than a utilisation curve.
+                        TimeSpan t = TimeSpan.FromHours(state.RemainingCapacityMWh / 1000.0 / batt.DischargeW);
+                        state.EstimatedTimeRemainingText = t.TotalHours < 24
+                            ? $"{t.Hours} 小時 {t.Minutes} 分鐘 (以目前 {batt.DischargeW:F1}W 計算)"
+                            : "估算中...";
                     }
                     else
                     {
