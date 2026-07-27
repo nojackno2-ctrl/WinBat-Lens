@@ -1,6 +1,76 @@
 # Project State & Handoff
 
-## IOCTL_BATTERY_QUERY_INFORMATION: the third battery IOCTL (latest)
+## The 1-second tick cost a third of a CPU core (latest)
+
+Measured on this machine, window open, steady state: **374 ms of CPU per
+second — 37.4% of one core, burned continuously by a battery monitor.** It is
+now **30 ms/s (3.0%)**, a ~12x cut, with no change to a single displayed value.
+
+### Where it went: one PerformanceCounter per GPU Engine instance
+
+`RealTimePowerService.GetDualGpuUsage` held a `PerformanceCounter` per GPU
+Engine instance and called `NextValue()` on each one, every tick. Every such
+call re-reads the *whole* category's performance data block, so the loop was
+quadratic in the instance count — and Windows exposes one GPU Engine instance
+per process per engine type. **This machine has ~600.**
+
+| per tick | wall | CPU |
+|---|---|---|
+| old: `GetInstanceNames()` + ~600 x `NextValue()` | 354-925 ms | 354-925 ms |
+| new: 1 x `ReadCategory()` | 1-7 ms | ~0-30 ms |
+
+`ReadCategory()` takes one snapshot of every instance in a single pass.
+The per-instance rate is then computed from the previous tick's raw sample with
+`CounterSampleCalculator.ComputeCounterValue`, which is exactly what
+`NextValue()` was doing internally — so the cached `PerformanceCounter` objects
+became a `Dictionary<string, CounterSample>` of last tick's raw samples. The
+"two samples over an interval or the value is always 0" constraint that the old
+cache existed to satisfy is unchanged; only the thing being cached moved.
+
+Verified rather than assumed: both implementations were run against the same
+category over the same intervals and compared per adapter, per engine type.
+Same adapters, same engine types, agreement within 0.35 percentage points
+(pure sampling noise — the two reads cannot be simultaneous). Driving the real
+shipping method afterwards showed the dGPU tracking a live load through 0.4%,
+16.5%, 33.2%, so nothing is stuck at zero.
+
+Worth knowing: this was running on the **UI thread**, in `DispatcherTimer.Tick`.
+The 1-second timer could not always finish its own tick.
+
+Counter names come back localised on some systems, so the English
+`"Utilization Percentage"` key is a preference with a substring search behind
+it, and a missing counter reports 0% rather than a guess.
+
+### And: sweeping sensors nothing reads
+
+`HardwareSensorService` polled the CPU, dGPU, iGPU and battery once a second.
+Only `DgpuPackageW` and `BatteryVoltageV` are ever read by anything — grep the
+solution and `CpuPackageW`, `CpuTempC` and `IgpuPackageW` had no consumer at
+all. `IHardware.Update()` is not free (measured, per sweep: dGPU 15.6 ms of CPU,
+iGPU 6.2 ms, CPU 3.1 ms, battery 0.0 ms), so those were ~9 ms/s of pure waste.
+The dead properties are gone along with the sweeps.
+
+The CPU group is now also off in the `Computer` config. It is the part that
+loads the ring-0 driver, and RAPL reads 0 W unelevated here anyway — the UI has
+not reported CPU package power since the linear estimate was removed. Side
+benefit: **`Computer.Open()` went from 934 ms to 248 ms**, off the warmup
+thread, and the process no longer loads a kernel driver.
+
+Both configurations were opened side by side to confirm the two values that
+matter are identical with the CPU group disabled: GPU Package 23.3 W / 25.9 W
+(live load), battery voltage 15.83 V in both.
+
+### Still on the table
+
+- The 1 Hz sensor sweep (~16 ms/s) is the largest single item left. It could
+  drop to 2 s while minimized to the tray, at the cost of halving the
+  resolution of the history the app records while hidden — a product call, not
+  a performance one, so it was left alone.
+- First call to `GetDualGpuUsage` still costs ~1 s (DXGI enumeration plus the
+  cold registry blob). That already happens on the warmup thread via
+  `RealTimePowerService.Initialize()`, never on the first UI tick.
+
+## IOCTL_BATTERY_QUERY_INFORMATION: the third battery IOCTL
 
 `BatteryTelemetryService` only ever used two of the battery class driver's
 IOCTLs — `QUERY_TAG` and `QUERY_STATUS`. `QUERY_INFORMATION` was untouched, and

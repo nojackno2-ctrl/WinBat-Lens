@@ -82,13 +82,19 @@ namespace WinBatLens.Services
         private static string _cachedPowerPlan = "平衡 (Balanced)";
         private static long _lastPowerPlanTick;
 
-        // Persistent GPU Engine counters, keyed by instance name. GPU utilization
-        // counters need two samples taken over an interval to produce a non-zero
-        // value, so the same counter object must survive across update ticks
-        // (the UI polls once per second). Recreating a counter every tick and
-        // reading it once always yields 0 — the original bug behind dGPU 0W.
-        private static readonly Dictionary<string, PerformanceCounter> _gpuEngineCounters
-            = new Dictionary<string, PerformanceCounter>(StringComparer.OrdinalIgnoreCase);
+        // Raw GPU Engine samples from the previous tick, keyed by instance name.
+        // GPU utilization is a rate: it needs two raw samples taken over an
+        // interval, so last tick's must survive to compute this tick's value.
+        // A single reading in isolation always yields 0 — the original bug
+        // behind dGPU 0W.
+        private static readonly Dictionary<string, CounterSample> _gpuEngineSamples
+            = new Dictionary<string, CounterSample>(StringComparer.OrdinalIgnoreCase);
+        private static PerformanceCounterCategory? _gpuEngineCategory;
+        // Reused across ticks so a ~600-instance sweep does not allocate two
+        // fresh collections every second.
+        private static readonly HashSet<string> _gpuEngineSeen
+            = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly List<string> _gpuEngineStale = new List<string>();
         // Maps a GPU Engine LUID token (e.g. "luid_0x00000000_0x00010666") to
         // whether that adapter is the discrete GPU. Built once from DXGI.
         private static Dictionary<string, bool>? _luidIsDiscrete;
@@ -606,51 +612,46 @@ namespace WinBatLens.Services
 
             try
             {
-                var category = new PerformanceCounterCategory("GPU Engine");
-                var currentInstances = new HashSet<string>(category.GetInstanceNames(), StringComparer.OrdinalIgnoreCase);
+                _gpuEngineCategory ??= new PerformanceCounterCategory("GPU Engine");
 
-                // Drop counters for instances that no longer exist (e.g. a process
-                // that closed) so the dictionary does not grow without bound.
-                var stale = new List<string>();
-                foreach (var key in _gpuEngineCounters.Keys)
-                {
-                    if (!currentInstances.Contains(key)) stale.Add(key);
-                }
-                foreach (var key in stale)
-                {
-                    try { _gpuEngineCounters[key].Dispose(); } catch { }
-                    _gpuEngineCounters.Remove(key);
-                }
+                // One snapshot of the whole category per tick.
+                //
+                // This used to hold a PerformanceCounter per instance and call
+                // NextValue() on each. Every one of those calls re-reads the
+                // category's entire performance data block, so the loop was
+                // quadratic in the instance count — and this machine exposes
+                // ~600 GPU Engine instances (one per process per engine type).
+                // Measured: 480-925 ms of CPU per tick, on the UI thread, once
+                // a second. ReadCategory() takes the same readings in a single
+                // pass in ~2 ms; the per-instance rate is then computed from
+                // last tick's raw sample, which is exactly what NextValue() did
+                // internally.
+                var util = ReadGpuEngineUtilization();
+                if (util == null) return (0.0, 0.0);
 
-                foreach (var inst in currentInstances)
+                _gpuEngineSeen.Clear();
+
+                foreach (InstanceData id in util.Values)
                 {
+                    string inst = id.InstanceName;
+                    _gpuEngineSeen.Add(inst);
+
                     string lower = inst.ToLowerInvariant();
                     string luid = ExtractToken(lower, "luid_", "_phys_");
                     string engType = ExtractToken(lower, "engtype_", null);
                     if (luid.Length == 0 || engType.Length == 0) continue;
                     luid = "luid_" + luid;
 
-                    double val;
-                    try
+                    // A new instance has no baseline and contributes 0; it
+                    // becomes accurate on the next tick.
+                    double val = 0.0;
+                    var sample = id.Sample;
+                    if (_gpuEngineSamples.TryGetValue(inst, out var previous))
                     {
-                        if (!_gpuEngineCounters.TryGetValue(inst, out var counter))
-                        {
-                            // New instance: create and prime it. The first read has
-                            // no baseline and returns 0; it becomes accurate next tick.
-                            counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", inst, true);
-                            _gpuEngineCounters[inst] = counter;
-                            counter.NextValue();
-                            val = 0.0;
-                        }
-                        else
-                        {
-                            val = counter.NextValue();
-                        }
+                        try { val = CounterSampleCalculator.ComputeCounterValue(previous, sample); }
+                        catch { val = 0.0; }
                     }
-                    catch
-                    {
-                        continue;
-                    }
+                    _gpuEngineSamples[inst] = sample;
 
                     if (val <= 0) continue;
 
@@ -661,6 +662,18 @@ namespace WinBatLens.Services
                     }
                     engMap.TryGetValue(engType, out double running);
                     engMap[engType] = running + val;
+                }
+
+                // Forget instances that no longer exist (e.g. a process that
+                // closed) so the dictionary does not grow without bound.
+                if (_gpuEngineSamples.Count > _gpuEngineSeen.Count)
+                {
+                    _gpuEngineStale.Clear();
+                    foreach (var key in _gpuEngineSamples.Keys)
+                    {
+                        if (!_gpuEngineSeen.Contains(key)) _gpuEngineStale.Add(key);
+                    }
+                    foreach (var key in _gpuEngineStale) _gpuEngineSamples.Remove(key);
                 }
             }
             catch { }
@@ -694,6 +707,32 @@ namespace WinBatLens.Services
             }
 
             return (Math.Round(iGpuMax, 1), Math.Round(dGpuMax, 1));
+        }
+
+        /// <summary>
+        /// One pass over the "GPU Engine" category, returning the per-instance
+        /// data for "Utilization Percentage". Returns null when the category or
+        /// the counter is unavailable, in which case the caller reports 0%
+        /// rather than guessing.
+        /// </summary>
+        private static InstanceDataCollection? ReadGpuEngineUtilization()
+        {
+            if (_gpuEngineCategory == null) return null;
+
+            var data = _gpuEngineCategory.ReadCategory();
+
+            var util = data["Utilization Percentage"];
+            if (util != null) return util;
+
+            // Counter names come back localised on some systems, so the English
+            // key is a preference rather than a guarantee.
+            foreach (InstanceDataCollection c in data.Values)
+            {
+                if (c.CounterName.IndexOf("Utilization", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return c;
+            }
+
+            return null;
         }
 
         private static void EnsureLuidMap()
