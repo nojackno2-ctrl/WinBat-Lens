@@ -72,10 +72,18 @@
                     <StackPanel HorizontalAlignment="Center">
                         <TextBlock x:Name="TxtHealthCardTitle" Text="電池健康度 (Health Score)" FontSize="11" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center"/>
 
-                        <!-- Health Score Ring / Value -->
+                        <!-- Health Score Ring / Value. The ring, the number and the
+                             badge are all painted by grade in DisplayReport: green
+                             at 80%+, amber from 60%, red below that — the same cuts
+                             the status wording uses. The arc is rotated so it
+                             starts at twelve o'clock instead of three. -->
                         <Grid Margin="0,6">
                             <Ellipse Width="84" Height="84" Stroke="#1E293B" StrokeThickness="8"/>
-                            <Ellipse x:Name="RingHealthProgress" Width="84" Height="84" Stroke="{StaticResource AccentEmerald}" StrokeThickness="8" StrokeDashArray="360" StrokeDashOffset="360"/>
+                            <Ellipse x:Name="RingHealthProgress" Width="84" Height="84" Stroke="{StaticResource HealthGood}" StrokeThickness="8" StrokeDashArray="0,1000" RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform Angle="-90"/>
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                     <TextBlock x:Name="TxtHealthPercent" Text="--" FontSize="26" FontWeight="ExtraBold" Foreground="{StaticResource TextMain}"/>
@@ -85,8 +93,8 @@
                         </Grid>
 
                         <!-- Status Badge -->
-                        <Border x:Name="BadgeStatus" CornerRadius="10" Background="#2010B981" BorderBrush="{StaticResource AccentEmerald}" BorderThickness="1" Padding="9,2" HorizontalAlignment="Center">
-                            <TextBlock x:Name="TxtStatusLabel" Text="--" FontWeight="Bold" FontSize="11" Foreground="{StaticResource AccentEmerald}"/>
+                        <Border x:Name="BadgeStatus" CornerRadius="10" Background="#2010B981" BorderBrush="{StaticResource HealthGood}" BorderThickness="1" Padding="9,2" HorizontalAlignment="Center">
+                            <TextBlock x:Name="TxtStatusLabel" Text="--" FontWeight="Bold" FontSize="11" Foreground="{StaticResource HealthGood}"/>
                         </Border>
 
                         <TextBlock x:Name="TxtSummary" Text="請點擊右上角「執行電池檢測」按鈕載入最新報告。"
@@ -202,13 +210,18 @@
                                                 <TextBlock Text="{Binding Period}" FontSize="11" Foreground="{StaticResource TextMain}" VerticalAlignment="Center" Grid.Column="0" TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding FullChargeCapacity}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentCyan}" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="1" Margin="0,0,5,0"/>
                                                 <TextBlock Text="{Binding DesignCapacity}" FontSize="11" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="2" Margin="0,0,8,0"/>
-                                                <Border Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="8" Padding="5,1" Background="#2010B981" BorderBrush="{StaticResource AccentEmerald}" BorderThickness="1">
+                                                <!-- Each row is graded on its own percentage, so a period
+                                                     where the pack dropped below a grade boundary stands
+                                                     out from the rows around it. -->
+                                                <Border Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="8" Padding="5,1"
+                                                        Background="{Binding HealthPercent, Converter={StaticResource HealthGradeBrush}, ConverterParameter=Badge}"
+                                                        BorderBrush="{Binding HealthPercent, Converter={StaticResource HealthGradeBrush}}" BorderThickness="1">
                                                     <StackPanel Orientation="Horizontal">
                                                         <!-- Fixed to one decimal: a whole value such as 74.0
                                                              otherwise renders as "74" and fails to line up
                                                              with the 73.6 above and below it. -->
-                                                        <TextBlock Text="{Binding HealthPercent, StringFormat={}{0:F1}}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}"/>
-                                                        <TextBlock Text="%" FontSize="10" Foreground="{StaticResource AccentEmerald}"/>
+                                                        <TextBlock Text="{Binding HealthPercent, StringFormat={}{0:F1}}" FontSize="11" FontWeight="Bold" Foreground="{Binding HealthPercent, Converter={StaticResource HealthGradeBrush}}"/>
+                                                        <TextBlock Text="%" FontSize="10" Foreground="{Binding HealthPercent, Converter={StaticResource HealthGradeBrush}}"/>
                                                     </StackPanel>
                                                 </Border>
                                             </Grid>
@@ -243,9 +256,12 @@
                                     <Border Grid.Column="0" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="0,0,5,0">
                                         <StackPanel>
                                             <TextBlock x:Name="TxtCardTotalPower" Text="⚡ 電池總放電 / AC 變壓器總供電功率" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock x:Name="TxtLiveDischargeRate" Text="-- W" FontSize="24" FontWeight="ExtraBold" Foreground="{StaticResource AccentCyan}" Margin="0,3"/>
-                                            <Border x:Name="BadgeLiveAcState" Background="#2038BDF8" BorderBrush="{StaticResource AccentCyan}" BorderThickness="1" CornerRadius="10" Padding="8,2" HorizontalAlignment="Left">
-                                                <TextBlock x:Name="TxtLiveAcState" Text="電源狀態讀取中..." FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentCyan}"/>
+                                            <!-- Repainted every tick: red while discharging, green while
+                                                 charging. Red is the resting state because the app is
+                                                 opened on battery far more often than on AC. -->
+                                            <TextBlock x:Name="TxtLiveDischargeRate" Text="-- W" FontSize="24" FontWeight="ExtraBold" Foreground="{StaticResource PowerDischarge}" Margin="0,3"/>
+                                            <Border x:Name="BadgeLiveAcState" Background="#20F43F5E" BorderBrush="{StaticResource PowerDischarge}" BorderThickness="1" CornerRadius="10" Padding="8,2" HorizontalAlignment="Left">
+                                                <TextBlock x:Name="TxtLiveAcState" Text="電源狀態讀取中..." FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource PowerDischarge}"/>
                                             </Border>
                                         </StackPanel>
                                     </Border>
@@ -254,7 +270,9 @@
                                     <Border Grid.Column="1" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="3,0,3,0">
                                         <StackPanel>
                                             <TextBlock x:Name="TxtCardEstTime" Text="⏱️ 電腦估算剩餘續航時間" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock x:Name="TxtLiveRemainingTime" Text="--" FontSize="21" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}" Margin="0,4"/>
+                                            <!-- Amber, not green: green is reserved for charging, and a
+                                                 runtime estimate is neither charge nor discharge. -->
+                                            <TextBlock x:Name="TxtLiveRemainingTime" Text="--" FontSize="21" FontWeight="Bold" Foreground="{StaticResource PowerNeutral}" Margin="0,4"/>
                                             <TextBlock x:Name="TxtLiveBatteryPercent" Text="目前電量: --%" FontSize="12" Foreground="{StaticResource TextMuted}"/>
                                         </StackPanel>
                                     </Border>
@@ -263,7 +281,9 @@
                                     <Border Grid.Column="2" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="5,0,0,0">
                                         <StackPanel>
                                             <TextBlock x:Name="TxtCardTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流)" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock x:Name="TxtLiveBatteryTelemetry" Text="-- V | -- A" FontSize="19" FontWeight="Bold" Foreground="{StaticResource AccentAmber}" Margin="0,5,0,4"/>
+                                            <!-- Also repainted per tick: current flowing out of the pack
+                                                 is red, current flowing into it is green. -->
+                                            <TextBlock x:Name="TxtLiveBatteryTelemetry" Text="-- V | -- A" FontSize="19" FontWeight="Bold" Foreground="{StaticResource PowerDischarge}" Margin="0,5,0,4"/>
                                             <TextBlock x:Name="TxtLiveBatteryTelemetrySub" Text="WMI &amp; ACPI 即時硬體感測" FontSize="11" Foreground="{StaticResource TextMuted}"/>
                                         </StackPanel>
                                     </Border>
@@ -277,18 +297,17 @@
                                             
                                             <!-- Legend -->
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                <!-- Discharge is amber and charge is emerald everywhere in
-                                                     the app — headline number, chart, legend and tray icon.
-                                                     The dGPU line moved to cyan so it no longer shares
-                                                     amber with discharge. -->
-                                                <Border Width="12" Height="3" Background="{StaticResource AccentAmber}" Margin="0,0,4,0"/>
-                                                <TextBlock x:Name="TxtLegendDischarge" Text="放電 (W)" FontSize="11" Foreground="{StaticResource AccentAmber}" Margin="0,0,10,0"/>
+                                                <!-- Discharge is red, charge is green and the dGPU is blue
+                                                     everywhere in the app — headline number, chart, legend,
+                                                     hardware rows and tray icon. -->
+                                                <Border Width="12" Height="3" Background="{StaticResource PowerDischarge}" Margin="0,0,4,0"/>
+                                                <TextBlock x:Name="TxtLegendDischarge" Text="放電 (W)" FontSize="11" Foreground="{StaticResource PowerDischarge}" Margin="0,0,10,0"/>
 
-                                                <Border Width="12" Height="3" Background="{StaticResource AccentEmerald}" Margin="0,0,4,0"/>
-                                                <TextBlock x:Name="TxtLegendCharge" Text="充電 (+W)" FontSize="11" Foreground="{StaticResource AccentEmerald}" Margin="0,0,10,0"/>
+                                                <Border Width="12" Height="3" Background="{StaticResource PowerCharge}" Margin="0,0,4,0"/>
+                                                <TextBlock x:Name="TxtLegendCharge" Text="充電 (+W)" FontSize="11" Foreground="{StaticResource PowerCharge}" Margin="0,0,10,0"/>
 
-                                                <Border Width="12" Height="3" Background="{StaticResource AccentCyan}" Margin="0,0,4,0"/>
-                                                <TextBlock x:Name="TxtLegendGpu" Text="獨顯 (W)" FontSize="11" Foreground="{StaticResource AccentCyan}"/>
+                                                <Border Width="12" Height="3" Background="{StaticResource PowerGpu}" Margin="0,0,4,0"/>
+                                                <TextBlock x:Name="TxtLegendGpu" Text="獨顯 (W)" FontSize="11" Foreground="{StaticResource PowerGpu}"/>
                                             </StackPanel>
                                         </Grid>
 
@@ -318,8 +337,8 @@
                                                 <!-- dGPU Y-Axis Scale Labels Overlay (Right Side). The
                                                      discrete GPU runs an order of magnitude above battery
                                                      power under load, so it gets its own scale rather than
-                                                     flattening the battery lines against the floor. Cyan
-                                                     ties these numbers to the cyan dGPU line and legend.
+                                                     flattening the battery lines against the floor. Blue
+                                                     ties these numbers to the blue dGPU line and legend.
                                                      Hidden outright when no GPU wattage is being measured. -->
                                                 <Grid x:Name="GridGpuAxis" VerticalAlignment="Stretch" HorizontalAlignment="Right" Margin="0,4,8,4" IsHitTestVisible="False" Visibility="Collapsed">
                                                     <Grid.RowDefinitions>
@@ -330,19 +349,19 @@
                                                         <RowDefinition Height="Auto"/>
                                                     </Grid.RowDefinitions>
 
-                                                    <TextBlock x:Name="TxtGpuAxis100" Grid.Row="0" Text="獨顯 35 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtGpuAxis75" Grid.Row="1" Text="26 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtGpuAxis50" Grid.Row="2" Text="18 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtGpuAxis25" Grid.Row="3" Text="9 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtGpuAxis0" Grid.Row="4" Text="0 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+                                                    <TextBlock x:Name="TxtGpuAxis100" Grid.Row="0" Text="獨顯 35 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                                    <TextBlock x:Name="TxtGpuAxis75" Grid.Row="1" Text="26 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                                    <TextBlock x:Name="TxtGpuAxis50" Grid.Row="2" Text="18 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                                    <TextBlock x:Name="TxtGpuAxis25" Grid.Row="3" Text="9 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                                    <TextBlock x:Name="TxtGpuAxis0" Grid.Row="4" Text="0 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
                                                 </Grid>
 
-                                                <!-- Separate Polylines for Discharge (Cyan), Charge (Emerald), CPU (Purple), GPU (Amber) -->
-                                                <Polyline x:Name="PolylineDischarge" Stroke="{StaticResource AccentAmber}" StrokeThickness="2" StrokeLineJoin="Round"/>
-                                                <Polyline x:Name="PolylineCharge" Stroke="{StaticResource AccentEmerald}" StrokeThickness="2.5" StrokeLineJoin="Round"/>
+                                                <!-- Separate Polylines for Discharge (red), Charge (green), GPU (blue) -->
+                                                <Polyline x:Name="PolylineDischarge" Stroke="{StaticResource PowerDischarge}" StrokeThickness="2" StrokeLineJoin="Round"/>
+                                                <Polyline x:Name="PolylineCharge" Stroke="{StaticResource PowerCharge}" StrokeThickness="2.5" StrokeLineJoin="Round"/>
                                                 <!-- The CPU polyline was removed along with CPU wattage: it
                                                      had been pinned flat at zero since that value went away. -->
-                                                <Polyline x:Name="PolylineGpu" Stroke="{StaticResource AccentCyan}" StrokeThickness="1.5" StrokeLineJoin="Round"/>
+                                                <Polyline x:Name="PolylineGpu" Stroke="{StaticResource PowerGpu}" StrokeThickness="1.5" StrokeLineJoin="Round"/>
                                             </Grid>
                                         </Border>
                                     </StackPanel>
@@ -365,9 +384,9 @@
                                                     <TextBlock x:Name="LblHwBatteryTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
                                                     <!-- Voltage comes from the battery driver IOCTL, not WMI,
                                                          which the old subtitle here claimed. -->
-                                                    <TextBlock x:Name="TxtTelemetrySub" Text="電池驅動 IOCTL 即時電氣感測" Foreground="{StaticResource AccentAmber}" FontSize="11" Margin="0,1,0,0"/>
+                                                    <TextBlock x:Name="TxtTelemetrySub" Text="電池驅動 IOCTL 即時電氣感測" Foreground="{StaticResource PowerDischarge}" FontSize="11" Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                                <TextBlock x:Name="TxtHwTelemetryVal" Grid.Column="1" Text="-- V  |  -- A" Foreground="{StaticResource AccentAmber}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
+                                                <TextBlock x:Name="TxtHwTelemetryVal" Grid.Column="1" Text="-- V  |  -- A" Foreground="{StaticResource PowerDischarge}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
                                                 <TextBlock Text="ACPI 感測器運作中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
@@ -384,9 +403,12 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                     <TextBlock x:Name="LblHwEnergy" Text="🔋 電池蓄電量 (Wh)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
-                                                    <TextBlock x:Name="TxtHwEnergySub" Text="電池驅動實測容量" Foreground="{StaticResource AccentCyan}" FontSize="11" Margin="0,1,0,0"/>
+                                                    <!-- Stored energy is neither spending nor saving power,
+                                                         so it takes the neutral amber rather than borrowing
+                                                         a colour that means something else. -->
+                                                    <TextBlock x:Name="TxtHwEnergySub" Text="電池驅動實測容量" Foreground="{StaticResource PowerNeutral}" FontSize="11" Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                                <TextBlock x:Name="TxtHwEnergyVal" Grid.Column="1" Text="--" Foreground="{StaticResource AccentCyan}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
+                                                <TextBlock x:Name="TxtHwEnergyVal" Grid.Column="1" Text="--" Foreground="{StaticResource PowerNeutral}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
                                                 <TextBlock x:Name="TxtHwEnergyRight" Grid.Column="2" Text="--" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
@@ -401,9 +423,12 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                     <TextBlock x:Name="LblHwPowerPlan" Text="⚙️ Windows 運作電源計劃" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
-                                                    <TextBlock Text="PowrProf 電源管理策略" Foreground="{StaticResource AccentEmerald}" FontSize="11" Margin="0,1,0,0"/>
+                                                    <!-- Coloured by what the plan costs: a performance plan
+                                                         spends power (red), a saver plan conserves it
+                                                         (green), balanced sits between (amber). -->
+                                                    <TextBlock x:Name="TxtHwPowerPlanSub" Text="PowrProf 電源管理策略" Foreground="{StaticResource PowerNeutral}" FontSize="11" Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                                <TextBlock x:Name="TxtHwPowerPlanVal" Grid.Column="1" Text="平衡 (Balanced)" Foreground="{StaticResource AccentEmerald}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
+                                                <TextBlock x:Name="TxtHwPowerPlanVal" Grid.Column="1" Text="平衡 (Balanced)" Foreground="{StaticResource PowerNeutral}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
                                                 <TextBlock Text="電源配置生效中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
@@ -423,10 +448,14 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                     <TextBlock x:Name="TxtDgpuName" Text="🎮 獨立顯示卡 (dGPU)" Foreground="{StaticResource TextMain}" FontWeight="Bold" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock x:Name="TxtDgpuPowerW" Text="~0.0 W" Foreground="{StaticResource AccentAmber}" FontSize="11" Margin="0,1,0,0"/>
+                                                    <!-- The wattage keeps the blue of the dGPU chart series
+                                                         so the two read as the same thing. The load bar and
+                                                         its label are repainted per tick by how much power
+                                                         the card is actually spending. -->
+                                                    <TextBlock x:Name="TxtDgpuPowerW" Text="~0.0 W" Foreground="{StaticResource PowerGpu}" FontSize="11" Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                                <ProgressBar x:Name="PbDgpuUsage" Grid.Column="1" Height="9" Value="0" Maximum="100" Foreground="{StaticResource AccentAmber}" Background="#090D16" BorderThickness="0" Margin="8,0" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="TxtDgpuUsageVal" Grid.Column="2" Text="0% (待機省電)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                <ProgressBar x:Name="PbDgpuUsage" Grid.Column="1" Height="9" Value="0" Maximum="100" Foreground="{StaticResource PowerCharge}" Background="#090D16" BorderThickness="0" Margin="8,0" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="TxtDgpuUsageVal" Grid.Column="2" Text="0% (待機省電)" Foreground="{StaticResource PowerCharge}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
 

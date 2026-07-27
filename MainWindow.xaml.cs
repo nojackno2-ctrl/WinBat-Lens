@@ -52,10 +52,19 @@ namespace WinBatLens
         // runs once per second; allocating fresh SolidColorBrush objects every
         // tick created needless GC pressure. Freezing also lets WPF share them
         // across threads without cloning.
+        // These are the semantic colours from App.xaml, repeated here because a
+        // brush assigned per tick cannot come from a StaticResource lookup.
+        // Keep the two in step: green means charging or saving power, red means
+        // spending it, blue is the dGPU series, amber is a battery figure that
+        // is neither.
         private static readonly SolidColorBrush BrushEmerald = CreateFrozen(MediaColor.FromRgb(0x10, 0xB9, 0x81));
         private static readonly SolidColorBrush BrushEmeraldBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0x10, 0xB9, 0x81));
         private static readonly SolidColorBrush BrushAmber = CreateFrozen(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
         private static readonly SolidColorBrush BrushAmberBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
+        private static readonly SolidColorBrush BrushRose = CreateFrozen(MediaColor.FromRgb(0xF4, 0x3F, 0x5E));
+        private static readonly SolidColorBrush BrushRoseBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0xF4, 0x3F, 0x5E));
+        private static readonly SolidColorBrush BrushSlate = CreateFrozen(MediaColor.FromRgb(0x94, 0xA3, 0xB8));
+        private static readonly SolidColorBrush BrushSlateBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0x94, 0xA3, 0xB8));
         private static readonly SolidColorBrush BrushGridStrong = CreateFrozen(MediaColor.FromArgb(0x20, 0x94, 0xA3, 0xB8));
         private static readonly SolidColorBrush BrushGridFaint = CreateFrozen(MediaColor.FromArgb(0x15, 0x94, 0xA3, 0xB8));
         private static readonly DoubleCollection DashStrong = CreateFrozenDashes(4, 4);
@@ -73,6 +82,48 @@ namespace WinBatLens
             var dashes = new DoubleCollection { a, b };
             dashes.Freeze();
             return dashes;
+        }
+
+        /// <summary>
+        /// The colour for a health percentage. The 80% / 60% boundaries are the
+        /// ones BatteryReportParser uses to pick the status wording, so the ring
+        /// can never show green next to a label that says the pack is degraded.
+        /// </summary>
+        private static SolidColorBrush HealthBrush(double percent) =>
+            percent < 60.0 ? BrushRose : percent < 80.0 ? BrushAmber : BrushEmerald;
+
+        private static SolidColorBrush HealthBadgeBrush(double percent) =>
+            percent < 60.0 ? BrushRoseBadge : percent < 80.0 ? BrushAmberBadge : BrushEmeraldBadge;
+
+        /// <summary>
+        /// Green below <paramref name="idleBelow"/>, red at or above
+        /// <paramref name="busyAtOrAbove"/>, amber in between — the
+        /// saving/spending scale used by the hardware rows.
+        /// </summary>
+        private static SolidColorBrush LoadBrush(double value, double idleBelow, double busyAtOrAbove) =>
+            value < idleBelow ? BrushEmerald : value < busyAtOrAbove ? BrushAmber : BrushRose;
+
+        /// <summary>
+        /// Grades the active Windows power plan by what it costs. Matched on
+        /// both languages because PowrProf hands back whatever the plan is
+        /// named on this machine, and custom OEM plans (ASUS "Performance")
+        /// keep the English word even on a Chinese Windows.
+        /// </summary>
+        private static SolidColorBrush PowerPlanBrush(string? planName)
+        {
+            if (string.IsNullOrWhiteSpace(planName)) return BrushSlate;
+
+            if (planName.Contains("高效能") || planName.Contains("效能") ||
+                planName.Contains("Performance", StringComparison.OrdinalIgnoreCase) ||
+                planName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
+                return BrushRose;
+
+            if (planName.Contains("省電") || planName.Contains("節能") ||
+                planName.Contains("Saver", StringComparison.OrdinalIgnoreCase) ||
+                planName.Contains("Eco", StringComparison.OrdinalIgnoreCase))
+                return BrushEmerald;
+
+            return BrushAmber;
         }
 
         public MainWindow()
@@ -674,11 +725,11 @@ namespace WinBatLens
                     TxtLiveDischargeRate.Text = state.IsDischargeRateMeasured
                         ? $"-{state.DischargeRateW:F1} W"
                         : "-- W";
-                    TxtLiveDischargeRate.Foreground = BrushAmber; // Amber
+                    TxtLiveDischargeRate.Foreground = BrushRose; // Red: spending power
 
-                    BadgeLiveAcState.Background = BrushAmberBadge;
-                    BadgeLiveAcState.BorderBrush = BrushAmber;
-                    TxtLiveAcState.Foreground = BrushAmber;
+                    BadgeLiveAcState.Background = BrushRoseBadge;
+                    BadgeLiveAcState.BorderBrush = BrushRose;
+                    TxtLiveAcState.Foreground = BrushRose;
 
                     if (state.IsDischargeRateMeasured)
                     {
@@ -704,10 +755,26 @@ namespace WinBatLens
                     ? $"Current Battery Level: {state.BatteryPercent}%{energyPart}"
                     : $"目前電池剩餘電量: {state.BatteryPercent}%{energyPart}";
 
-                // Battery Hardware Telemetry (Voltage / Current)
+                // Battery Hardware Telemetry (Voltage / Current). Coloured by
+                // which way the current is flowing: out of the pack is red,
+                // into it is green, and a pack sitting idle on AC is neither.
                 TxtLiveBatteryTelemetry.Text = state.BatteryTelemetryText;
                 TxtHwTelemetryVal.Text = state.BatteryTelemetryText;
+
+                SolidColorBrush flowBrush = state.IsCharging ? BrushEmerald
+                    : state.IsAcOnline ? BrushAmber
+                    : BrushRose;
+                TxtLiveBatteryTelemetry.Foreground = flowBrush;
+                TxtHwTelemetryVal.Foreground = flowBrush;
+                TxtTelemetrySub.Foreground = flowBrush;
+
+                // Power plan, coloured by what it costs rather than by nothing
+                // at all: performance spends, saver conserves, balanced sits
+                // between the two.
                 TxtHwPowerPlanVal.Text = state.PowerPlanName;
+                SolidColorBrush planBrush = PowerPlanBrush(state.PowerPlanName);
+                TxtHwPowerPlanVal.Foreground = planBrush;
+                TxtHwPowerPlanSub.Foreground = planBrush;
 
                 // Pack temperature, asked of the battery driver itself. Shown
                 // only where the firmware implements the query; where it does
@@ -750,6 +817,17 @@ namespace WinBatLens
                 TxtDgpuPowerW.Text = state.IsDgpuPowerMeasured
                     ? $"{state.DgpuPowerW:F1} W"
                     : "-- W";
+
+                // The load bar follows the same rule as everything else on this
+                // page: green while the card is idling and saving power, red
+                // once it is genuinely drawing. Where the card reports real
+                // watts those are the better signal — an idle-but-hot dGPU can
+                // sit at 0% utilisation and still burn 10 W.
+                SolidColorBrush dgpuBrush = state.IsDgpuPowerMeasured
+                    ? LoadBrush(state.DgpuPowerW, 5.0, 15.0)
+                    : LoadBrush(state.DgpuUsagePercent, 5.0, 40.0);
+                PbDgpuUsage.Foreground = dgpuBrush;
+                TxtDgpuUsageVal.Foreground = dgpuBrush;
 
                 // Live tips. Every wattage quoted here is a real reading; when
                 // nothing real is available the tip says so rather than
@@ -948,6 +1026,42 @@ namespace WinBatLens
             TxtHealthPercentSign.Visibility = metrics.HasBattery ? Visibility.Visible : Visibility.Collapsed;
             TxtStatusLabel.Text = metrics.StatusLabel;
             TxtSummary.Text = metrics.SummaryText;
+
+            // Grade the health card by colour. The ring used to be painted a
+            // fixed green and, with a full-circle dash offset, never drew at
+            // all — so a pack at 73.6% looked exactly like one at 100%.
+            if (metrics.HasBattery)
+            {
+                var healthBrush = HealthBrush(metrics.HealthPercent);
+                RingHealthProgress.Stroke = healthBrush;
+                TxtHealthPercent.Foreground = healthBrush;
+                TxtHealthPercentSign.Foreground = healthBrush;
+                BadgeStatus.Background = HealthBadgeBrush(metrics.HealthPercent);
+                BadgeStatus.BorderBrush = healthBrush;
+                TxtStatusLabel.Foreground = healthBrush;
+
+                // Draw the arc as well as colour it. Dash lengths are multiples
+                // of the stroke thickness, so the 84px circle measures
+                // (π × 84) / 8 ≈ 33 dash units; a dash of that times the health
+                // fraction followed by a gap too long to ever repeat leaves
+                // exactly one arc. The ellipse is rotated -90° in XAML so the
+                // arc starts at the top.
+                const double ringUnits = Math.PI * 84.0 / 8.0;
+                double fraction = Math.Clamp(metrics.HealthPercent / 100.0, 0.0, 1.0);
+                RingHealthProgress.StrokeDashArray = new DoubleCollection { ringUnits * fraction, 1000 };
+                RingHealthProgress.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                // No battery: no grade to show, so the ring goes away rather
+                // than sitting there in a colour that means something.
+                RingHealthProgress.Visibility = Visibility.Collapsed;
+                TxtHealthPercent.Foreground = BrushSlate;
+                TxtHealthPercentSign.Foreground = BrushSlate;
+                BadgeStatus.Background = BrushSlateBadge;
+                BadgeStatus.BorderBrush = BrushSlate;
+                TxtStatusLabel.Foreground = BrushSlate;
+            }
 
             // Specs Grid
             TxtSpecName.Text = specs.Name;

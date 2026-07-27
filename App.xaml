@@ -1,9 +1,13 @@
 <Application x:Class="WinBatLens.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:WinBatLens"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <ResourceDictionary>
+            <!-- Grades a health percentage into its colour; "Badge" returns the
+                 translucent fill for the pill behind it. -->
+            <local:HealthGradeBrushConverter x:Key="HealthGradeBrush"/>
             <!-- Theme Colors -->
             <SolidColorBrush x:Key="BgDark" Color="#090D16"/>
             <SolidColorBrush x:Key="BgCard" Color="#121A2C"/>
@@ -16,6 +20,24 @@
             <SolidColorBrush x:Key="AccentEmerald" Color="#10B981"/>
             <SolidColorBrush x:Key="AccentAmber" Color="#F59E0B"/>
             <SolidColorBrush x:Key="AccentRose" Color="#F43F5E"/>
+
+            <!-- Semantic power colours: one colour per meaning, used by the
+                 headline cards, the waveform, the hardware rows and the tray
+                 icon alike, so the same idea never changes colour between them.
+                   red   = the machine is spending power (discharging, heavy load)
+                   green = the machine is gaining or saving power (charging, idle)
+                   blue  = the discrete GPU series
+                   amber = battery figures that are neither (stored energy, runtime) -->
+            <SolidColorBrush x:Key="PowerDischarge" Color="#F43F5E"/>
+            <SolidColorBrush x:Key="PowerCharge" Color="#10B981"/>
+            <SolidColorBrush x:Key="PowerGpu" Color="#3B82F6"/>
+            <SolidColorBrush x:Key="PowerNeutral" Color="#F59E0B"/>
+
+            <!-- Health grades, on the same 80% / 60% cuts BatteryReportParser
+                 uses for the status label, so colour and wording always agree. -->
+            <SolidColorBrush x:Key="HealthGood" Color="#10B981"/>
+            <SolidColorBrush x:Key="HealthWarn" Color="#F59E0B"/>
+            <SolidColorBrush x:Key="HealthDanger" Color="#F43F5E"/>
 
             <SolidColorBrush x:Key="TextMain" Color="#F8FAFC"/>
             <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>

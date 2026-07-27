@@ -188,8 +188,8 @@ watts — and `maxPowerW` was the maximum across all three series, so whenever t
 GPU woke up the Y axis jumped to 92 W and pressed the charge and discharge lines
 flat onto the floor. Battery and dGPU are now scaled independently: the left
 axis is `Math.Max(35, batteryPeak * 1.15)` as before but battery-only, and the
-dGPU series is plotted against its own maximum with a cyan right-hand axis
-matching the cyan line and legend entry. The right axis is hidden outright when
+dGPU series is plotted against its own maximum with a right-hand axis in the
+dGPU's own colour, matching its line and legend entry. The right axis is hidden when
 no GPU wattage is being measured. Verified live: left axis back to `35 W (100%)`
 where it had been reading 92 W, right axis reading `獨顯 92 W`.
 
@@ -254,6 +254,48 @@ Sizing note for future edits: the right panel's tab strip needs ~750px. At a
 1200px window that leaves the sidebar about 20px of room to grow before the tabs
 wrap — widen the window at the same time if the sidebar needs more.
 
+## The palette, second pass (v1.0.9)
+
+v1.0.8 (below) made each concept use one colour, but the colours themselves were
+arbitrary — amber for discharge, cyan for the dGPU — and half the dashboard was
+outside the rule: the hardware rows, the runtime estimate and the health card
+were painted whatever looked good when they were written. So the page still had
+green meaning "charging" in one card and "power plan" in another, and a pack at
+73.6% health wore the same green ring as one at 100%.
+
+The rule now is **what the colour means, not what it labels**:
+
+| colour | meaning | where |
+|---|---|---|
+| red `#F43F5E` | spending power | discharge headline + badge, discharge line/legend, V\|A while draining, performance power plan, dGPU under load, tray icon |
+| green `#10B981` | gaining or saving power | charge headline + badge, charge line/legend, V\|A while charging, saver power plan, idle dGPU, tray icon |
+| blue `#3B82F6` | the dGPU series | chart line, legend, right-hand axis, the dGPU row's wattage |
+| amber `#F59E0B` | a battery figure that is neither | stored energy, runtime estimate, balanced power plan, pack idle on AC |
+
+Defined once as `PowerDischarge` / `PowerCharge` / `PowerGpu` / `PowerNeutral` in
+`App.xaml`, and repeated as frozen brushes in `MainWindow.xaml.cs` because a
+brush assigned on a timer tick cannot come from a `StaticResource` lookup — the
+two lists have to be kept in step by hand.
+
+What moved off green: the runtime estimate and the `PowrProf` power-plan row,
+both of which were emerald for no reason and diluted "charging". The energy row
+moved off cyan for the same reason with respect to the dGPU.
+
+Health is graded rather than fixed: `HealthGood` / `HealthWarn` / `HealthDanger`
+on the same 80% / 60% cuts `BatteryReportParser` uses for the status wording, so
+the ring, the number, the badge and the label can never disagree. Per-row grading
+in the capacity-history list goes through `HealthGradeBrushConverter`
+(`ConverterParameter=Badge` returns the translucent pill fill).
+
+While colouring the ring it turned out `RingHealthProgress` **had never drawn at
+all**: `StrokeDashArray="360" StrokeDashOffset="360"` put the whole circle inside
+the dash pattern's off half, so the only visible circle was the `#1E293B` track
+behind it. It now draws a real arc — dash units are multiples of the stroke
+thickness, so the 84px circle is `π × 84 / 8 ≈ 33` units and the dash is that
+times the health fraction, followed by a gap long enough never to repeat. The
+ellipse carries a `-90°` `RotateTransform` so the arc starts at twelve o'clock
+instead of three.
+
 ## One colour per meaning (v1.0.8)
 
 Discharge was being drawn in three different colours depending on where you
@@ -317,7 +359,7 @@ whichever rate is actually measured:
 | state | headline |
 |---|---|
 | charging | `+56.1 W` (emerald) |
-| on battery | `-48.9 W` (amber) |
+| on battery | `-48.9 W` (red) |
 | on AC, pack idle | `-- W` |
 
 The tray icon and its tooltip had the same defect and now follow the same rule
