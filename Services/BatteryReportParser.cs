@@ -7,7 +7,16 @@ namespace WinBatLens.Services
 {
     public class BatteryReportParser
     {
-        public static BatteryReportData Parse(string htmlContent)
+        /// <summary>
+        /// Parses a powercfg battery report, optionally overlaying what the
+        /// battery driver reports right now.
+        /// </summary>
+        /// <param name="pack">
+        /// Live pack information from <see cref="BatteryTelemetryService"/>, or
+        /// null to parse the report on its own (as when the user opens someone
+        /// else's saved HTML report).
+        /// </param>
+        public static BatteryReportData Parse(string htmlContent, BatteryTelemetryService.PackInfo? pack = null)
         {
             var data = new BatteryReportData();
 
@@ -18,11 +27,86 @@ namespace WinBatLens.Services
             data.BatteryLifeEstimates = ParseBatteryLifeEstimates(htmlContent);
             data.RecentUsage = ParseRecentUsage(htmlContent);
 
+            // Must run before the metrics: health, wear and every diagnostic is
+            // computed from the merged specs.
+            if (pack != null && pack.IsValid) OverlayDriverSpecs(data.BatterySpecs, pack);
+
             // Compute metrics & diagnostics
             data.HealthMetrics = CalculateHealthMetrics(data.BatterySpecs);
             data.Diagnostics = GenerateDiagnostics(data);
 
             return data;
+        }
+
+        /// <summary>
+        /// Prefers the battery driver's live figures over the report's snapshot.
+        /// </summary>
+        /// <remarks>
+        /// The report is generated from data Windows logged earlier, so its
+        /// full-charge capacity lags: measured on the development machine the
+        /// report said 55,969 mWh while the driver said 56,032 mWh. The driver
+        /// also fills in fields the report leaves blank — cycle count and the
+        /// manufacture date, which powercfg has no column for at all — so a
+        /// machine whose report is empty or unparseable still gets a real
+        /// health score instead of being reported as having no battery.
+        /// </remarks>
+        private static void OverlayDriverSpecs(BatterySpecs specs, BatteryTelemetryService.PackInfo pack)
+        {
+            // A relative-capacity pack reports capacities in its own arbitrary
+            // units, and a report in mAh cannot be mixed with the driver's mWh.
+            // In both cases the ratio is still sound, so health is left to the
+            // report's own numbers rather than combining incompatible units.
+            bool unitsMatch = !pack.IsCapacityRelative
+                && (specs.Unit == "mWh" || specs.DesignCapacity <= 0);
+
+            if (unitsMatch)
+            {
+                if (pack.DesignedCapacityMWh > 0)
+                {
+                    specs.DesignCapacity = pack.DesignedCapacityMWh;
+                    specs.Unit = "mWh";
+                    specs.CapacitiesFromDriver = true;
+                }
+
+                if (pack.FullChargedCapacityMWh > 0)
+                {
+                    specs.FullChargeCapacity = pack.FullChargedCapacityMWh;
+                    specs.Unit = "mWh";
+                    specs.CapacitiesFromDriver = true;
+                }
+            }
+
+            // Cycle count is blank in the report on a great many laptops; take
+            // the driver's whenever it has one.
+            if (pack.CycleCount.HasValue) specs.CycleCount = pack.CycleCount;
+
+            specs.ManufactureDate = pack.ManufactureDate;
+
+            // Identity: keep whatever the report gave, since powercfg tends to
+            // carry the friendlier string, and fall back to the driver's.
+            if (IsBlank(specs.Chemistry) && !string.IsNullOrWhiteSpace(pack.Chemistry))
+                specs.Chemistry = pack.Chemistry;
+
+            if (IsBlank(specs.Name) && !string.IsNullOrWhiteSpace(pack.DeviceName))
+                specs.Name = pack.DeviceName;
+
+            if (IsBlank(specs.Manufacturer) && !string.IsNullOrWhiteSpace(pack.ManufactureName))
+                specs.Manufacturer = pack.ManufactureName;
+        }
+
+        /// <summary>
+        /// True for an empty cell or one of the defaults the model starts with,
+        /// which are placeholders rather than parsed values.
+        /// </summary>
+        private static bool IsBlank(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return true;
+
+            string v = value.Trim();
+            return v == "N/A"
+                || v == "Primary Battery"
+                || v == "Windows PC"
+                || v == "Li-ion";
         }
 
         private static SystemInfo ParseSystemInfo(string html)
@@ -358,6 +442,28 @@ namespace WinBatLens.Services
                         Description = $"目前已累積 {specs.CycleCount.Value} 次循環。"
                     });
                 }
+            }
+            else
+            {
+                // Worth saying out loud: a blank cycle count is the pack's
+                // firmware declining to keep the tally, not a read failure.
+                tips.Add(new DiagnosticItem
+                {
+                    Type = "info",
+                    Title = "此電池未回報循環次數",
+                    Description = "powercfg 報告與電池驅動 (IOCTL_BATTERY_QUERY_INFORMATION) 都沒有循環次數，代表這顆電池的韌體並未實作該欄位，而不是讀取失敗。"
+                });
+            }
+
+            if (specs.AgeYears.HasValue && specs.ManufactureDate.HasValue)
+            {
+                double years = specs.AgeYears.Value;
+                tips.Add(new DiagnosticItem
+                {
+                    Type = years >= 4.0 ? "warning" : "info",
+                    Title = $"電池役齡約 {years:F1} 年",
+                    Description = $"電芯出廠日期為 {specs.ManufactureDate.Value:yyyy-MM-dd}（讀自電池驅動，powercfg 報告沒有這個欄位）。鋰電池即使少用也會隨時間自然老化，役齡可用來判斷目前的衰退幅度是偏快還是正常。"
+                });
             }
 
             tips.Add(new DiagnosticItem

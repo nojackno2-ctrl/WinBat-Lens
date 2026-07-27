@@ -118,6 +118,16 @@
                         </Grid>
                         <Separator Background="#10FFFFFF" Margin="0,2"/>
 
+                        <!-- Manufacture date and pack age, read from the battery
+                             driver. powercfg's report has no such field and many
+                             packs do not implement the query either, so the row
+                             hides itself rather than showing a permanent dash. -->
+                        <Grid x:Name="RowSpecMade" Margin="0,1" Visibility="Collapsed">
+                            <TextBlock x:Name="LblSpecMade" Text="出廠日期" Foreground="{StaticResource TextMuted}" FontSize="12"/>
+                            <TextBlock x:Name="TxtSpecMade" Text="--" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Separator x:Name="SepSpecMade" Background="#10FFFFFF" Margin="0,2" Visibility="Collapsed"/>
+
                         <Grid Margin="0,1">
                             <TextBlock x:Name="LblSpecDesign" Text="設計容量" Foreground="{StaticResource TextMuted}" FontSize="12"/>
                             <TextBlock x:Name="TxtSpecDesign" Text="-- mWh" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right"/>
@@ -194,7 +204,10 @@
                                                 <TextBlock Text="{Binding DesignCapacity}" FontSize="11" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="2" Margin="0,0,8,0"/>
                                                 <Border Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="8" Padding="5,1" Background="#2010B981" BorderBrush="{StaticResource AccentEmerald}" BorderThickness="1">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding HealthPercent}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}"/>
+                                                        <!-- Fixed to one decimal: a whole value such as 74.0
+                                                             otherwise renders as "74" and fails to line up
+                                                             with the 73.6 above and below it. -->
+                                                        <TextBlock Text="{Binding HealthPercent, StringFormat={}{0:F1}}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentEmerald}"/>
                                                         <TextBlock Text="%" FontSize="10" Foreground="{StaticResource AccentEmerald}"/>
                                                     </StackPanel>
                                                 </Border>
@@ -302,6 +315,28 @@
                                                     <TextBlock x:Name="TxtYAxis0" Grid.Row="4" Text="0 W (0%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Bottom"/>
                                                 </Grid>
 
+                                                <!-- dGPU Y-Axis Scale Labels Overlay (Right Side). The
+                                                     discrete GPU runs an order of magnitude above battery
+                                                     power under load, so it gets its own scale rather than
+                                                     flattening the battery lines against the floor. Cyan
+                                                     ties these numbers to the cyan dGPU line and legend.
+                                                     Hidden outright when no GPU wattage is being measured. -->
+                                                <Grid x:Name="GridGpuAxis" VerticalAlignment="Stretch" HorizontalAlignment="Right" Margin="0,4,8,4" IsHitTestVisible="False" Visibility="Collapsed">
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="*"/>
+                                                        <RowDefinition Height="*"/>
+                                                        <RowDefinition Height="*"/>
+                                                        <RowDefinition Height="*"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+
+                                                    <TextBlock x:Name="TxtGpuAxis100" Grid.Row="0" Text="獨顯 35 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                                    <TextBlock x:Name="TxtGpuAxis75" Grid.Row="1" Text="26 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                                    <TextBlock x:Name="TxtGpuAxis50" Grid.Row="2" Text="18 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                                    <TextBlock x:Name="TxtGpuAxis25" Grid.Row="3" Text="9 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                                                    <TextBlock x:Name="TxtGpuAxis0" Grid.Row="4" Text="0 W" FontSize="10" Foreground="{StaticResource AccentCyan}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+                                                </Grid>
+
                                                 <!-- Separate Polylines for Discharge (Cyan), Charge (Emerald), CPU (Purple), GPU (Amber) -->
                                                 <Polyline x:Name="PolylineDischarge" Stroke="{StaticResource AccentAmber}" StrokeThickness="2" StrokeLineJoin="Round"/>
                                                 <Polyline x:Name="PolylineCharge" Stroke="{StaticResource AccentEmerald}" StrokeThickness="2.5" StrokeLineJoin="Round"/>
@@ -328,10 +363,31 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                                     <TextBlock x:Name="LblHwBatteryTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
-                                                    <TextBlock x:Name="TxtTelemetrySub" Text="WMI &amp; ACPI 即時電氣感測" Foreground="{StaticResource AccentAmber}" FontSize="11" Margin="0,1,0,0"/>
+                                                    <!-- Voltage comes from the battery driver IOCTL, not WMI,
+                                                         which the old subtitle here claimed. -->
+                                                    <TextBlock x:Name="TxtTelemetrySub" Text="電池驅動 IOCTL 即時電氣感測" Foreground="{StaticResource AccentAmber}" FontSize="11" Margin="0,1,0,0"/>
                                                 </StackPanel>
                                                 <TextBlock x:Name="TxtHwTelemetryVal" Grid.Column="1" Text="-- V  |  -- A" Foreground="{StaticResource AccentAmber}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
                                                 <TextBlock Text="ACPI 感測器運作中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Battery Energy & Capacity Row. Hidden on a pack whose
+                                             driver reports no capacity, or reports it in relative
+                                             units that cannot honestly be called watt-hours. -->
+                                        <Border x:Name="RowHwEnergy" Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="7" Padding="10,6" Margin="0,0,0,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="238"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="150"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="LblHwEnergy" Text="🔋 電池蓄電量 (Wh)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
+                                                    <TextBlock x:Name="TxtHwEnergySub" Text="電池驅動實測容量" Foreground="{StaticResource AccentCyan}" FontSize="11" Margin="0,1,0,0"/>
+                                                </StackPanel>
+                                                <TextBlock x:Name="TxtHwEnergyVal" Grid.Column="1" Text="--" Foreground="{StaticResource AccentCyan}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
+                                                <TextBlock x:Name="TxtHwEnergyRight" Grid.Column="2" Text="--" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
 

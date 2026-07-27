@@ -22,6 +22,24 @@ namespace WinBatLens.Models
         public int FullChargeCapacity { get; set; }
         public int? CycleCount { get; set; }
         public string Unit { get; set; } = "mWh";
+
+        /// <summary>
+        /// Date the cells were manufactured, from the battery driver. powercfg's
+        /// report has no such field, and many packs do not implement the query
+        /// either, so this stays null on plenty of machines.
+        /// </summary>
+        public DateTime? ManufactureDate { get; set; }
+
+        public double? AgeYears => ManufactureDate.HasValue
+            ? Math.Round((DateTime.Now - ManufactureDate.Value).TotalDays / 365.25, 1)
+            : null;
+
+        /// <summary>
+        /// True when the capacities above came from the live battery driver
+        /// rather than the powercfg report. The driver's figures are current,
+        /// whereas the report's are a snapshot that can be days stale.
+        /// </summary>
+        public bool CapacitiesFromDriver { get; set; }
     }
 
     public class HealthMetrics
@@ -95,15 +113,36 @@ namespace WinBatLens.Models
         // Battery Physical Telemetry. The *Measured flags are false when the
         // hardware/firmware does not expose the value, so the UI can show "--"
         // instead of presenting a fallback constant as a real reading.
-        //
-        // Temperature is deliberately absent: the only thermal zone Windows
-        // exposes here is the CPU/system zone, which was previously displayed
-        // as if it were the battery's own temperature.
         public double BatteryVoltageV { get; set; }
         public bool IsVoltageMeasured { get; set; }
         public double BatteryCurrentA { get; set; }
         public string BatteryTelemetryText { get; set; } = "-- V | -- A";
         public string PowerPlanName { get; set; } = "平衡 (Balanced)";
+
+        // Pack temperature, asked of the battery driver itself
+        // (IOCTL_BATTERY_QUERY_INFORMATION / BatteryTemperature). This is not
+        // the CPU thermal zone an earlier version mislabelled as the battery's;
+        // when the firmware does not implement the level the flag stays false
+        // and the UI shows nothing at all rather than a placeholder row.
+        public double BatteryTemperatureC { get; set; }
+        public bool IsBatteryTemperatureMeasured { get; set; }
+
+        // Energy in the pack, in mWh, straight from the driver. Gives real
+        // resolution where the Windows percentage is a rounded integer, and
+        // makes time-to-full a measurement instead of an assumed pack size.
+        public bool IsEnergyMeasured { get; set; }
+        public int RemainingCapacityMWh { get; set; }
+        public int FullChargedCapacityMWh { get; set; }
+        public int DesignedCapacityMWh { get; set; }
+
+        /// <summary>Remaining over full-charged capacity — the pack's own state of charge.</summary>
+        public double TrueSocPercent { get; set; }
+
+        /// <summary>Live health from the driver: full-charged over design capacity.</summary>
+        public double DriverHealthPercent { get; set; }
+
+        public string BatteryEnergyText { get; set; } = "--";
+        public string BatteryCapacityHealthText { get; set; } = "--";
 
         // Read from the battery driver itself (IOCTL_BATTERY_QUERY_STATUS).
         // When IsDischargeRateMeasured is true, DischargeRateW is the whole
