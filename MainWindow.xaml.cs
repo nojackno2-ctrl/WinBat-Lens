@@ -330,21 +330,19 @@ namespace WinBatLens
                 // Iterate the queue directly (oldest→newest) instead of
                 // materialising a List and running a LINQ Max each tick.
                 //
-                // Battery and dGPU are scaled separately. A loaded discrete GPU
-                // draws an order of magnitude more than the pack — 76 W against
-                // a handful of watts — and a shared axis pressed the charge and
-                // discharge lines flat onto the floor whenever the GPU woke up.
-                double batteryPeak = 0.0;
-                double gpuPeak = 0.0;
+                // All three wattage traces share one scale so their heights can
+                // be compared directly. For example, 20 W of dGPU power is one
+                // quarter of an 80 W battery discharge, not half the chart.
+                double powerPeak = 0.0;
                 foreach (var item in _chartHistory)
                 {
-                    double b = Math.Max(item.DischargeW, item.ChargeW);
-                    if (b > batteryPeak) batteryPeak = b;
-                    if (item.GpuW > gpuPeak) gpuPeak = item.GpuW;
+                    double samplePeak = Math.Max(
+                        Math.Max(item.DischargeW, item.ChargeW),
+                        item.GpuW);
+                    if (samplePeak > powerPeak) powerPeak = samplePeak;
                 }
 
-                double maxPowerW = Math.Max(35.0, batteryPeak * 1.15);
-                double maxGpuW = gpuPeak > 0.0 ? Math.Max(35.0, gpuPeak * 1.15) : 0.0;
+                double maxPowerW = Math.Max(35.0, powerPeak * 1.15);
 
                 // Update Y-Axis Scale Coordinates Text
                 TxtYAxis100.Text = $"{maxPowerW:F0} W (100%)";
@@ -353,37 +351,16 @@ namespace WinBatLens
                 TxtYAxis25.Text = $"{(maxPowerW * 0.25):F0} W (25%)";
                 TxtYAxis0.Text = "0 W (0%)";
 
-                // The right-hand scale exists only while a GPU wattage is
-                // actually being measured; with none there is nothing for it to
-                // label and it would just be a second set of numbers.
-                if (maxGpuW > 0.0)
-                {
-                    GridGpuAxis.Visibility = Visibility.Visible;
-                    bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
-
-                    TxtGpuAxis100.Text = en ? $"dGPU {maxGpuW:F0} W" : $"獨顯 {maxGpuW:F0} W";
-                    TxtGpuAxis75.Text = $"{(maxGpuW * 0.75):F0} W";
-                    TxtGpuAxis50.Text = $"{(maxGpuW * 0.50):F0} W";
-                    TxtGpuAxis25.Text = $"{(maxGpuW * 0.25):F0} W";
-                    TxtGpuAxis0.Text = "0 W";
-                }
-                else
-                {
-                    GridGpuAxis.Visibility = Visibility.Collapsed;
-                }
-
                 int i = 0;
                 foreach (var item in _chartHistory)
                 {
                     double x = (i / (double)(MAX_CHART_POINTS - 1)) * w;
 
-                    // Y values (0 at bottom, Height at top). The GPU series is
-                    // plotted against its own maximum, hence the right-hand axis.
+                    // Y values (0 at bottom, Height at top). Every series uses
+                    // maxPowerW so equal wattages always land at equal heights.
                     double yDischarge = h - Math.Min(h, Math.Max(0, (item.DischargeW / maxPowerW) * h));
                     double yCharge = h - Math.Min(h, Math.Max(0, (item.ChargeW / maxPowerW) * h));
-                    double yGpu = maxGpuW > 0.0
-                        ? h - Math.Min(h, Math.Max(0, (item.GpuW / maxGpuW) * h))
-                        : h;
+                    double yGpu = h - Math.Min(h, Math.Max(0, (item.GpuW / maxPowerW) * h));
 
                     dischargePoints.Add(new WpfPoint(x, yDischarge));
                     chargePoints.Add(new WpfPoint(x, yCharge));
