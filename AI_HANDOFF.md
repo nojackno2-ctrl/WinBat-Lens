@@ -1,18 +1,29 @@
 # Project State & Handoff
 
-## v1.1.1 GitHub release preparation
+## v1.1.1 GitHub release published
 
-Version metadata in `WinBatLens.csproj`, `build-release.ps1` and
-`installer/WinBatLens.iss` has been advanced from 1.1.0 to 1.1.1 for the
-shared-scale waveform release. The first `./build-release.ps1` attempt did not
-start because the machine blocks PowerShell scripts by execution policy; no
-artifacts were changed. A process-scoped `-ExecutionPolicy Bypass` retry then
-successfully produced the portable EXE, portable ZIP and installer. Asset-count,
-name, file-version and ZIP-content checks passed. Both EXEs remain unsigned, the
-repository's known distribution limitation. These are preliminary artifacts:
-their product version carries parent SHA `ab31a36`, so rebuild once after the
-release commit and record the final hashes before upload. Git publication and
-GitHub Release verification are pending.
+The shared-scale waveform change and 1.1.1 version metadata were committed as
+`a4823aaca108d6502b4f4be1e935889fb60e3d9c` on branch
+`agent/unify-waveform-scale-v1.1.1`; draft PR #1 targets `main`. Annotated tag
+`v1.1.1` resolves exactly to that built commit. The final public, non-prerelease
+GitHub Release is the repository's latest release:
+https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v1.1.1
+
+`build-release.ps1` needed process-scoped `-ExecutionPolicy Bypass` because the
+machine blocks scripts by default. The final package passed Release publish,
+Inno Setup compilation, asset name/count, file-version, ZIP-content and an
+8-second hidden startup smoke test. GitHub reported the same SHA-256 digests as
+the local files:
+
+| asset | bytes | SHA-256 |
+|---|---:|---|
+| `WinBatLens_v1.1.1_Portable_x64.exe` | 80,454,959 | `3B0B3513ABD37F2EB3552002FD4F7DE695416709F66E29981A6A50BDD7E8279A` |
+| `WinBatLens_v1.1.1_Portable_x64.zip` | 74,454,105 | `553F082B27CB8F9F281F196FC409F86F3F146F1B0F1B4BBC5394F2BD01EDEC33` |
+| `WinBatLens_v1.1.1_Setup_x64.exe` | 75,315,533 | `E60F1A7C8C730AFD9E1B49584258B72FAF4BBB450A549F1CF8A138A440C8436E` |
+
+Both EXEs remain unsigned, the repository's known distribution limitation.
+The GitHub App could not create the PR (`403 Resource not accessible by
+integration`), so the authenticated `gh` fallback was used as prescribed.
 
 ## Waveform dGPU / battery shared scale (current task)
 
