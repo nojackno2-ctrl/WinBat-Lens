@@ -156,6 +156,9 @@ namespace WinBatLens.Services
                 // happen here on the warmup thread, never on the first UI tick.
                 HardwareSensorService.Initialize();
                 BatteryTelemetryService.Initialize();
+                // WinRT activation is COM work; it belongs here rather than on
+                // the first tick. Reads afterwards are effectively free.
+                PowerSupplyService.Initialize();
                 GetWmiBatteryVoltage();
                 GetActivePowerPlanName();
             }
@@ -286,6 +289,13 @@ namespace WinBatLens.Services
             // 8. Windows power status + the battery's own charge/discharge rate.
             bool haveBatt = BatteryTelemetryService.TryRead(out var batt);
 
+            // Windows' verdict on the charger itself. This is the only thing
+            // the platform will say about the external supply rather than
+            // about the pack — the USB-C PD contract, and with it a real
+            // adapter wattage, is not reachable unelevated (PowerSupplyService
+            // documents what was tried).
+            state.SupplyCapability = PowerSupplyService.GetStatus();
+
             // 8a. Energy in the pack and the health that follows from it, both
             // read from the battery driver. A relative-capacity pack reports
             // capacities in its own arbitrary units, so it is excluded here
@@ -383,6 +393,50 @@ namespace WinBatLens.Services
                         else
                         {
                             state.EstimatedTimeRemainingText = "充電中...";
+                        }
+                    }
+                    else if (haveBatt && batt.IsRateKnown && batt.DischargeW > 0)
+                    {
+                        // External power is connected and the pack is *still*
+                        // draining. The charger is not covering the load, and
+                        // the battery is silently making up the difference.
+                        //
+                        // This is the everyday failure mode of charging a
+                        // laptop over USB-C: a 65 W PD brick cannot hold up a
+                        // machine that wants more than 65 W, so the pack drains
+                        // even though the cable is plugged in. It used to be
+                        // folded into the "on AC, battery idle" branch below
+                        // and displayed as "-- W", which hid the one wattage
+                        // that actually matters in this state.
+                        //
+                        // The shortfall is measured at the pack, so unlike any
+                        // adapter figure it is a reading rather than a guess.
+                        state.ChargingRateW = 0.0;
+                        state.IsChargerDeficit = true;
+                        state.DischargeRateW = batt.DischargeW;
+                        state.IsDischargeRateMeasured = true;
+
+                        state.PowerStatusText = "外接電源供電不足";
+                        state.ChargingStatusText =
+                            $"外接電源供電不足 | 電池補上 -{state.DischargeRateW:F1}W (電池實測)";
+                        state.DischargeRateText =
+                            $"-{state.DischargeRateW:F1} W (外接電源不足，由電池補足)";
+
+                        // How long the pack can keep covering the shortfall.
+                        // Windows' own forecast is not offered while on AC, so
+                        // this comes from the pack's remaining energy over the
+                        // measured deficit — both real readings.
+                        if (energyUsable)
+                        {
+                            TimeSpan t = TimeSpan.FromHours(
+                                state.RemainingCapacityMWh / 1000.0 / state.DischargeRateW);
+                            state.EstimatedTimeRemainingText = t.TotalHours < 24
+                                ? $"仍在耗電，約 {t.Hours} 小時 {t.Minutes} 分鐘 (以 -{state.DischargeRateW:F1}W 計算)"
+                                : "外接電源不足，電池仍在耗電";
+                        }
+                        else
+                        {
+                            state.EstimatedTimeRemainingText = "外接電源不足，電池仍在耗電";
                         }
                     }
                     else
@@ -492,7 +546,12 @@ namespace WinBatLens.Services
             state.BatteryVoltageV = volts;
             state.IsVoltageMeasured = _voltageMeasured;
 
-            double activePowerW = state.IsAcOnline ? state.ChargingRateW : state.DischargeRateW;
+            // Current follows whichever way power is actually flowing. On AC
+            // that is normally the charge rate, but not when the charger is
+            // being out-run and the pack is discharging into the machine.
+            double activePowerW = (!state.IsAcOnline || state.IsChargerDeficit)
+                ? state.DischargeRateW
+                : state.ChargingRateW;
             if (volts > 0 && activePowerW > 0)
             {
                 state.BatteryCurrentA = Math.Round(activePowerW / volts, 2);

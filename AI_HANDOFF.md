@@ -1,6 +1,57 @@
 # Project State & Handoff
 
-## The 1-second tick cost a third of a CPU core (latest)
+## USB-C charging: what the dashboard can and cannot say (latest)
+
+Asked to report "USB charging wattage" while the machine was running off a
+USB-C charger. **The adapter's own wattage is not obtainable**, and that was
+established against this hardware rather than assumed. Every avenue, and how it
+closed:
+
+| avenue | result |
+|---|---|
+| UCM-UCSI ACPI device (`ACPI\USBC000\0`) | present, but its two device interfaces (`{4cedf9cf-…}`, `{ae05a169-…}`) appear nowhere in the public SDK — driver-to-driver only, no documented user-mode IOCTL |
+| `BATTERY_USB_CHARGER_STATUS` (poclass.h) | carries the PD contract flag, port mA and mV — but travels in the `IOCTL_BATTERY_SET_INFORMATION` direction, pushed in by a Charging Arbitration Driver this class of laptop does not have. No matching query level exists |
+| `POWER_ADAPTER_STATUS.MaxOutputPower` | the rated wattage, but batclass.h exposes it only through a **kernel-mode** adapter miniclass callback. The generic Microsoft AC Adapter driver on `ACPI\ACPI0003` does not provide it |
+| battery Customized I/O (`IOCTL_QUERY_CUSTOMIZED_IO_CAPABILITIES`) | the OEM escape hatch. Answers `SupportedInputs = 0`, `SupportedOutputs = 0` — nothing exposed |
+| ASUS ATK WMI (`AsusAtkWmi_WMNB`, `DSTS`) | knows the charge source on a ROG machine, but every query is access-denied unelevated, and this app runs unelevated by design |
+
+So no adapter figure is shown anywhere, consistent with the rest of the
+dashboard: an unobtainable number is left out, not estimated.
+
+### What was added instead — both measured
+
+**1. `PowerSupplyService` — `Windows.System.Power.PowerManager.PowerSupplyStatus`.**
+The one documented, unelevated thing Windows will say about the *supply* rather
+than the pack: `Adequate` / `Inadequate` / `NotPresent`. `Inadequate` is exactly
+the under-powered-PD-charger case.
+
+Reached by **raw WinRT activation** (one IID, one vtable slot) rather than the
+C# projection on purpose: the projection needs a `net8.0-windows10.0.x` target,
+which drags the SDK projection assembly into a single-file bundle whose size and
+cold-start time this project measures and tunes. Measured cost of a read:
+**0.022 us**, so it is taken fresh every tick with no caching. Verified by
+compiling the real shipping file into a harness and driving it exactly as the
+app does — activate on a background warmup thread, read from an STA thread.
+
+**2. Plugged in and still discharging is no longer invisible.**
+This was a real bug. `RealTimePowerService` only ever read a discharge rate when
+`!IsAcOnline`, so a charger that cannot keep up — the pack draining *while the
+cable is in* — fell into the "on AC, battery idle" branch and rendered as
+`-- W` / "市電直供 | 電池未充放電". That is the single most useful number when
+charging over USB-C, and the app was hiding it.
+
+Now `IsChargerDeficit` is set, the shortfall is reported as a measured
+`DischargeRateW`, and it flows through consistently: the headline number, the
+badge (rose — the pack really is being spent, so green would be a lie), the
+60-second chart's discharge trace, the tray icon digits and the tray tooltip.
+Time-remaining in that state comes from pack energy over the measured deficit.
+`BatteryCurrentA` also follows the real direction of flow now, instead of
+assuming AC means charging.
+
+Colour discipline from the previous commit is preserved: rose = power leaving
+the pack, emerald = charging, amber = the supply warning (a caution, not a rate).
+
+## The 1-second tick cost a third of a CPU core
 
 Measured on this machine, window open, steady state: **374 ms of CPU per
 second — 37.4% of one core, burned continuously by a battery monitor.** It is

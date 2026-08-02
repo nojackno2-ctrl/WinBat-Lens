@@ -263,6 +263,12 @@
                                             <Border x:Name="BadgeLiveAcState" Background="#20F43F5E" BorderBrush="{StaticResource PowerDischarge}" BorderThickness="1" CornerRadius="10" Padding="8,2" HorizontalAlignment="Left">
                                                 <TextBlock x:Name="TxtLiveAcState" Text="電源狀態讀取中..." FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource PowerDischarge}"/>
                                             </Border>
+                                            <!-- Windows' own verdict on the attached charger. Windows exposes
+                                                 no adapter wattage at all (see PowerSupplyService), so this is
+                                                 the one thing it will say about the supply itself. Collapsed
+                                                 while on battery, where it would only restate the obvious. -->
+                                            <TextBlock x:Name="TxtLiveChargerSupply" Text="" FontSize="11" Foreground="{StaticResource TextMuted}"
+                                                       Margin="0,5,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
                                         </StackPanel>
                                     </Border>
 

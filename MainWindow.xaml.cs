@@ -296,7 +296,10 @@ namespace WinBatLens
         {
             // Only plot values that were actually measured; an unavailable
             // reading contributes 0 rather than a fabricated curve.
-            double disW = (!state.IsAcOnline && state.IsDischargeRateMeasured) ? state.DischargeRateW : 0.0;
+            // IsDischargeRateMeasured now also covers being plugged into a
+            // charger that cannot keep up, so the shortfall is plotted on the
+            // discharge trace where it belongs instead of vanishing.
+            double disW = state.IsDischargeRateMeasured ? state.DischargeRateW : 0.0;
             double chgW = (state.IsCharging && state.IsChargeRateMeasured) ? state.ChargingRateW : 0.0;
             double gpuW = state.IsDgpuPowerMeasured ? state.DgpuPowerW : 0.0;
 
@@ -534,6 +537,7 @@ namespace WinBatLens
             _livePowerTimer?.Stop();
             try { HardwareSensorService.Shutdown(); } catch { }
             try { BatteryTelemetryService.Shutdown(); } catch { }
+            try { PowerSupplyService.Shutdown(); } catch { }
             try
             {
                 if (_notifyIcon != null)
@@ -669,6 +673,8 @@ namespace WinBatLens
                     string powerStatusStr;
                     if (state.IsCharging && state.IsChargeRateMeasured)
                         powerStatusStr = $"+{state.ChargingRateW:F1}W Charging";
+                    else if (state.IsChargerDeficit)
+                        powerStatusStr = $"-{state.DischargeRateW:F1}W (charger too weak)";
                     else if (!state.IsAcOnline && state.IsDischargeRateMeasured)
                         powerStatusStr = $"-{state.DischargeRateW:F1}W Discharging";
                     else
@@ -685,7 +691,24 @@ namespace WinBatLens
                 // Charge / Discharge Wattage & Status Display
                 bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
 
-                if (state.IsAcOnline)
+                if (state.IsChargerDeficit)
+                {
+                    // Plugged in and still draining. The shortfall is painted in
+                    // the discharge colour because that is exactly what it is —
+                    // the machine is spending battery. Green would read as
+                    // "charging", which is the opposite of what is happening.
+                    TxtLiveDischargeRate.Text = $"-{state.DischargeRateW:F1} W";
+                    TxtLiveDischargeRate.Foreground = BrushRose;
+
+                    BadgeLiveAcState.Background = BrushRoseBadge;
+                    BadgeLiveAcState.BorderBrush = BrushRose;
+                    TxtLiveAcState.Foreground = BrushRose;
+
+                    TxtLiveAcState.Text = en
+                        ? $"🔌⚠️ Charger cannot keep up — battery covering -{state.DischargeRateW:F1}W (measured at the pack)"
+                        : $"🔌⚠️ 外接電源供電不足 — 電池補上 -{state.DischargeRateW:F1}W（電池實測）";
+                }
+                else if (state.IsAcOnline)
                 {
                     // Charging is a real measurement, so it belongs in the
                     // headline. There is deliberately no adapter-input figure:
@@ -743,6 +766,39 @@ namespace WinBatLens
                             ? $"🔋 Battery Discharging (~-{state.DischargeRateW:F1}W estimated)"
                             : $"🔋 電池放電中 (~-{state.DischargeRateW:F1}W 推估)";
                     }
+                }
+
+                // Windows' verdict on the charger. It carries no wattage,
+                // because Windows exposes none for the adapter — see
+                // PowerSupplyService for everything that was tried — but "is
+                // the supply keeping up" is the question that actually matters
+                // when a laptop is charging over USB-C.
+                switch (state.SupplyCapability)
+                {
+                    case PowerSupplyCapability.Inadequate:
+                        // Amber, not red: red means power leaving the pack, and
+                        // this line is a warning about the supply, not a rate.
+                        TxtLiveChargerSupply.Text = en
+                            ? "⚠️ Windows reports the external supply as inadequate for this system"
+                            : "⚠️ Windows 判定：外接電源供電能力不足以支撐目前的系統負載";
+                        TxtLiveChargerSupply.Foreground = BrushAmber;
+                        TxtLiveChargerSupply.Visibility = Visibility.Visible;
+                        break;
+
+                    case PowerSupplyCapability.Adequate:
+                        TxtLiveChargerSupply.Text = en
+                            ? "🔌 Windows reports the external supply as adequate. The adapter's own wattage is not exposed by Windows."
+                            : "🔌 Windows 判定：外接電源供電充足（變壓器 / USB-C 充電器本身的瓦數，Windows 並未提供）";
+                        TxtLiveChargerSupply.Foreground = BrushSlate;
+                        TxtLiveChargerSupply.Visibility = Visibility.Visible;
+                        break;
+
+                    default:
+                        // NotPresent means running on battery, and Unknown means
+                        // the API did not answer. Neither says anything worth a
+                        // row, so the line disappears rather than showing filler.
+                        TxtLiveChargerSupply.Visibility = Visibility.Collapsed;
+                        break;
                 }
 
                 // Battery Remaining Time & Level. The watt-hour figure is the
@@ -836,7 +892,13 @@ namespace WinBatLens
                     ? (en ? $" Discrete GPU {state.DgpuPowerW:F1} W." : $" 獨顯實測 {state.DgpuPowerW:F1} W。")
                     : string.Empty;
 
-                if (state.IsAcOnline)
+                if (state.IsChargerDeficit)
+                {
+                    TxtLivePowerTip.Text = en
+                        ? $"🔌⚠️ Plugged in but still discharging: the charger is short by at least {state.DischargeRateW:F1} W, which the battery is covering.{dgpuPart} Typical of charging over USB-C — a PD charger rated below this machine's draw cannot hold it up. Use a higher-wattage charger, or reduce load, to charge while working."
+                        : $"🔌⚠️ 已接上外接電源，但電池仍在放電：充電器至少差 {state.DischargeRateW:F1} W，缺口由電池補上。{dgpuPart}這是 USB-C 充電最常見的情況 — PD 充電器的瓦數低於本機耗電就撐不住。請改用瓦數更高的充電器，或降低負載才能邊用邊充。";
+                }
+                else if (state.IsAcOnline)
                 {
                     if (state.IsCharging && state.IsChargeRateMeasured)
                     {

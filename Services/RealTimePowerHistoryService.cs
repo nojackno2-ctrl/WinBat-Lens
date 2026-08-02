@@ -61,15 +61,26 @@ namespace WinBatLens.Services
                     eventType = "⚠️ 高耗電警示";
                     badgeClass = "Danger";
                 }
+                else if (state.IsChargerDeficit)
+                {
+                    // Being plugged in is not the same as being powered. When
+                    // the charger is out-run the pack drains anyway, and the
+                    // log has to say so — "AC 供電 / 市電正常" alongside a real
+                    // non-zero discharge figure would contradict itself.
+                    eventType = "⚠️ 外接電源不足";
+                    badgeClass = "Danger";
+                }
                 else if (state.DgpuUsagePercent > 30.0)
                 {
                     eventType = "🎮 獨顯運算";
                     badgeClass = "Warning";
                 }
 
-                string summary = isAc
-                    ? $"市電正常 | 電壓: {state.BatteryVoltageV:F2}V | CPU: {state.CpuUsagePercent:F0}% | 螢幕亮度: {state.ScreenBrightnessPercent}%"
-                    : $"放電中 ({state.DischargeRateW:F1}W) | {state.BatteryTelemetryText} | CPU: {state.CpuUsagePercent:F0}% | 獨顯: {state.DgpuStatusText}";
+                string summary = state.IsChargerDeficit
+                    ? $"外接電源供電不足，電池補上 {state.DischargeRateW:F1}W | {state.BatteryTelemetryText} | CPU: {state.CpuUsagePercent:F0}% | 獨顯: {state.DgpuStatusText}"
+                    : isAc
+                        ? $"市電正常 | 電壓: {state.BatteryVoltageV:F2}V | CPU: {state.CpuUsagePercent:F0}% | 螢幕亮度: {state.ScreenBrightnessPercent}%"
+                        : $"放電中 ({state.DischargeRateW:F1}W) | {state.BatteryTelemetryText} | CPU: {state.CpuUsagePercent:F0}% | 獨顯: {state.DgpuStatusText}";
 
                 AddRecord(new PowerHistoryRecord
                 {
