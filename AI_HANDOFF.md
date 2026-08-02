@@ -24,6 +24,9 @@ the local files:
 Both EXEs remain unsigned, the repository's known distribution limitation.
 The GitHub App could not create the PR (`403 Resource not accessible by
 integration`), so the authenticated `gh` fallback was used as prescribed.
+After the final documentation push, local and remote branch heads matched;
+`gh pr checks 1` reported no checks on the branch, so there was no remote CI run
+to await or claim as passed.
 
 ## Waveform dGPU / battery shared scale (current task)
 
