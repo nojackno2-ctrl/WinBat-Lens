@@ -1,5 +1,37 @@
 # Project State & Handoff
 
+## v1.1.2 quality upgrade (committed locally, not published)
+
+The requested quality pass is implemented and committed as `f8fc5f3` on
+`agent/v1.1.2-quality`. The worktree was clean before this pass;
+all changes below are part of the same intended v1.1.2 scope:
+
+- `WinBatLens.csproj`, `build-release.ps1` and `installer/WinBatLens.iss` now
+  target .NET 10 and version 1.1.2.
+- `MainWindow.xaml.cs` no longer performs `GetCurrentPowerState()` from a
+  `DispatcherTimer`. A background cancellation-aware loop reads hardware and
+  dispatches completed snapshots to WPF. Visible polling remains 1 second;
+  tray polling is 5 seconds; working-set trimming remains once per minute while
+  hidden.
+- `tests/WinBatLens.Tests` contains four parser tests covering normal parsing,
+  driver overlays, mAh/mWh guards and no-battery diagnostics. The legacy
+  solution includes the test project.
+- `.github/workflows/ci.yml` restores, builds with `-warnaserror`, tests and
+  publishes on Windows using .NET 10.
+- `README.md` and `release_notes.md` now describe only measured or explicitly
+  estimated values and no longer claim adapter wattage.
+- `build-release.ps1` accepts `WINBAT_SIGNING_CERTIFICATE` and optional
+  `WINBAT_SIGNING_PASSWORD`, signs all generated EXEs with SHA-256 plus an RFC
+  3161 timestamp, and verifies them with SignTool. Without a certificate it
+  completes packaging with an explicit unsigned warning.
+
+Validation completed locally: Debug and Release solution builds pass with 0
+warnings / 0 errors; all 4 parser tests pass; PowerShell syntax parses; .NET 10
+single-file publish and Inno Setup v6.7.3 produce all three v1.1.2 artifacts.
+The local packages are currently unsigned because no signing certificate was
+provided. GitHub publication/PR merge is blocked until `gh auth status` is
+repaired: the configured token for `nojackno2-ctrl` is invalid.
+
 ## v1.1.1 GitHub release published
 
 The shared-scale waveform change and 1.1.1 version metadata were committed as

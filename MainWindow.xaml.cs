@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,10 +28,13 @@ namespace WinBatLens
     public partial class MainWindow : Window
     {
         private BatteryReportData? _currentReport;
-        private DispatcherTimer? _livePowerTimer;
+        private CancellationTokenSource? _livePowerCts;
+        private Task? _livePowerTask;
+        private RealTimePowerState? _latestPowerState;
+        private bool _isTrayMode;
 
-        // Working-set re-trim cadence while hidden, in 1-second timer ticks.
-        private const int TrimIntervalTicks = 60;
+        // Working-set re-trim cadence while hidden, in five-second tray polls.
+        private const int TrimIntervalSamples = 12;
         private int _hiddenTickCount;
         private NotifyIcon? _notifyIcon;
         private bool _isExitRequested = false;
@@ -177,7 +181,7 @@ namespace WinBatLens
         {
             LocalizationService.ToggleLanguage();
             ApplyLanguage();
-            UpdateLivePowerUI();
+            if (_latestPowerState != null) UpdateLivePowerUI(_latestPowerState);
         }
 
         private void ApplyLanguage()
@@ -510,8 +514,8 @@ namespace WinBatLens
             }
 
             // Real exit: Unloaded is not reliably raised for a top-level
-            // Window, so release the timer, sensors and tray icon here.
-            _livePowerTimer?.Stop();
+            // Window, so stop the polling loop and release sensors/tray here.
+            _livePowerCts?.Cancel();
             try { HardwareSensorService.Shutdown(); } catch { }
             try { BatteryTelemetryService.Shutdown(); } catch { }
             try { PowerSupplyService.Shutdown(); } catch { }
@@ -531,6 +535,7 @@ namespace WinBatLens
 
         private void HideToTray()
         {
+            _isTrayMode = true;
             this.Hide();
 
             // Only explain the tray behaviour the first time; after that the
@@ -564,18 +569,19 @@ namespace WinBatLens
 
         private void RestoreFromTray()
         {
+            _isTrayMode = false;
             this.Show();
             this.WindowState = WindowState.Normal;
             this.Activate();
 
-            // Visual updates are skipped while hidden; refresh everything now
-            // so the window doesn't show stale values for up to a second.
-            UpdateLivePowerUI();
+            // Visual updates are skipped while hidden; render the latest cached
+            // snapshot immediately, then the background loop resumes at 1 Hz.
+            if (_latestPowerState != null) UpdateLivePowerUI(_latestPowerState);
         }
 
         private void MainWindow_Unloaded(object sender, RoutedEventArgs e)
         {
-            _livePowerTimer?.Stop();
+            _livePowerCts?.Cancel();
             if (_notifyIcon != null)
             {
                 _notifyIcon.Visible = false;
@@ -585,35 +591,43 @@ namespace WinBatLens
 
         private void StartLivePowerMonitoring()
         {
-            _livePowerTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(1)
-            };
-            _livePowerTimer.Tick += LivePowerTimer_Tick;
-            _livePowerTimer.Start();
-
-            UpdateLivePowerUI();
+            _livePowerCts = new CancellationTokenSource();
+            _livePowerTask = Task.Run(() => PollLivePowerAsync(_livePowerCts.Token));
         }
 
-        private void LivePowerTimer_Tick(object? sender, EventArgs e)
+        private async Task PollLivePowerAsync(CancellationToken cancellationToken)
         {
-            UpdateLivePowerUI();
-
-            // Trimming once on minimize is not enough: the OS pages the app
-            // back in as it keeps sampling, so the working set climbs back to
-            // roughly its windowed size within a few minutes. Re-trim on a slow
-            // cadence for as long as the window stays hidden.
-            if (!IsVisible)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                if (++_hiddenTickCount >= TrimIntervalTicks)
+                try
                 {
-                    _hiddenTickCount = 0;
-                    TrimWorkingSet();
+                    // All hardware, WMI and performance-counter reads happen
+                    // here, off the WPF dispatcher. The UI receives only the
+                    // completed immutable-by-convention snapshot.
+                    var state = RealTimePowerService.GetCurrentPowerState();
+                    await Dispatcher.InvokeAsync(
+                        () => UpdateLivePowerUI(state),
+                        DispatcherPriority.Background,
+                        cancellationToken);
                 }
-            }
-            else
-            {
-                _hiddenTickCount = 0;
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Live power polling error: {ex.Message}");
+                }
+
+                int intervalMs = Volatile.Read(ref _isTrayMode) ? 5_000 : 1_000;
+                try
+                {
+                    await Task.Delay(intervalMs, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
             }
         }
 
@@ -630,11 +644,11 @@ namespace WinBatLens
                 : $"~{watts:F1} W ({(en ? "estimated" : "推估")})";
         }
 
-        private void UpdateLivePowerUI()
+        private void UpdateLivePowerUI(RealTimePowerState state)
         {
             try
             {
-                var state = RealTimePowerService.GetCurrentPowerState();
+                _latestPowerState = state;
 
                 // Add to Power & Battery Event History Service
                 RealTimePowerHistoryService.AddRecordFromPowerState(state);
@@ -663,7 +677,17 @@ namespace WinBatLens
                 // While hidden in the tray only the icon, tooltip and history
                 // need refreshing — skip every visual control update so the
                 // background working set and per-tick allocations stay minimal.
-                if (!IsVisible) return;
+                if (!IsVisible)
+                {
+                    if (++_hiddenTickCount >= TrimIntervalSamples)
+                    {
+                        _hiddenTickCount = 0;
+                        TrimWorkingSet();
+                    }
+                    return;
+                }
+
+                _hiddenTickCount = 0;
 
                 // Charge / Discharge Wattage & Status Display
                 bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
