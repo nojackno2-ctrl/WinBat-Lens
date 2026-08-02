@@ -1,6 +1,127 @@
 # Project State & Handoff
 
-## IOCTL_BATTERY_QUERY_INFORMATION: the third battery IOCTL (latest)
+## USB-C charging: what the dashboard can and cannot say (latest)
+
+Asked to report "USB charging wattage" while the machine was running off a
+USB-C charger. **The adapter's own wattage is not obtainable**, and that was
+established against this hardware rather than assumed. Every avenue, and how it
+closed:
+
+| avenue | result |
+|---|---|
+| UCM-UCSI ACPI device (`ACPI\USBC000\0`) | present, but its two device interfaces (`{4cedf9cf-…}`, `{ae05a169-…}`) appear nowhere in the public SDK — driver-to-driver only, no documented user-mode IOCTL |
+| `BATTERY_USB_CHARGER_STATUS` (poclass.h) | carries the PD contract flag, port mA and mV — but travels in the `IOCTL_BATTERY_SET_INFORMATION` direction, pushed in by a Charging Arbitration Driver this class of laptop does not have. No matching query level exists |
+| `POWER_ADAPTER_STATUS.MaxOutputPower` | the rated wattage, but batclass.h exposes it only through a **kernel-mode** adapter miniclass callback. The generic Microsoft AC Adapter driver on `ACPI\ACPI0003` does not provide it |
+| battery Customized I/O (`IOCTL_QUERY_CUSTOMIZED_IO_CAPABILITIES`) | the OEM escape hatch. Answers `SupportedInputs = 0`, `SupportedOutputs = 0` — nothing exposed |
+| ASUS ATK WMI (`AsusAtkWmi_WMNB`, `DSTS`) | knows the charge source on a ROG machine, but every query is access-denied unelevated, and this app runs unelevated by design |
+
+So no adapter figure is shown anywhere, consistent with the rest of the
+dashboard: an unobtainable number is left out, not estimated.
+
+### What was added instead — both measured
+
+**1. `PowerSupplyService` — `Windows.System.Power.PowerManager.PowerSupplyStatus`.**
+The one documented, unelevated thing Windows will say about the *supply* rather
+than the pack: `Adequate` / `Inadequate` / `NotPresent`. `Inadequate` is exactly
+the under-powered-PD-charger case.
+
+Reached by **raw WinRT activation** (one IID, one vtable slot) rather than the
+C# projection on purpose: the projection needs a `net8.0-windows10.0.x` target,
+which drags the SDK projection assembly into a single-file bundle whose size and
+cold-start time this project measures and tunes. Measured cost of a read:
+**0.022 us**, so it is taken fresh every tick with no caching. Verified by
+compiling the real shipping file into a harness and driving it exactly as the
+app does — activate on a background warmup thread, read from an STA thread.
+
+**2. Plugged in and still discharging is no longer invisible.**
+This was a real bug. `RealTimePowerService` only ever read a discharge rate when
+`!IsAcOnline`, so a charger that cannot keep up — the pack draining *while the
+cable is in* — fell into the "on AC, battery idle" branch and rendered as
+`-- W` / "市電直供 | 電池未充放電". That is the single most useful number when
+charging over USB-C, and the app was hiding it.
+
+Now `IsChargerDeficit` is set, the shortfall is reported as a measured
+`DischargeRateW`, and it flows through consistently: the headline number, the
+badge (rose — the pack really is being spent, so green would be a lie), the
+60-second chart's discharge trace, the tray icon digits and the tray tooltip.
+Time-remaining in that state comes from pack energy over the measured deficit.
+`BatteryCurrentA` also follows the real direction of flow now, instead of
+assuming AC means charging.
+
+Colour discipline from the previous commit is preserved: rose = power leaving
+the pack, emerald = charging, amber = the supply warning (a caution, not a rate).
+
+## The 1-second tick cost a third of a CPU core
+
+Measured on this machine, window open, steady state: **374 ms of CPU per
+second — 37.4% of one core, burned continuously by a battery monitor.** It is
+now **30 ms/s (3.0%)**, a ~12x cut, with no change to a single displayed value.
+
+### Where it went: one PerformanceCounter per GPU Engine instance
+
+`RealTimePowerService.GetDualGpuUsage` held a `PerformanceCounter` per GPU
+Engine instance and called `NextValue()` on each one, every tick. Every such
+call re-reads the *whole* category's performance data block, so the loop was
+quadratic in the instance count — and Windows exposes one GPU Engine instance
+per process per engine type. **This machine has ~600.**
+
+| per tick | wall | CPU |
+|---|---|---|
+| old: `GetInstanceNames()` + ~600 x `NextValue()` | 354-925 ms | 354-925 ms |
+| new: 1 x `ReadCategory()` | 1-7 ms | ~0-30 ms |
+
+`ReadCategory()` takes one snapshot of every instance in a single pass.
+The per-instance rate is then computed from the previous tick's raw sample with
+`CounterSampleCalculator.ComputeCounterValue`, which is exactly what
+`NextValue()` was doing internally — so the cached `PerformanceCounter` objects
+became a `Dictionary<string, CounterSample>` of last tick's raw samples. The
+"two samples over an interval or the value is always 0" constraint that the old
+cache existed to satisfy is unchanged; only the thing being cached moved.
+
+Verified rather than assumed: both implementations were run against the same
+category over the same intervals and compared per adapter, per engine type.
+Same adapters, same engine types, agreement within 0.35 percentage points
+(pure sampling noise — the two reads cannot be simultaneous). Driving the real
+shipping method afterwards showed the dGPU tracking a live load through 0.4%,
+16.5%, 33.2%, so nothing is stuck at zero.
+
+Worth knowing: this was running on the **UI thread**, in `DispatcherTimer.Tick`.
+The 1-second timer could not always finish its own tick.
+
+Counter names come back localised on some systems, so the English
+`"Utilization Percentage"` key is a preference with a substring search behind
+it, and a missing counter reports 0% rather than a guess.
+
+### And: sweeping sensors nothing reads
+
+`HardwareSensorService` polled the CPU, dGPU, iGPU and battery once a second.
+Only `DgpuPackageW` and `BatteryVoltageV` are ever read by anything — grep the
+solution and `CpuPackageW`, `CpuTempC` and `IgpuPackageW` had no consumer at
+all. `IHardware.Update()` is not free (measured, per sweep: dGPU 15.6 ms of CPU,
+iGPU 6.2 ms, CPU 3.1 ms, battery 0.0 ms), so those were ~9 ms/s of pure waste.
+The dead properties are gone along with the sweeps.
+
+The CPU group is now also off in the `Computer` config. It is the part that
+loads the ring-0 driver, and RAPL reads 0 W unelevated here anyway — the UI has
+not reported CPU package power since the linear estimate was removed. Side
+benefit: **`Computer.Open()` went from 934 ms to 248 ms**, off the warmup
+thread, and the process no longer loads a kernel driver.
+
+Both configurations were opened side by side to confirm the two values that
+matter are identical with the CPU group disabled: GPU Package 23.3 W / 25.9 W
+(live load), battery voltage 15.83 V in both.
+
+### Still on the table
+
+- The 1 Hz sensor sweep (~16 ms/s) is the largest single item left. It could
+  drop to 2 s while minimized to the tray, at the cost of halving the
+  resolution of the history the app records while hidden — a product call, not
+  a performance one, so it was left alone.
+- First call to `GetDualGpuUsage` still costs ~1 s (DXGI enumeration plus the
+  cold registry blob). That already happens on the warmup thread via
+  `RealTimePowerService.Initialize()`, never on the first UI tick.
+
+## IOCTL_BATTERY_QUERY_INFORMATION: the third battery IOCTL
 
 `BatteryTelemetryService` only ever used two of the battery class driver's
 IOCTLs — `QUERY_TAG` and `QUERY_STATUS`. `QUERY_INFORMATION` was untouched, and
@@ -118,8 +239,8 @@ watts — and `maxPowerW` was the maximum across all three series, so whenever t
 GPU woke up the Y axis jumped to 92 W and pressed the charge and discharge lines
 flat onto the floor. Battery and dGPU are now scaled independently: the left
 axis is `Math.Max(35, batteryPeak * 1.15)` as before but battery-only, and the
-dGPU series is plotted against its own maximum with a cyan right-hand axis
-matching the cyan line and legend entry. The right axis is hidden outright when
+dGPU series is plotted against its own maximum with a right-hand axis in the
+dGPU's own colour, matching its line and legend entry. The right axis is hidden when
 no GPU wattage is being measured. Verified live: left axis back to `35 W (100%)`
 where it had been reading 92 W, right axis reading `獨顯 92 W`.
 
@@ -184,6 +305,48 @@ Sizing note for future edits: the right panel's tab strip needs ~750px. At a
 1200px window that leaves the sidebar about 20px of room to grow before the tabs
 wrap — widen the window at the same time if the sidebar needs more.
 
+## The palette, second pass (v1.0.9)
+
+v1.0.8 (below) made each concept use one colour, but the colours themselves were
+arbitrary — amber for discharge, cyan for the dGPU — and half the dashboard was
+outside the rule: the hardware rows, the runtime estimate and the health card
+were painted whatever looked good when they were written. So the page still had
+green meaning "charging" in one card and "power plan" in another, and a pack at
+73.6% health wore the same green ring as one at 100%.
+
+The rule now is **what the colour means, not what it labels**:
+
+| colour | meaning | where |
+|---|---|---|
+| red `#F43F5E` | spending power | discharge headline + badge, discharge line/legend, V\|A while draining, performance power plan, dGPU under load, tray icon |
+| green `#10B981` | gaining or saving power | charge headline + badge, charge line/legend, V\|A while charging, saver power plan, idle dGPU, tray icon |
+| blue `#3B82F6` | the dGPU series | chart line, legend, right-hand axis, the dGPU row's wattage |
+| amber `#F59E0B` | a battery figure that is neither | stored energy, runtime estimate, balanced power plan, pack idle on AC |
+
+Defined once as `PowerDischarge` / `PowerCharge` / `PowerGpu` / `PowerNeutral` in
+`App.xaml`, and repeated as frozen brushes in `MainWindow.xaml.cs` because a
+brush assigned on a timer tick cannot come from a `StaticResource` lookup — the
+two lists have to be kept in step by hand.
+
+What moved off green: the runtime estimate and the `PowrProf` power-plan row,
+both of which were emerald for no reason and diluted "charging". The energy row
+moved off cyan for the same reason with respect to the dGPU.
+
+Health is graded rather than fixed: `HealthGood` / `HealthWarn` / `HealthDanger`
+on the same 80% / 60% cuts `BatteryReportParser` uses for the status wording, so
+the ring, the number, the badge and the label can never disagree. Per-row grading
+in the capacity-history list goes through `HealthGradeBrushConverter`
+(`ConverterParameter=Badge` returns the translucent pill fill).
+
+While colouring the ring it turned out `RingHealthProgress` **had never drawn at
+all**: `StrokeDashArray="360" StrokeDashOffset="360"` put the whole circle inside
+the dash pattern's off half, so the only visible circle was the `#1E293B` track
+behind it. It now draws a real arc — dash units are multiples of the stroke
+thickness, so the 84px circle is `π × 84 / 8 ≈ 33` units and the dash is that
+times the health fraction, followed by a gap long enough never to repeat. The
+ellipse carries a `-90°` `RotateTransform` so the arc starts at twelve o'clock
+instead of three.
+
 ## One colour per meaning (v1.0.8)
 
 Discharge was being drawn in three different colours depending on where you
@@ -247,7 +410,7 @@ whichever rate is actually measured:
 | state | headline |
 |---|---|
 | charging | `+56.1 W` (emerald) |
-| on battery | `-48.9 W` (amber) |
+| on battery | `-48.9 W` (red) |
 | on AC, pack idle | `-- W` |
 
 The tray icon and its tooltip had the same defect and now follow the same rule

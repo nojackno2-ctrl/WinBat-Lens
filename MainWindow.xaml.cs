@@ -52,10 +52,19 @@ namespace WinBatLens
         // runs once per second; allocating fresh SolidColorBrush objects every
         // tick created needless GC pressure. Freezing also lets WPF share them
         // across threads without cloning.
+        // These are the semantic colours from App.xaml, repeated here because a
+        // brush assigned per tick cannot come from a StaticResource lookup.
+        // Keep the two in step: green means charging or saving power, red means
+        // spending it, blue is the dGPU series, amber is a battery figure that
+        // is neither.
         private static readonly SolidColorBrush BrushEmerald = CreateFrozen(MediaColor.FromRgb(0x10, 0xB9, 0x81));
         private static readonly SolidColorBrush BrushEmeraldBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0x10, 0xB9, 0x81));
         private static readonly SolidColorBrush BrushAmber = CreateFrozen(MediaColor.FromRgb(0xF5, 0x9E, 0x0B));
         private static readonly SolidColorBrush BrushAmberBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0xF5, 0x9E, 0x0B));
+        private static readonly SolidColorBrush BrushRose = CreateFrozen(MediaColor.FromRgb(0xF4, 0x3F, 0x5E));
+        private static readonly SolidColorBrush BrushRoseBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0xF4, 0x3F, 0x5E));
+        private static readonly SolidColorBrush BrushSlate = CreateFrozen(MediaColor.FromRgb(0x94, 0xA3, 0xB8));
+        private static readonly SolidColorBrush BrushSlateBadge = CreateFrozen(MediaColor.FromArgb(0x20, 0x94, 0xA3, 0xB8));
         private static readonly SolidColorBrush BrushGridStrong = CreateFrozen(MediaColor.FromArgb(0x20, 0x94, 0xA3, 0xB8));
         private static readonly SolidColorBrush BrushGridFaint = CreateFrozen(MediaColor.FromArgb(0x15, 0x94, 0xA3, 0xB8));
         private static readonly DoubleCollection DashStrong = CreateFrozenDashes(4, 4);
@@ -73,6 +82,48 @@ namespace WinBatLens
             var dashes = new DoubleCollection { a, b };
             dashes.Freeze();
             return dashes;
+        }
+
+        /// <summary>
+        /// The colour for a health percentage. The 80% / 60% boundaries are the
+        /// ones BatteryReportParser uses to pick the status wording, so the ring
+        /// can never show green next to a label that says the pack is degraded.
+        /// </summary>
+        private static SolidColorBrush HealthBrush(double percent) =>
+            percent < 60.0 ? BrushRose : percent < 80.0 ? BrushAmber : BrushEmerald;
+
+        private static SolidColorBrush HealthBadgeBrush(double percent) =>
+            percent < 60.0 ? BrushRoseBadge : percent < 80.0 ? BrushAmberBadge : BrushEmeraldBadge;
+
+        /// <summary>
+        /// Green below <paramref name="idleBelow"/>, red at or above
+        /// <paramref name="busyAtOrAbove"/>, amber in between — the
+        /// saving/spending scale used by the hardware rows.
+        /// </summary>
+        private static SolidColorBrush LoadBrush(double value, double idleBelow, double busyAtOrAbove) =>
+            value < idleBelow ? BrushEmerald : value < busyAtOrAbove ? BrushAmber : BrushRose;
+
+        /// <summary>
+        /// Grades the active Windows power plan by what it costs. Matched on
+        /// both languages because PowrProf hands back whatever the plan is
+        /// named on this machine, and custom OEM plans (ASUS "Performance")
+        /// keep the English word even on a Chinese Windows.
+        /// </summary>
+        private static SolidColorBrush PowerPlanBrush(string? planName)
+        {
+            if (string.IsNullOrWhiteSpace(planName)) return BrushSlate;
+
+            if (planName.Contains("高效能") || planName.Contains("效能") ||
+                planName.Contains("Performance", StringComparison.OrdinalIgnoreCase) ||
+                planName.Contains("Ultimate", StringComparison.OrdinalIgnoreCase))
+                return BrushRose;
+
+            if (planName.Contains("省電") || planName.Contains("節能") ||
+                planName.Contains("Saver", StringComparison.OrdinalIgnoreCase) ||
+                planName.Contains("Eco", StringComparison.OrdinalIgnoreCase))
+                return BrushEmerald;
+
+            return BrushAmber;
         }
 
         public MainWindow()
@@ -245,7 +296,10 @@ namespace WinBatLens
         {
             // Only plot values that were actually measured; an unavailable
             // reading contributes 0 rather than a fabricated curve.
-            double disW = (!state.IsAcOnline && state.IsDischargeRateMeasured) ? state.DischargeRateW : 0.0;
+            // IsDischargeRateMeasured now also covers being plugged into a
+            // charger that cannot keep up, so the shortfall is plotted on the
+            // discharge trace where it belongs instead of vanishing.
+            double disW = state.IsDischargeRateMeasured ? state.DischargeRateW : 0.0;
             double chgW = (state.IsCharging && state.IsChargeRateMeasured) ? state.ChargingRateW : 0.0;
             double gpuW = state.IsDgpuPowerMeasured ? state.DgpuPowerW : 0.0;
 
@@ -483,6 +537,7 @@ namespace WinBatLens
             _livePowerTimer?.Stop();
             try { HardwareSensorService.Shutdown(); } catch { }
             try { BatteryTelemetryService.Shutdown(); } catch { }
+            try { PowerSupplyService.Shutdown(); } catch { }
             try
             {
                 if (_notifyIcon != null)
@@ -618,6 +673,8 @@ namespace WinBatLens
                     string powerStatusStr;
                     if (state.IsCharging && state.IsChargeRateMeasured)
                         powerStatusStr = $"+{state.ChargingRateW:F1}W Charging";
+                    else if (state.IsChargerDeficit)
+                        powerStatusStr = $"-{state.DischargeRateW:F1}W (charger too weak)";
                     else if (!state.IsAcOnline && state.IsDischargeRateMeasured)
                         powerStatusStr = $"-{state.DischargeRateW:F1}W Discharging";
                     else
@@ -634,7 +691,24 @@ namespace WinBatLens
                 // Charge / Discharge Wattage & Status Display
                 bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
 
-                if (state.IsAcOnline)
+                if (state.IsChargerDeficit)
+                {
+                    // Plugged in and still draining. The shortfall is painted in
+                    // the discharge colour because that is exactly what it is —
+                    // the machine is spending battery. Green would read as
+                    // "charging", which is the opposite of what is happening.
+                    TxtLiveDischargeRate.Text = $"-{state.DischargeRateW:F1} W";
+                    TxtLiveDischargeRate.Foreground = BrushRose;
+
+                    BadgeLiveAcState.Background = BrushRoseBadge;
+                    BadgeLiveAcState.BorderBrush = BrushRose;
+                    TxtLiveAcState.Foreground = BrushRose;
+
+                    TxtLiveAcState.Text = en
+                        ? $"🔌⚠️ Charger cannot keep up — battery covering -{state.DischargeRateW:F1}W (measured at the pack)"
+                        : $"🔌⚠️ 外接電源供電不足 — 電池補上 -{state.DischargeRateW:F1}W（電池實測）";
+                }
+                else if (state.IsAcOnline)
                 {
                     // Charging is a real measurement, so it belongs in the
                     // headline. There is deliberately no adapter-input figure:
@@ -674,11 +748,11 @@ namespace WinBatLens
                     TxtLiveDischargeRate.Text = state.IsDischargeRateMeasured
                         ? $"-{state.DischargeRateW:F1} W"
                         : "-- W";
-                    TxtLiveDischargeRate.Foreground = BrushAmber; // Amber
+                    TxtLiveDischargeRate.Foreground = BrushRose; // Red: spending power
 
-                    BadgeLiveAcState.Background = BrushAmberBadge;
-                    BadgeLiveAcState.BorderBrush = BrushAmber;
-                    TxtLiveAcState.Foreground = BrushAmber;
+                    BadgeLiveAcState.Background = BrushRoseBadge;
+                    BadgeLiveAcState.BorderBrush = BrushRose;
+                    TxtLiveAcState.Foreground = BrushRose;
 
                     if (state.IsDischargeRateMeasured)
                     {
@@ -694,6 +768,39 @@ namespace WinBatLens
                     }
                 }
 
+                // Windows' verdict on the charger. It carries no wattage,
+                // because Windows exposes none for the adapter — see
+                // PowerSupplyService for everything that was tried — but "is
+                // the supply keeping up" is the question that actually matters
+                // when a laptop is charging over USB-C.
+                switch (state.SupplyCapability)
+                {
+                    case PowerSupplyCapability.Inadequate:
+                        // Amber, not red: red means power leaving the pack, and
+                        // this line is a warning about the supply, not a rate.
+                        TxtLiveChargerSupply.Text = en
+                            ? "⚠️ Windows reports the external supply as inadequate for this system"
+                            : "⚠️ Windows 判定：外接電源供電能力不足以支撐目前的系統負載";
+                        TxtLiveChargerSupply.Foreground = BrushAmber;
+                        TxtLiveChargerSupply.Visibility = Visibility.Visible;
+                        break;
+
+                    case PowerSupplyCapability.Adequate:
+                        TxtLiveChargerSupply.Text = en
+                            ? "🔌 Windows reports the external supply as adequate. The adapter's own wattage is not exposed by Windows."
+                            : "🔌 Windows 判定：外接電源供電充足（變壓器 / USB-C 充電器本身的瓦數，Windows 並未提供）";
+                        TxtLiveChargerSupply.Foreground = BrushSlate;
+                        TxtLiveChargerSupply.Visibility = Visibility.Visible;
+                        break;
+
+                    default:
+                        // NotPresent means running on battery, and Unknown means
+                        // the API did not answer. Neither says anything worth a
+                        // row, so the line disappears rather than showing filler.
+                        TxtLiveChargerSupply.Visibility = Visibility.Collapsed;
+                        break;
+                }
+
                 // Battery Remaining Time & Level. The watt-hour figure is the
                 // pack's own reading, which has real resolution where the
                 // Windows percentage is a rounded integer.
@@ -704,10 +811,26 @@ namespace WinBatLens
                     ? $"Current Battery Level: {state.BatteryPercent}%{energyPart}"
                     : $"目前電池剩餘電量: {state.BatteryPercent}%{energyPart}";
 
-                // Battery Hardware Telemetry (Voltage / Current)
+                // Battery Hardware Telemetry (Voltage / Current). Coloured by
+                // which way the current is flowing: out of the pack is red,
+                // into it is green, and a pack sitting idle on AC is neither.
                 TxtLiveBatteryTelemetry.Text = state.BatteryTelemetryText;
                 TxtHwTelemetryVal.Text = state.BatteryTelemetryText;
+
+                SolidColorBrush flowBrush = state.IsCharging ? BrushEmerald
+                    : state.IsAcOnline ? BrushAmber
+                    : BrushRose;
+                TxtLiveBatteryTelemetry.Foreground = flowBrush;
+                TxtHwTelemetryVal.Foreground = flowBrush;
+                TxtTelemetrySub.Foreground = flowBrush;
+
+                // Power plan, coloured by what it costs rather than by nothing
+                // at all: performance spends, saver conserves, balanced sits
+                // between the two.
                 TxtHwPowerPlanVal.Text = state.PowerPlanName;
+                SolidColorBrush planBrush = PowerPlanBrush(state.PowerPlanName);
+                TxtHwPowerPlanVal.Foreground = planBrush;
+                TxtHwPowerPlanSub.Foreground = planBrush;
 
                 // Pack temperature, asked of the battery driver itself. Shown
                 // only where the firmware implements the query; where it does
@@ -751,6 +874,17 @@ namespace WinBatLens
                     ? $"{state.DgpuPowerW:F1} W"
                     : "-- W";
 
+                // The load bar follows the same rule as everything else on this
+                // page: green while the card is idling and saving power, red
+                // once it is genuinely drawing. Where the card reports real
+                // watts those are the better signal — an idle-but-hot dGPU can
+                // sit at 0% utilisation and still burn 10 W.
+                SolidColorBrush dgpuBrush = state.IsDgpuPowerMeasured
+                    ? LoadBrush(state.DgpuPowerW, 5.0, 15.0)
+                    : LoadBrush(state.DgpuUsagePercent, 5.0, 40.0);
+                PbDgpuUsage.Foreground = dgpuBrush;
+                TxtDgpuUsageVal.Foreground = dgpuBrush;
+
                 // Live tips. Every wattage quoted here is a real reading; when
                 // nothing real is available the tip says so rather than
                 // inventing a figure.
@@ -758,7 +892,13 @@ namespace WinBatLens
                     ? (en ? $" Discrete GPU {state.DgpuPowerW:F1} W." : $" 獨顯實測 {state.DgpuPowerW:F1} W。")
                     : string.Empty;
 
-                if (state.IsAcOnline)
+                if (state.IsChargerDeficit)
+                {
+                    TxtLivePowerTip.Text = en
+                        ? $"🔌⚠️ Plugged in but still discharging: the charger is short by at least {state.DischargeRateW:F1} W, which the battery is covering.{dgpuPart} Typical of charging over USB-C — a PD charger rated below this machine's draw cannot hold it up. Use a higher-wattage charger, or reduce load, to charge while working."
+                        : $"🔌⚠️ 已接上外接電源，但電池仍在放電：充電器至少差 {state.DischargeRateW:F1} W，缺口由電池補上。{dgpuPart}這是 USB-C 充電最常見的情況 — PD 充電器的瓦數低於本機耗電就撐不住。請改用瓦數更高的充電器，或降低負載才能邊用邊充。";
+                }
+                else if (state.IsAcOnline)
                 {
                     if (state.IsCharging && state.IsChargeRateMeasured)
                     {
@@ -948,6 +1088,42 @@ namespace WinBatLens
             TxtHealthPercentSign.Visibility = metrics.HasBattery ? Visibility.Visible : Visibility.Collapsed;
             TxtStatusLabel.Text = metrics.StatusLabel;
             TxtSummary.Text = metrics.SummaryText;
+
+            // Grade the health card by colour. The ring used to be painted a
+            // fixed green and, with a full-circle dash offset, never drew at
+            // all — so a pack at 73.6% looked exactly like one at 100%.
+            if (metrics.HasBattery)
+            {
+                var healthBrush = HealthBrush(metrics.HealthPercent);
+                RingHealthProgress.Stroke = healthBrush;
+                TxtHealthPercent.Foreground = healthBrush;
+                TxtHealthPercentSign.Foreground = healthBrush;
+                BadgeStatus.Background = HealthBadgeBrush(metrics.HealthPercent);
+                BadgeStatus.BorderBrush = healthBrush;
+                TxtStatusLabel.Foreground = healthBrush;
+
+                // Draw the arc as well as colour it. Dash lengths are multiples
+                // of the stroke thickness, so the 84px circle measures
+                // (π × 84) / 8 ≈ 33 dash units; a dash of that times the health
+                // fraction followed by a gap too long to ever repeat leaves
+                // exactly one arc. The ellipse is rotated -90° in XAML so the
+                // arc starts at the top.
+                const double ringUnits = Math.PI * 84.0 / 8.0;
+                double fraction = Math.Clamp(metrics.HealthPercent / 100.0, 0.0, 1.0);
+                RingHealthProgress.StrokeDashArray = new DoubleCollection { ringUnits * fraction, 1000 };
+                RingHealthProgress.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                // No battery: no grade to show, so the ring goes away rather
+                // than sitting there in a colour that means something.
+                RingHealthProgress.Visibility = Visibility.Collapsed;
+                TxtHealthPercent.Foreground = BrushSlate;
+                TxtHealthPercentSign.Foreground = BrushSlate;
+                BadgeStatus.Background = BrushSlateBadge;
+                BadgeStatus.BorderBrush = BrushSlate;
+                TxtStatusLabel.Foreground = BrushSlate;
+            }
 
             // Specs Grid
             TxtSpecName.Text = specs.Name;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using WinBatLens.Services;
 
 namespace WinBatLens.Models
 {
@@ -149,6 +150,27 @@ namespace WinBatLens.Models
         // machine's real power draw measured at the pack.
         public bool IsDischargeRateMeasured { get; set; }
         public bool IsChargeRateMeasured { get; set; }
+
+        // CHARGER / EXTERNAL SUPPLY
+        // Windows' own verdict on the attached charger, the one thing it will
+        // say about the supply rather than about the pack. See
+        // PowerSupplyService for why the USB-C PD contract — and with it any
+        // real adapter wattage — is not obtainable unelevated.
+        public PowerSupplyCapability SupplyCapability { get; set; } = PowerSupplyCapability.Unknown;
+
+        /// <summary>
+        /// External power is connected and the pack is still draining into the
+        /// machine, so the charger is not covering the current load. This is
+        /// the everyday failure mode of charging a laptop over USB-C: a 65 W
+        /// PD brick cannot hold up a machine drawing more than that, and the
+        /// battery quietly makes up the difference.
+        /// <para>
+        /// DischargeRateW is that shortfall, measured at the pack. It is the
+        /// nearest thing to a real USB-charging wattage this platform will
+        /// give up, and unlike an adapter figure it is a measurement.
+        /// </para>
+        /// </summary>
+        public bool IsChargerDeficit { get; set; }
 
         // NOTE ON WATTAGE
         // Only three power figures exist in this model, and every one of them

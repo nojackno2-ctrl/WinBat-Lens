@@ -14,40 +14,39 @@ namespace WinBatLens.Services
     /// Measured on the development machine (Ryzen + RTX 3060 Laptop):
     /// NVIDIA GPU package power and temperatures work at normal privilege
     /// because NVML is a userspace API, but CPU package power comes from RAPL
-    /// via a kernel driver and reads 0 W unless the process is elevated.
-    /// <see cref="IsCpuPowerAvailable"/> reflects that at runtime rather than
-    /// assuming either way.
+    /// via a kernel driver and reads 0 W unless the process is elevated. The UI
+    /// does not report CPU power for that reason, so the CPU group is not opened
+    /// at all — which also keeps the ring-0 driver out of the process.
+    /// <para>
+    /// Only sensors something actually displays are swept on the timer. An
+    /// <c>IHardware.Update()</c> is not free — measured per sweep on this
+    /// machine: dGPU 15.6 ms of CPU, iGPU 6.2 ms, CPU 3.1 ms, battery 0.0 ms —
+    /// and at one sweep a second the ones feeding nothing were pure cost.
+    /// </para>
     /// </remarks>
     public static class HardwareSensorService
     {
         private static Computer? _computer;
-        private static IHardware? _cpu;
         private static IHardware? _dGpu;
-        private static IHardware? _iGpu;
         private static IHardware? _battery;
 
         private static readonly object _sync = new object();
         private static System.Threading.Timer? _pollTimer;
         private static int _polling;
 
-        // A full sensor sweep measured 85-256 ms on the development machine —
-        // far too slow to sit on the UI thread's 1 s tick. Polling therefore
-        // runs on a background timer and the UI only ever reads cached fields.
+        // A sweep is far too slow to sit on the UI thread's 1 s tick (it was
+        // 85-256 ms when every hardware group was polled, ~16 ms now that only
+        // the dGPU and the battery are). Polling therefore runs on a background
+        // timer and the UI only ever reads cached fields.
         private const int RefreshMs = 1000;
 
         public static bool IsInitialized { get; private set; }
 
-        /// <summary>True when CPU package power is actually being reported.</summary>
-        public static bool IsCpuPowerAvailable { get; private set; }
-
         /// <summary>True when discrete GPU package power is actually being reported.</summary>
         public static bool IsGpuPowerAvailable { get; private set; }
 
-        public static double? CpuPackageW { get; private set; }
-        public static double? CpuTempC { get; private set; }
         public static double? DgpuPackageW { get; private set; }
         public static double? DgpuTempC { get; private set; }
-        public static double? IgpuPackageW { get; private set; }
         public static double? BatteryRateW { get; private set; }
         public static double? BatteryVoltageV { get; private set; }
 
@@ -65,29 +64,28 @@ namespace WinBatLens.Services
                 {
                     // Only the hardware we actually report on. Enabling storage
                     // and motherboard costs real time on Open() and adds
-                    // sensors we never read.
+                    // sensors we never read. The CPU group is off for the same
+                    // reason plus one more: it is the part that loads the ring-0
+                    // driver, and RAPL reads 0 W unelevated on this machine
+                    // anyway. CPU load already comes from a PerformanceCounter.
                     _computer = new Computer
                     {
-                        IsCpuEnabled = true,
+                        IsCpuEnabled = false,
                         IsGpuEnabled = true,
                         IsBatteryEnabled = true,
                     };
 
                     _computer.Open();
 
-                    _cpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Cpu);
                     _battery = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Battery);
                     _dGpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuNvidia)
                             ?? _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuIntel);
-                    _iGpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuAmd);
 
                     // An AMD-only machine has no NVIDIA/Intel part, so the AMD
                     // GPU is the discrete one rather than the integrated one.
-                    if (_dGpu == null && _iGpu != null)
-                    {
-                        _dGpu = _iGpu;
-                        _iGpu = null;
-                    }
+                    // Where a discrete part exists the AMD one is integrated,
+                    // and nothing displays its wattage, so it is never polled.
+                    _dGpu ??= _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuAmd);
 
                     IsInitialized = true;
 
@@ -96,14 +94,7 @@ namespace WinBatLens.Services
                     PollOnce();
                     PollOnce();
 
-                    IsCpuPowerAvailable = CpuPackageW.HasValue;
                     IsGpuPowerAvailable = DgpuPackageW.HasValue;
-
-                    // Updating the CPU hardware walks every core and is the
-                    // single most expensive part of a sweep. Without elevation
-                    // RAPL reports nothing, so there is no reason to pay for it
-                    // — CPU load already comes from a PerformanceCounter.
-                    if (!IsCpuPowerAvailable) _cpu = null;
 
                     DisableValueHistory();
 
@@ -131,21 +122,10 @@ namespace WinBatLens.Services
 
             try
             {
-                UpdateAndRead(_cpu, hw =>
-                {
-                    CpuPackageW = ReadPower(hw, "Package", "CPU Package");
-                    CpuTempC = ReadTemp(hw, "Core (Tctl/Tdie)", "CPU Package", "Core Max", "CPU Cores");
-                });
-
                 UpdateAndRead(_dGpu, hw =>
                 {
                     DgpuPackageW = ReadPower(hw, "GPU Package", "GPU Power", "GPU PPT");
                     DgpuTempC = ReadTemp(hw, "GPU Core", "GPU Hot Spot");
-                });
-
-                UpdateAndRead(_iGpu, hw =>
-                {
-                    IgpuPackageW = ReadPower(hw, "GPU Package", "GPU Power", "GPU SoC");
                 });
 
                 UpdateAndRead(_battery, hw =>
