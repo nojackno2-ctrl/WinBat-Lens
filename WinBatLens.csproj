@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -13,9 +13,9 @@
     <Company>WinBat Lens</Company>
     <Product>WinBat Lens</Product>
     <Description>Windows 電池健康度視覺化儀表板與 powercfg /batteryreport 解析工具</Description>
-    <Version>1.1.1</Version>
-    <AssemblyVersion>1.1.1.0</AssemblyVersion>
-    <FileVersion>1.1.1.0</FileVersion>
+    <Version>1.1.2</Version>
+    <AssemblyVersion>1.1.2.0</AssemblyVersion>
+    <FileVersion>1.1.2.0</FileVersion>
 
     <!-- Memory tuning for a long-running background tray app -->
     <!-- Workstation (non-server) GC keeps a single small heap instead of one per CPU core -->
@@ -40,6 +40,12 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests\**" />
+    <EmbeddedResource Remove="tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Real hardware sensors (CPU package power via RAPL, GPU power via NVML/ADL).

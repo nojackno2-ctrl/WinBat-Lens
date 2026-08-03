@@ -1,3 +1,9 @@
+param(
+    [string]$SigningCertificate = $env:WINBAT_SIGNING_CERTIFICATE,
+    [string]$SigningPassword = $env:WINBAT_SIGNING_PASSWORD,
+    [string]$TimestampUrl = "http://timestamp.digicert.com"
+)
+
 # WinBat Lens Release Packaging Script
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -5,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = $PSScriptRoot
 Set-Location $ProjectRoot
 
-$Version = "1.1.1"
+$Version = "1.1.2"
 $DistDir = Join-Path $ProjectRoot "dist"
 $PortableDirName = "WinBatLens_v$Version`_Portable_x64"
 $PortableDir = Join-Path $DistDir $PortableDirName
@@ -25,12 +31,12 @@ if (Test-Path $DistDir) {
 New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
 
 # 2. Dotnet Publish Single-File Self-Contained Release
-Write-Host "[2/5] Publishing .NET 8 WPF Single-File Executable..." -ForegroundColor Yellow
+Write-Host "[2/5] Publishing .NET 10 WPF Single-File Executable..." -ForegroundColor Yellow
 # Packaging flags (single-file, self-contained, ReadyToRun, compression) all
 # live in WinBatLens.csproj so this script and a plain `dotnet publish` agree.
 dotnet publish WinBatLens.csproj -c Release
 
-$PublishExePath = Join-Path $ProjectRoot "bin\Release\net8.0-windows\win-x64\publish\WinBatLens.exe"
+$PublishExePath = Join-Path $ProjectRoot "bin\Release\net10.0-windows\win-x64\publish\WinBatLens.exe"
 if (-not (Test-Path $PublishExePath)) {
     throw "Publish failed: $PublishExePath does not exist!"
 }
@@ -82,7 +88,47 @@ if ($IsccPath) {
     Write-Warning "Inno Setup Compiler (ISCC.exe) not found. Installer setup generation skipped."
 }
 
-# 5. Output Summary
+# 5. Optional Authenticode signing and verification
+$SigningRequested = -not [string]::IsNullOrWhiteSpace($SigningCertificate)
+$SignToolPath = $null
+$SignToolCommand = Get-Command signtool.exe -ErrorAction SilentlyContinue
+if ($SignToolCommand) { $SignToolPath = $SignToolCommand.Source }
+if (-not $SignToolPath) {
+    $SdkRoots = @(
+        "${env:ProgramFiles(x86)}\Windows Kits\10\bin",
+        "$env:ProgramFiles\Windows Kits\10\bin"
+    ) | Where-Object { $_ -and (Test-Path $_) }
+    foreach ($sdkRoot in $SdkRoots) {
+        $candidate = Get-ChildItem -LiteralPath $sdkRoot -Filter signtool.exe -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+        if ($candidate) {
+            $SignToolPath = $candidate.FullName
+            break
+        }
+    }
+}
+
+if ($SigningRequested) {
+    if (-not $SignToolPath) { throw "Signing was requested but signtool.exe was not found." }
+    if (-not (Test-Path -LiteralPath $SigningCertificate)) { throw "Signing certificate was not found: $SigningCertificate" }
+
+    $signArgs = @("sign", "/fd", "SHA256", "/td", "SHA256", "/tr", $TimestampUrl, "/f", $SigningCertificate)
+    if (-not [string]::IsNullOrWhiteSpace($SigningPassword)) { $signArgs += @("/p", $SigningPassword) }
+
+    Get-ChildItem -LiteralPath $DistDir -Filter *.exe -File | ForEach-Object {
+        Write-Host "  Signing $($_.Name)..." -ForegroundColor Yellow
+        & $SignToolPath @signArgs $_.FullName
+        if ($LASTEXITCODE -ne 0) { throw "signtool sign failed for $($_.FullName)" }
+
+        & $SignToolPath verify /pa /all $_.FullName
+        if ($LASTEXITCODE -ne 0) { throw "signtool verify failed for $($_.FullName)" }
+    }
+} else {
+    Write-Warning "No signing certificate supplied. Set WINBAT_SIGNING_CERTIFICATE (and optionally WINBAT_SIGNING_PASSWORD) to sign and verify release EXEs."
+}
+
+# 6. Output Summary
 Write-Host "`n=========================================" -ForegroundColor Cyan
 Write-Host " Release Packaging Finished Successfully! " -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan

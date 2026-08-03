@@ -5,6 +5,8 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinBatLens", "WinBatLens.csproj", "{8F124E5B-0B86-42E1-987F-6E35C83E4C02}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinBatLens.Tests", "tests\WinBatLens.Tests\WinBatLens.Tests.csproj", "{C4E6B0D0-2B28-4D2C-8D99-1E9C5A1E6B4F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{8F124E5B-0B86-42E1-987F-6E35C83E4C02}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8F124E5B-0B86-42E1-987F-6E35C83E4C02}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8F124E5B-0B86-42E1-987F-6E35C83E4C02}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C4E6B0D0-2B28-4D2C-8D99-1E9C5A1E6B4F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4E6B0D0-2B28-4D2C-8D99-1E9C5A1E6B4F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4E6B0D0-2B28-4D2C-8D99-1E9C5A1E6B4F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4E6B0D0-2B28-4D2C-8D99-1E9C5A1E6B4F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

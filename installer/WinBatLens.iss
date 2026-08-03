@@ -1,6 +1,6 @@
 ; WinBat Lens Inno Setup Script
 #define MyAppName "WinBat Lens"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "WinBat Lens Team"
 #define MyAppExeName "WinBatLens.exe"
 #define MyAppId "{{D2B3F0E1-8E4B-4D2A-9A2C-5F1B3E7A902A}"
@@ -47,7 +47,7 @@ Name: "startmenuicon"; Description: "{cm:CreateStartMenuIcon}"; GroupDescription
 Name: "autostart"; Description: "{cm:AutoStartTask}"; GroupDescription: "{cm:StartupOptions}"
 
 [Files]
-Source: "..\bin\Release\net8.0-windows\win-x64\publish\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\bin\Release\net10.0-windows\win-x64\publish\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 

@@ -1,3 +1,17 @@
+## 📈 WinBat Lens v1.1.2
+
+### 工程可靠性與效能
+
+- 升級至 .NET 10 LTS，並同步更新 Release、Inno Setup 與發行腳本路徑。
+- 即時硬體取樣移至背景工作，避免 WMI、GPU Performance Counter 或 DXGI 延遲阻塞 WPF UI。
+- 視窗顯示時維持 1 秒取樣；縮至系統托盤後改為 5 秒，並保留恢復時的最新快照。
+- 新增 BatteryReportParser 單元測試與 Windows GitHub Actions CI。
+- README 改為只描述能由目前硬體 API 證明的資料，移除變壓器額定瓦數與虛構系統總功耗敘述。
+
+### 發行注意事項
+
+v1.1.2 的 EXE 與安裝程式仍需在發行環境提供 Authenticode 憑證或簽章服務後簽署。未簽章檔案可能觸發 Windows SmartScreen 提示；簽章流程會驗證檔案並加入 RFC 3161 時間戳。
+
 ## 📈 WinBat Lens v1.1.1
 
 波形圖的放電、充電與獨顯功耗現在共用同一個瓦數刻度。移除獨顯專用的右側刻度後，相同高度永遠代表相同 W，能直接比較整機電池放電與獨顯功耗。
