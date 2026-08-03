@@ -1,9 +1,14 @@
 # Project State & Handoff
 
-## v1.1.2 quality upgrade (committed locally, not published)
+## v1.1.2 quality upgrade merged and released
 
-The requested quality pass is implemented and committed as `f8fc5f3` on
-`agent/v1.1.2-quality`. The worktree was clean before this pass;
+The requested quality pass was committed as `94ace83` on
+`agent/v1.1.2-quality`, reviewed in PR #2, and merged into `main` as
+`4dc33ad49c87c74eaf1ce920de164f61497da04d`. The existing v1.1.1 branch was
+reviewed and merged first through PR #1. The public v1.1.2 release is:
+https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v1.1.2
+
+The worktree was clean before this pass;
 all changes below are part of the same intended v1.1.2 scope:
 
 - `WinBatLens.csproj`, `build-release.ps1` and `installer/WinBatLens.iss` now
@@ -28,9 +33,15 @@ all changes below are part of the same intended v1.1.2 scope:
 Validation completed locally: Debug and Release solution builds pass with 0
 warnings / 0 errors; all 4 parser tests pass; PowerShell syntax parses; .NET 10
 single-file publish and Inno Setup v6.7.3 produce all three v1.1.2 artifacts.
-The local packages are currently unsigned because no signing certificate was
-provided. GitHub publication/PR merge is blocked until `gh auth status` is
-repaired: the configured token for `nojackno2-ctrl` is invalid.
+Both Windows CI runs on PR #2 passed before merge. The public EXEs are
+unsigned because no Authenticode certificate was provided; the GitHub Release
+notes state this explicitly.
+
+| asset | bytes | SHA-256 |
+|---|---:|---|
+| `WinBatLens_v1.1.2_Portable_x64.exe` | 85,571,647 | `B77EDC64BF082C8F0B6395867DF73E68D9EE970D3A7F7FF3CB4A297559EA5AC1` |
+| `WinBatLens_v1.1.2_Portable_x64.zip` | 79,387,508 | `33F5C7A88AD738143DE7FBDFD46E328120C558F1DBBF6174FE67711977E1758C` |
+| `WinBatLens_v1.1.2_Setup_x64.exe` | 80,116,571 | `5DE2BE07A051682F67FC1249945F50CF662BCE159931C2686FC831B08BE207AF` |
 
 ## v1.1.1 GitHub release published
 
