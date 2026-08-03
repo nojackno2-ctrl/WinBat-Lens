@@ -1,5 +1,48 @@
 # Project State & Handoff
 
+## v1.1.1 GitHub release published
+
+The shared-scale waveform change and 1.1.1 version metadata were committed as
+`a4823aaca108d6502b4f4be1e935889fb60e3d9c` on branch
+`agent/unify-waveform-scale-v1.1.1`; draft PR #1 targets `main`. Annotated tag
+`v1.1.1` resolves exactly to that built commit. The final public, non-prerelease
+GitHub Release is the repository's latest release:
+https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v1.1.1
+
+`build-release.ps1` needed process-scoped `-ExecutionPolicy Bypass` because the
+machine blocks scripts by default. The final package passed Release publish,
+Inno Setup compilation, asset name/count, file-version, ZIP-content and an
+8-second hidden startup smoke test. GitHub reported the same SHA-256 digests as
+the local files:
+
+| asset | bytes | SHA-256 |
+|---|---:|---|
+| `WinBatLens_v1.1.1_Portable_x64.exe` | 80,454,959 | `3B0B3513ABD37F2EB3552002FD4F7DE695416709F66E29981A6A50BDD7E8279A` |
+| `WinBatLens_v1.1.1_Portable_x64.zip` | 74,454,105 | `553F082B27CB8F9F281F196FC409F86F3F146F1B0F1B4BBC5394F2BD01EDEC33` |
+| `WinBatLens_v1.1.1_Setup_x64.exe` | 75,315,533 | `E60F1A7C8C730AFD9E1B49584258B72FAF4BBB450A549F1CF8A138A440C8436E` |
+
+Both EXEs remain unsigned, the repository's known distribution limitation.
+The GitHub App could not create the PR (`403 Resource not accessible by
+integration`), so the authenticated `gh` fallback was used as prescribed.
+After the final documentation push, local and remote branch heads matched;
+`gh pr checks 1` reported no checks on the branch, so there was no remote CI run
+to await or claim as passed.
+
+## Waveform dGPU / battery shared scale (current task)
+
+The 60-second waveform now plots discharge, charge and measured dGPU power
+against one shared wattage maximum. The separate blue right-hand dGPU axis was
+removed: equal wattages now always appear at equal heights, so pack draw and
+dGPU draw can be compared directly. The scale retains the 35 W floor and 15%
+headroom, but its peak is calculated across all three series.
+
+Changed: `MainWindow.xaml` and `MainWindow.xaml.cs`. Debug and Release builds
+both pass with 0 warnings / 0 errors. Source assertions confirm that all former
+right-axis names are gone and `GpuW` is divided by the same `maxPowerW` used by
+charge/discharge. Live visual QA was attempted with Windows app automation, but
+launch approval timed out before the Debug executable opened; no new rendered
+screenshot was obtained in this task.
+
 ## USB-C charging: what the dashboard can and cannot say (latest)
 
 Asked to report "USB charging wattage" while the machine was running off a
@@ -233,16 +276,12 @@ or charging; their inputs are all confirmed readable.
 
 ### Two fixes that came out of looking at the running app
 
-**The chart had one axis for two very different quantities.** A loaded discrete
-GPU draws an order of magnitude more than the pack — 76 W against a handful of
-watts — and `maxPowerW` was the maximum across all three series, so whenever the
-GPU woke up the Y axis jumped to 92 W and pressed the charge and discharge lines
-flat onto the floor. Battery and dGPU are now scaled independently: the left
-axis is `Math.Max(35, batteryPeak * 1.15)` as before but battery-only, and the
-dGPU series is plotted against its own maximum with a right-hand axis in the
-dGPU's own colour, matching its line and legend entry. The right axis is hidden when
-no GPU wattage is being measured. Verified live: left axis back to `35 W (100%)`
-where it had been reading 92 W, right axis reading `獨顯 92 W`.
+**The chart briefly used independent battery and dGPU axes.** That made small
+battery changes easier to see beside a heavily loaded GPU, but identical chart
+heights represented different wattages and could not be compared directly. Per
+the latest product decision, discharge, charge and dGPU are back on one shared
+W axis. A high peak may make a smaller trace flatter, but its height now always
+has one unambiguous wattage meaning.
 
 **Whole-number health percentages did not line up.** `CapacityHistoryItem.
 HealthPercent` is a double, so 74.0 rendered as `74` in a column of `73.6`s. The
@@ -320,7 +359,7 @@ The rule now is **what the colour means, not what it labels**:
 |---|---|---|
 | red `#F43F5E` | spending power | discharge headline + badge, discharge line/legend, V\|A while draining, performance power plan, dGPU under load, tray icon |
 | green `#10B981` | gaining or saving power | charge headline + badge, charge line/legend, V\|A while charging, saver power plan, idle dGPU, tray icon |
-| blue `#3B82F6` | the dGPU series | chart line, legend, right-hand axis, the dGPU row's wattage |
+| blue `#3B82F6` | the dGPU series | chart line, legend, the dGPU row's wattage |
 | amber `#F59E0B` | a battery figure that is neither | stored energy, runtime estimate, balanced power plan, pack idle on AC |
 
 Defined once as `PowerDischarge` / `PowerCharge` / `PowerGpu` / `PowerNeutral` in

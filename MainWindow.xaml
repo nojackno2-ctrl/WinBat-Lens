@@ -340,29 +340,8 @@
                                                     <TextBlock x:Name="TxtYAxis0" Grid.Row="4" Text="0 W (0%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Bottom"/>
                                                 </Grid>
 
-                                                <!-- dGPU Y-Axis Scale Labels Overlay (Right Side). The
-                                                     discrete GPU runs an order of magnitude above battery
-                                                     power under load, so it gets its own scale rather than
-                                                     flattening the battery lines against the floor. Blue
-                                                     ties these numbers to the blue dGPU line and legend.
-                                                     Hidden outright when no GPU wattage is being measured. -->
-                                                <Grid x:Name="GridGpuAxis" VerticalAlignment="Stretch" HorizontalAlignment="Right" Margin="0,4,8,4" IsHitTestVisible="False" Visibility="Collapsed">
-                                                    <Grid.RowDefinitions>
-                                                        <RowDefinition Height="*"/>
-                                                        <RowDefinition Height="*"/>
-                                                        <RowDefinition Height="*"/>
-                                                        <RowDefinition Height="*"/>
-                                                        <RowDefinition Height="Auto"/>
-                                                    </Grid.RowDefinitions>
-
-                                                    <TextBlock x:Name="TxtGpuAxis100" Grid.Row="0" Text="獨顯 35 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtGpuAxis75" Grid.Row="1" Text="26 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtGpuAxis50" Grid.Row="2" Text="18 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtGpuAxis25" Grid.Row="3" Text="9 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtGpuAxis0" Grid.Row="4" Text="0 W" FontSize="10" Foreground="{StaticResource PowerGpu}" FontFamily="Consolas, Segoe UI" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
-                                                </Grid>
-
-                                                <!-- Separate Polylines for Discharge (red), Charge (green), GPU (blue) -->
+                                                <!-- Discharge, charge and dGPU share this single wattage
+                                                     scale so their heights are directly comparable. -->
                                                 <Polyline x:Name="PolylineDischarge" Stroke="{StaticResource PowerDischarge}" StrokeThickness="2" StrokeLineJoin="Round"/>
                                                 <Polyline x:Name="PolylineCharge" Stroke="{StaticResource PowerCharge}" StrokeThickness="2.5" StrokeLineJoin="Round"/>
                                                 <!-- The CPU polyline was removed along with CPU wattage: it
