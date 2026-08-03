@@ -40,6 +40,15 @@ namespace WinBatLens.Services
         // timer and the UI only ever reads cached fields.
         private const int RefreshMs = 1000;
 
+        // While the window is hidden in the tray the monitoring loop itself
+        // only samples every 5 s, so sweeping the sensors five times per
+        // consumed reading was pure waste — and this sweep is the single
+        // largest piece of background CPU the app spends (~16 ms of it a
+        // second, forever, on a machine nobody is looking at).
+        private const int IdleRefreshMs = 5000;
+
+        private static int _currentIntervalMs = RefreshMs;
+
         public static bool IsInitialized { get; private set; }
 
         /// <summary>True when discrete GPU package power is actually being reported.</summary>
@@ -98,7 +107,13 @@ namespace WinBatLens.Services
 
                     DisableValueHistory();
 
-                    _pollTimer = new System.Threading.Timer(_ => PollOnce(), null, RefreshMs, RefreshMs);
+                    int interval = System.Threading.Volatile.Read(ref _currentIntervalMs);
+                    _pollTimer = new System.Threading.Timer(_ => PollOnce(), null, interval, interval);
+
+                    // A SetIdleMode call that landed while the stack was being
+                    // opened found no timer to retarget, so honour it now.
+                    interval = System.Threading.Volatile.Read(ref _currentIntervalMs);
+                    try { _pollTimer.Change(interval, interval); } catch (ObjectDisposedException) { }
                 }
                 catch (Exception ex)
                 {
@@ -108,6 +123,32 @@ namespace WinBatLens.Services
                     IsInitialized = false;
                 }
             }
+        }
+
+        /// <summary>
+        /// Matches the sweep cadence to how often anything actually reads the
+        /// values: 1 s while the dashboard is on screen, 5 s once it is hidden
+        /// in the tray. Safe to call before <see cref="Initialize"/> — the
+        /// chosen period is remembered and applied when the timer starts.
+        /// </summary>
+        public static void SetIdleMode(bool idle)
+        {
+            int interval = idle ? IdleRefreshMs : RefreshMs;
+            if (System.Threading.Interlocked.Exchange(ref _currentIntervalMs, interval) == interval)
+                return;
+
+            // Deliberately outside _sync: Initialize can hold that lock for
+            // seconds while it opens the sensor stack, and this is called from
+            // the UI thread on minimize/restore, which must never block on it.
+            // Timer.Change is itself thread-safe, and a timer that has not been
+            // created yet picks the interval up when Initialize starts it.
+            var timer = _pollTimer;
+            if (timer == null) return;
+
+            // Restoring the window asks for fresh values, so the first fast
+            // sweep is due immediately rather than a second later.
+            try { timer.Change(idle ? interval : 0, interval); }
+            catch (ObjectDisposedException) { }
         }
 
         /// <summary>

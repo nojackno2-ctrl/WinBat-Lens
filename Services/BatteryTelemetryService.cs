@@ -169,6 +169,14 @@ namespace WinBatLens.Services
 
         private static Guid _batteryClassGuid = new("72631e54-78a4-11d0-bcf7-00aa00b7b32a");
 
+        // Fixed struct sizes, resolved once. Marshal.SizeOf<T>() is not free
+        // enough to call four times a second forever.
+        private static readonly int WaitStatusSize = Marshal.SizeOf<BATTERY_WAIT_STATUS>();
+        private static readonly int StatusSize = Marshal.SizeOf<BATTERY_STATUS>();
+        private static readonly int QueryInfoSize = Marshal.SizeOf<BATTERY_QUERY_INFORMATION>();
+        private static readonly int BatteryInfoSize = Marshal.SizeOf<BATTERY_INFORMATION>();
+        private static readonly int ManufactureDateSize = Marshal.SizeOf<BATTERY_MANUFACTURE_DATE>();
+
         private static readonly object _sync = new object();
         private static IntPtr _handle = InvalidHandle;
         private static uint _tag;
@@ -306,30 +314,21 @@ namespace WinBatLens.Services
         {
             status = default;
 
+            // Every struct here is blittable, so the P/Invoke marshaller can
+            // pin the locals and hand the driver a pointer straight to the
+            // stack. The previous AllocHGlobal / StructureToPtr / PtrToStructure
+            // round-trip put two native allocations and two struct copies on
+            // the once-a-second path for no benefit.
             var wait = new BATTERY_WAIT_STATUS { BatteryTag = _tag };
-            int inSize = Marshal.SizeOf<BATTERY_WAIT_STATUS>();
-            int outSize = Marshal.SizeOf<BATTERY_STATUS>();
-
-            IntPtr inBuf = Marshal.AllocHGlobal(inSize);
-            IntPtr outBuf = Marshal.AllocHGlobal(outSize);
             try
             {
-                Marshal.StructureToPtr(wait, inBuf, false);
-                if (!DeviceIoControl(_handle, IOCTL_BATTERY_QUERY_STATUS, inBuf, (uint)inSize,
-                                     outBuf, (uint)outSize, out _, IntPtr.Zero))
-                    return false;
-
-                status = Marshal.PtrToStructure<BATTERY_STATUS>(outBuf);
-                return true;
+                return DeviceIoControl(_handle, IOCTL_BATTERY_QUERY_STATUS,
+                                       ref wait, (uint)WaitStatusSize,
+                                       out status, (uint)StatusSize, out _, IntPtr.Zero);
             }
             catch
             {
                 return false;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(inBuf);
-                Marshal.FreeHGlobal(outBuf);
             }
         }
 
@@ -442,34 +441,34 @@ namespace WinBatLens.Services
         private static bool TryQueryBatteryInformation(out BATTERY_INFORMATION info)
         {
             info = default;
+            if (_handle == InvalidHandle) return false;
 
-            int outSize = Marshal.SizeOf<BATTERY_INFORMATION>();
-            IntPtr outBuf = Marshal.AllocHGlobal(outSize);
+            var query = NewQuery(LevelBatteryInformation, 0);
             try
             {
-                if (!QueryInfoLevel(LevelBatteryInformation, 0, outBuf, outSize, out _)) return false;
-                info = Marshal.PtrToStructure<BATTERY_INFORMATION>(outBuf);
-                return true;
+                return DeviceIoControl(_handle, IOCTL_BATTERY_QUERY_INFORMATION,
+                                       ref query, (uint)QueryInfoSize,
+                                       out info, (uint)BatteryInfoSize, out _, IntPtr.Zero);
             }
             catch
             {
                 return false;
             }
-            finally
-            {
-                Marshal.FreeHGlobal(outBuf);
-            }
         }
 
         private static DateTime? QueryManufactureDate()
         {
-            int outSize = Marshal.SizeOf<BATTERY_MANUFACTURE_DATE>();
-            IntPtr outBuf = Marshal.AllocHGlobal(outSize);
+            if (_handle == InvalidHandle) return null;
+
+            var query = NewQuery(LevelManufactureDate, 0);
             try
             {
-                if (!QueryInfoLevel(LevelManufactureDate, 0, outBuf, outSize, out _)) return null;
+                if (!DeviceIoControl(_handle, IOCTL_BATTERY_QUERY_INFORMATION,
+                                     ref query, (uint)QueryInfoSize,
+                                     out BATTERY_MANUFACTURE_DATE date, (uint)ManufactureDateSize,
+                                     out _, IntPtr.Zero))
+                    return null;
 
-                var date = Marshal.PtrToStructure<BATTERY_MANUFACTURE_DATE>(outBuf);
                 if (date.Year < 1990 || date.Year > 2100) return null;
                 if (date.Month < 1 || date.Month > 12) return null;
                 if (date.Day < 1 || date.Day > 31) return null;
@@ -479,10 +478,6 @@ namespace WinBatLens.Services
             catch
             {
                 return null;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(outBuf);
             }
         }
 
@@ -509,58 +504,58 @@ namespace WinBatLens.Services
             }
         }
 
+        /// <summary>
+        /// The temperature and estimated-runtime levels, both of which answer a
+        /// single 32-bit value. Called on every tick, so like the status query
+        /// it marshals through pinned locals rather than the heap.
+        /// </summary>
         private static bool TryQueryInfoUInt32(uint level, out uint value, int atRate = 0)
         {
             value = 0;
+            if (_handle == InvalidHandle) return false;
 
-            IntPtr outBuf = Marshal.AllocHGlobal(4);
+            var query = NewQuery(level, atRate);
             try
             {
-                if (!QueryInfoLevel(level, atRate, outBuf, 4, out _)) return false;
-                value = (uint)Marshal.ReadInt32(outBuf);
-                return true;
+                return DeviceIoControl(_handle, IOCTL_BATTERY_QUERY_INFORMATION,
+                                       ref query, (uint)QueryInfoSize,
+                                       out value, sizeof(uint), out _, IntPtr.Zero);
             }
             catch
             {
                 return false;
             }
-            finally
-            {
-                Marshal.FreeHGlobal(outBuf);
-            }
         }
 
-        /// <summary>
-        /// One IOCTL_BATTERY_QUERY_INFORMATION call. Callers hold _sync and have
-        /// already checked that the handle is open.
-        /// </summary>
-        private static bool QueryInfoLevel(uint level, int atRate, IntPtr outBuf, int outSize, out uint bytesReturned)
-        {
-            bytesReturned = 0;
-            if (_handle == InvalidHandle) return false;
-
-            var query = new BATTERY_QUERY_INFORMATION
+        private static BATTERY_QUERY_INFORMATION NewQuery(uint level, int atRate) =>
+            new BATTERY_QUERY_INFORMATION
             {
                 BatteryTag = _tag,
                 InformationLevel = level,
                 AtRate = atRate,
             };
 
-            int inSize = Marshal.SizeOf<BATTERY_QUERY_INFORMATION>();
-            IntPtr inBuf = Marshal.AllocHGlobal(inSize);
+        /// <summary>
+        /// One IOCTL_BATTERY_QUERY_INFORMATION call into a caller-owned native
+        /// buffer, for the variable-length string levels. Those are read once
+        /// per pack rather than per tick, so the buffer stays on the heap.
+        /// Callers hold _sync and have already checked that the handle is open.
+        /// </summary>
+        private static bool QueryInfoLevel(uint level, int atRate, IntPtr outBuf, int outSize, out uint bytesReturned)
+        {
+            bytesReturned = 0;
+            if (_handle == InvalidHandle) return false;
+
+            var query = NewQuery(level, atRate);
             try
             {
-                Marshal.StructureToPtr(query, inBuf, false);
-                return DeviceIoControl(_handle, IOCTL_BATTERY_QUERY_INFORMATION, inBuf, (uint)inSize,
+                return DeviceIoControl(_handle, IOCTL_BATTERY_QUERY_INFORMATION,
+                                       ref query, (uint)QueryInfoSize,
                                        outBuf, (uint)outSize, out bytesReturned, IntPtr.Zero);
             }
             catch
             {
                 return false;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(inBuf);
             }
         }
 
@@ -590,25 +585,19 @@ namespace WinBatLens.Services
         private static bool TryQueryTag(IntPtr h, out uint tag)
         {
             tag = 0;
-            IntPtr inBuf = Marshal.AllocHGlobal(4);
-            IntPtr outBuf = Marshal.AllocHGlobal(4);
+            uint timeout = 0;    // zero timeout: do not wait
             try
             {
-                Marshal.WriteInt32(inBuf, 0);   // zero timeout: do not wait
-                if (!DeviceIoControl(h, IOCTL_BATTERY_QUERY_TAG, inBuf, 4, outBuf, 4, out _, IntPtr.Zero))
+                if (!DeviceIoControl(h, IOCTL_BATTERY_QUERY_TAG, ref timeout, sizeof(uint),
+                                     out uint value, sizeof(uint), out _, IntPtr.Zero))
                     return false;
 
-                tag = (uint)Marshal.ReadInt32(outBuf);
+                tag = value;
                 return tag != 0;
             }
             catch
             {
                 return false;
-            }
-            finally
-            {
-                Marshal.FreeHGlobal(inBuf);
-                Marshal.FreeHGlobal(outBuf);
             }
         }
 
@@ -761,10 +750,46 @@ namespace WinBatLens.Services
         private static extern IntPtr CreateFile(string fileName, uint access, uint shareMode,
                                                 IntPtr security, uint disposition, uint flags, IntPtr template);
 
+        // One overload per struct pair actually used. All of these types are
+        // blittable, so each call marshals as a pinned pointer to a stack local
+        // with no copy, no native allocation and no reflection.
+
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool DeviceIoControl(IntPtr device, uint controlCode,
-                                                   IntPtr inBuffer, uint inSize,
+                                                   ref BATTERY_WAIT_STATUS inBuffer, uint inSize,
+                                                   out BATTERY_STATUS outBuffer, uint outSize,
+                                                   out uint bytesReturned, IntPtr overlapped);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool DeviceIoControl(IntPtr device, uint controlCode,
+                                                   ref BATTERY_QUERY_INFORMATION inBuffer, uint inSize,
+                                                   out BATTERY_INFORMATION outBuffer, uint outSize,
+                                                   out uint bytesReturned, IntPtr overlapped);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool DeviceIoControl(IntPtr device, uint controlCode,
+                                                   ref BATTERY_QUERY_INFORMATION inBuffer, uint inSize,
+                                                   out BATTERY_MANUFACTURE_DATE outBuffer, uint outSize,
+                                                   out uint bytesReturned, IntPtr overlapped);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool DeviceIoControl(IntPtr device, uint controlCode,
+                                                   ref BATTERY_QUERY_INFORMATION inBuffer, uint inSize,
+                                                   out uint outBuffer, uint outSize,
+                                                   out uint bytesReturned, IntPtr overlapped);
+
+        /// <summary>The variable-length string levels, into a native buffer.</summary>
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool DeviceIoControl(IntPtr device, uint controlCode,
+                                                   ref BATTERY_QUERY_INFORMATION inBuffer, uint inSize,
                                                    IntPtr outBuffer, uint outSize,
+                                                   out uint bytesReturned, IntPtr overlapped);
+
+        /// <summary>IOCTL_BATTERY_QUERY_TAG: a timeout in, a tag out.</summary>
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool DeviceIoControl(IntPtr device, uint controlCode,
+                                                   ref uint inBuffer, uint inSize,
+                                                   out uint outBuffer, uint outSize,
                                                    out uint bytesReturned, IntPtr overlapped);
 
         [DllImport("kernel32.dll", SetLastError = true)]
