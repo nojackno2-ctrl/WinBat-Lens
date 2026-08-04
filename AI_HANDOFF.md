@@ -1,5 +1,126 @@
 # Project State & Handoff
 
+## v1.1.3 release pipeline
+
+Release artifacts are now built by GitHub Actions rather than only by hand.
+`.github/workflows/release.yml` fires on a `v*` tag, runs the very same
+`build-release.ps1` on `windows-latest` (with Inno Setup installed via choco so
+the installer is never silently skipped), and attaches all three artifacts to a
+GitHub Release.
+
+Guards, because a bad release is expensive to retract:
+- The tag, `build-release.ps1`, `WinBatLens.csproj` and `installer/WinBatLens.iss`
+  versions must all agree, checked **before** the build starts.
+- All three expected artifact filenames must exist before anything is published.
+- Release notes come from `.github/release-notes/<tag>.md`, so the published
+  text is reviewed in the same pull request as the code it describes.
+- A release is marked pre-release when the tag carries a suffix (`v1.2.0-rc1`)
+  or its notes file contains a `<!-- prerelease -->` marker. Future normal tags
+  publish as normal releases; the flag is not hardcoded.
+
+v1.1.3 itself is tagged pre-release on purpose: it is the memory/CPU pass
+below, which reworks hardware-read paths that CI cannot exercise (the runner has
+no battery, no discrete GPU and no GPU Engine counters). Promote it to latest
+from the GitHub UI once it has been confirmed on real hardware.
+
+Version bumped to 1.1.3 in `WinBatLens.csproj`, `build-release.ps1`,
+`installer/WinBatLens.iss` and `README.md`.
+
+
+## Memory + CPU optimization pass (latest)
+
+Goal: cut what this always-on tray monitor costs per tick, in both allocations
+and CPU, without changing a single number the dashboard reports. No display
+behaviour changed — every reading, cadence and label is what it was.
+
+### Per-tick hot path (`Services/RealTimePowerService.cs`)
+1. **GPU Engine instance names are parsed once, not ~600 times a second.**
+   The sweep used to lower-case every instance name and take two `Substring`s
+   from it on every tick — roughly 1,800 throwaway strings a second, all
+   identical to the previous second's. The LUID/engine-type split is now cached
+   per instance name (`_gpuEngineKeys`), pruned alongside `_gpuEngineSamples`,
+   and `ExtractToken` matches case-insensitively so nothing is lower-cased.
+   Parsing is also deferred until an instance reports non-zero utilisation,
+   which is a small minority of them.
+2. **The per-adapter aggregation dictionaries are reused**, cleared in place
+   rather than rebuilt: a machine has two or three adapters and a handful of
+   engine types, so the same dictionaries now last the life of the process.
+3. **GPU names resolved once** (`EnsureGpuNames`). The adapter list cannot
+   change under a running process, but two LINQ scans with two closures ran
+   every second to reach a constant answer.
+4. **One battery read per tick instead of two.** `GetCurrentPowerState` already
+   held a `BatteryTelemetryService.Reading`; the voltage path used to call
+   `TryRead()` again, which is three more device IOCTLs. The reading is now
+   handed over (`GetBatteryVoltage(bool, double)`).
+
+### Battery IOCTLs (`Services/BatteryTelemetryService.cs`)
+5. **No native allocations on the polling path.** Every struct involved is
+   blittable, so `DeviceIoControl` now has typed `ref`/`out` overloads and the
+   marshaller pins stack locals. That removes 6 `AllocHGlobal`/`FreeHGlobal`
+   pairs, 3 `StructureToPtr` and 2 `PtrToStructure` calls per second. The
+   variable-length string levels (read once per pack) still use a heap buffer.
+   Struct sizes are resolved once into static fields instead of by
+   `Marshal.SizeOf<T>()` on each call.
+
+### Background sensors (`Services/HardwareSensorService.cs`)
+6. **`SetIdleMode(bool)`** drops the LibreHardwareMonitor sweep from 1 s to 5 s
+   while the window is hidden, matching the tray tick that consumes it. That
+   sweep is the largest single piece of background CPU the app spends (~16 ms
+   per sweep, measured), and while minimized four of every five were discarded.
+   Called from `HideToTray`/`RestoreFromTray`; deliberately lock-free so the UI
+   thread can never block on `Initialize`'s long-held lock.
+
+### UI (`MainWindow.xaml.cs`)
+7. **Tray tooltip assigned only when it changes.** `NotifyIcon.Text` is a
+   `Shell_NotifyIcon` call into the shell, not a field write, and it was made
+   every second regardless.
+8. **Waveform point collections written in place.** Three fresh
+   `PointCollection`s (180 points) were handed to the Polylines each second;
+   they are now allocated once and mutated (`EnsureChartPointCapacity`).
+9. **Y-axis labels rewritten only when the scale changes**, instead of five
+   text assignments — each of which WPF answers with a measure and arrange
+   pass — every second.
+10. **Working-set trimming is growth-driven.** A blocking gen2 collection plus
+    `EmptyWorkingSet` ran every 60 s forever while hidden, whether or not
+    anything had accumulated; it now runs only when the managed heap has grown
+    at least 8 MB since the last trim. The trim on minimize is now compacting
+    (the visual tree has just been released, so it is the one moment worth it).
+11. **Handle leak fixed**: `Process.GetCurrentProcess().Handle` allocated a
+    `Process` object and an OS handle on every trim and disposed neither. The
+    `GetCurrentProcess()` pseudo-handle needs no release.
+12. `_isTrayMode` is now written with `Volatile.Write`, pairing with the
+    `Volatile.Read` the polling loop already used.
+
+### History (`Services/RealTimePowerHistoryService.cs`)
+13. `AddRecord`/`ClearHistory` take the same-thread path directly when the
+    caller is already on the UI thread (it always is), instead of building a
+    `DispatcherOperation` for it.
+
+### CI
+- `.github/workflows/ci.yml` also builds `claude/**` branches, so this work is
+  compiled and tested on `windows-latest` like `agent/**` is.
+
+### Verification status
+**Not built or run in this environment** — the session is Linux and this is a
+Windows-only WPF project with no .NET SDK present. Correctness rests on review
+plus the Windows CI job; the numbers above are the measurement notes already
+recorded in this file for the same code paths, not fresh measurements. Someone
+on Windows should run `dotnet build WinBatLens.sln -c Release -warnaserror`,
+`dotnet test`, and then confirm on a live machine that the dGPU utilisation row
+still tracks load and that battery voltage/temperature still read.
+
+### Not done, deliberately
+- **`InvariantGlobalization`** would drop the ICU data from the single-file
+  bundle and shrink both the download and the mapped footprint noticeably, but
+  it changes culture-sensitive formatting for every user and could not be
+  verified here. Worth measuring on Windows before taking.
+- **Replacing `PerformanceCounterCategory.ReadCategory()` with raw PDH.** That
+  call is now the app's dominant allocator (~1,200 `InstanceData` objects and
+  as many fresh strings per sweep on a machine with ~600 GPU Engine instances).
+  `PdhGetFormattedCounterArray` would avoid the managed objects entirely, but it
+  is a rewrite of the load-measurement path and not something to land unverified.
+
+
 ## v1.1.2 quality upgrade merged and released
 
 The requested quality pass was committed as `94ace83` on

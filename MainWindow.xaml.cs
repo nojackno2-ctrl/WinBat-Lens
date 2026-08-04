@@ -33,12 +33,19 @@ namespace WinBatLens
         private RealTimePowerState? _latestPowerState;
         private bool _isTrayMode;
 
-        // Working-set re-trim cadence while hidden, in five-second tray polls.
-        private const int TrimIntervalSamples = 12;
+        // Re-trimming the working set is not free: it is a blocking gen2
+        // collection followed by a page-out, so doing it on a fixed timer meant
+        // a CPU spike every minute for the rest of the session whether or not
+        // anything had accumulated. It is now driven by actual heap growth, and
+        // the counter only rate-limits how often that growth is checked.
+        private const int TrimCheckIntervalSamples = 12;   // ~60 s at the 5 s tray tick
+        private const long TrimGrowthBytes = 8L * 1024 * 1024;
         private int _hiddenTickCount;
+        private long _managedBytesAtLastTrim;
         private NotifyIcon? _notifyIcon;
         private bool _isExitRequested = false;
         private bool _trayBalloonShown = false;
+        private string? _lastTrayTooltip;
 
         // Tray menu items kept as fields so ApplyLanguage can relabel them.
         private ToolStripMenuItem? _trayItemShow;
@@ -51,6 +58,13 @@ namespace WinBatLens
         private readonly Queue<(double DischargeW, double ChargeW, double GpuW)> _chartHistory =
             new Queue<(double, double, double)>();
         private const int MAX_CHART_POINTS = 60;
+
+        // Written in place on every redraw and handed to the Polylines exactly
+        // once — see EnsureChartPointCapacity.
+        private readonly PointCollection _dischargePoints = new PointCollection(MAX_CHART_POINTS);
+        private readonly PointCollection _chargePoints = new PointCollection(MAX_CHART_POINTS);
+        private readonly PointCollection _gpuPoints = new PointCollection(MAX_CHART_POINTS);
+        private double _lastAxisScaleW = -1.0;
 
         // Frozen, shared brushes reused across timer ticks. UpdateLivePowerUI
         // runs once per second; allocating fresh SolidColorBrush objects every
@@ -340,9 +354,12 @@ namespace WinBatLens
 
                 if (w <= 0 || h <= 0 || _chartHistory.Count == 0) return;
 
-                var dischargePoints = new PointCollection();
-                var chargePoints = new PointCollection();
-                var gpuPoints = new PointCollection();
+                // The three collections are built once and then written in
+                // place. Handing the Polylines three brand-new PointCollections
+                // a second meant re-allocating 180 points and three collection
+                // objects every tick, and made WPF drop and re-adopt the old
+                // ones each time; the redraw itself costs the same either way.
+                EnsureChartPointCapacity(_chartHistory.Count);
 
                 // Iterate the queue directly (oldest→newest) instead of
                 // materialising a List and running a LINQ Max each tick.
@@ -361,12 +378,20 @@ namespace WinBatLens
 
                 double maxPowerW = Math.Max(35.0, powerPeak * 1.15);
 
-                // Update Y-Axis Scale Coordinates Text
-                TxtYAxis100.Text = $"{maxPowerW:F0} W (100%)";
-                TxtYAxis75.Text = $"{(maxPowerW * 0.75):F0} W (75%)";
-                TxtYAxis50.Text = $"{(maxPowerW * 0.50):F0} W (50%)";
-                TxtYAxis25.Text = $"{(maxPowerW * 0.25):F0} W (25%)";
-                TxtYAxis0.Text = "0 W (0%)";
+                // The axis only ever shows whole watts, so it is rewritten when
+                // the rounded scale changes rather than once a second. Each of
+                // these assignments is a text change that WPF answers with a
+                // measure and arrange pass.
+                double roundedScale = Math.Round(maxPowerW);
+                if (roundedScale != _lastAxisScaleW)
+                {
+                    _lastAxisScaleW = roundedScale;
+                    TxtYAxis100.Text = $"{maxPowerW:F0} W (100%)";
+                    TxtYAxis75.Text = $"{(maxPowerW * 0.75):F0} W (75%)";
+                    TxtYAxis50.Text = $"{(maxPowerW * 0.50):F0} W (50%)";
+                    TxtYAxis25.Text = $"{(maxPowerW * 0.25):F0} W (25%)";
+                    TxtYAxis0.Text = "0 W (0%)";
+                }
 
                 int i = 0;
                 foreach (var item in _chartHistory)
@@ -379,17 +404,50 @@ namespace WinBatLens
                     double yCharge = h - Math.Min(h, Math.Max(0, (item.ChargeW / maxPowerW) * h));
                     double yGpu = h - Math.Min(h, Math.Max(0, (item.GpuW / maxPowerW) * h));
 
-                    dischargePoints.Add(new WpfPoint(x, yDischarge));
-                    chargePoints.Add(new WpfPoint(x, yCharge));
-                    gpuPoints.Add(new WpfPoint(x, yGpu));
+                    _dischargePoints[i] = new WpfPoint(x, yDischarge);
+                    _chargePoints[i] = new WpfPoint(x, yCharge);
+                    _gpuPoints[i] = new WpfPoint(x, yGpu);
                     i++;
                 }
-
-                PolylineDischarge.Points = dischargePoints;
-                PolylineCharge.Points = chargePoints;
-                PolylineGpu.Points = gpuPoints;
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Grows the three shared PointCollections to <paramref name="count"/>
+        /// entries and attaches them to their Polylines the first time round.
+        /// The history only ever grows to <see cref="MAX_CHART_POINTS"/> and
+        /// never shrinks, so after the first minute this does nothing at all.
+        /// </summary>
+        private void EnsureChartPointCapacity(int count)
+        {
+            if (_dischargePoints.Count == count) return;
+
+            bool firstTime = _dischargePoints.Count == 0;
+
+            while (_dischargePoints.Count < count)
+            {
+                _dischargePoints.Add(default);
+                _chargePoints.Add(default);
+                _gpuPoints.Add(default);
+            }
+
+            // A cleared history (or a shorter one) must not leave stale points
+            // trailing off the right-hand edge.
+            while (_dischargePoints.Count > count)
+            {
+                int last = _dischargePoints.Count - 1;
+                _dischargePoints.RemoveAt(last);
+                _chargePoints.RemoveAt(last);
+                _gpuPoints.RemoveAt(last);
+            }
+
+            if (firstTime)
+            {
+                PolylineDischarge.Points = _dischargePoints;
+                PolylineCharge.Points = _chargePoints;
+                PolylineGpu.Points = _gpuPoints;
+            }
         }
 
         private void InitAutoStartState()
@@ -541,10 +599,20 @@ namespace WinBatLens
         [DllImport("psapi.dll")]
         private static extern int EmptyWorkingSet(IntPtr hProcess);
 
+        // The pseudo-handle for the current process: no allocation and nothing
+        // to release. Process.GetCurrentProcess() was allocating a Process
+        // object and an OS handle on every trim, and never disposing either.
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetCurrentProcess();
+
         private void HideToTray()
         {
-            _isTrayMode = true;
+            Volatile.Write(ref _isTrayMode, true);
             this.Hide();
+
+            // Nothing on screen consumes the sensor sweep any more, and the
+            // monitoring loop itself drops to 5 s, so the sensors follow.
+            HardwareSensorService.SetIdleMode(true);
 
             // Only explain the tray behaviour the first time; after that the
             // balloon is just noise on every minimize.
@@ -564,13 +632,19 @@ namespace WinBatLens
             TrimWorkingSet();
         }
 
-        private static void TrimWorkingSet()
+        private void TrimWorkingSet()
         {
             try
             {
-                GC.Collect();
+                // Compacting is worth the extra time here specifically: the
+                // window's visual tree has just been torn down, so this is the
+                // one moment when the heap has large holes to close up before
+                // the pages are handed back.
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
                 GC.WaitForPendingFinalizers();
-                EmptyWorkingSet(System.Diagnostics.Process.GetCurrentProcess().Handle);
+                EmptyWorkingSet(GetCurrentProcess());
+                _managedBytesAtLastTrim = GC.GetTotalMemory(false);
+                _hiddenTickCount = 0;
             }
             catch { }
         }
@@ -596,7 +670,8 @@ namespace WinBatLens
 
         private void RestoreFromTray()
         {
-            _isTrayMode = false;
+            Volatile.Write(ref _isTrayMode, false);
+            HardwareSensorService.SetIdleMode(false);
             this.Show();
             this.WindowState = WindowState.Normal;
             this.Activate();
@@ -707,7 +782,16 @@ namespace WinBatLens
                     else
                         powerStatusStr = "-- W";
 
-                    _notifyIcon.Text = $"WinBat Lens - {state.PowerStatusText}\nLevel: {state.BatteryPercent}% | {powerStatusStr}";
+                    // Assigning NotifyIcon.Text is a Shell_NotifyIcon call into
+                    // the shell, not a field write, so it is only made when the
+                    // tooltip would actually read differently. The wattage is
+                    // shown to one decimal and often repeats between ticks.
+                    string tooltip = $"WinBat Lens - {state.PowerStatusText}\nLevel: {state.BatteryPercent}% | {powerStatusStr}";
+                    if (!string.Equals(tooltip, _lastTrayTooltip, StringComparison.Ordinal))
+                    {
+                        _lastTrayTooltip = tooltip;
+                        _notifyIcon.Text = tooltip;
+                    }
                 }
 
                 // While hidden in the tray only the icon, tooltip and history
@@ -715,10 +799,18 @@ namespace WinBatLens
                 // background working set and per-tick allocations stay minimal.
                 if (!IsVisible)
                 {
-                    if (++_hiddenTickCount >= TrimIntervalSamples)
+                    if (++_hiddenTickCount >= TrimCheckIntervalSamples)
                     {
                         _hiddenTickCount = 0;
-                        TrimWorkingSet();
+
+                        // Only pay for a trim when there is something to
+                        // reclaim. A hidden tick allocates very little now, so
+                        // most of these checks find nothing and cost one cheap
+                        // read instead of a full blocking collection.
+                        if (GC.GetTotalMemory(false) - _managedBytesAtLastTrim >= TrimGrowthBytes)
+                        {
+                            TrimWorkingSet();
+                        }
                     }
                     return;
                 }

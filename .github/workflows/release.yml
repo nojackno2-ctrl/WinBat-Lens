@@ -1,0 +1,156 @@
+name: Release
+
+# Builds the three published artifacts on a real Windows runner and attaches
+# them to a GitHub Release. Triggered by pushing a version tag (v1.1.3), or run
+# manually with the tag as an input — the manual path creates the tag itself, so
+# a release can be cut without local push access to refs/tags, and a failed
+# release can be retried without inventing a new version number.
+#
+# The build itself is build-release.ps1 — the same script used locally — so a
+# release built here and one built by hand cannot drift apart.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to publish, e.g. v1.1.3"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Passed through the environment rather than interpolated into the script
+      # body, so the input cannot inject PowerShell.
+      - name: Resolve release tag
+        shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          $tag = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_TAG } else { $env:GITHUB_REF_NAME }
+          $tag = $tag.Trim()
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') {
+            throw "Refusing to publish an unexpected tag format: '$tag'"
+          }
+          Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_TAG=$tag"
+          Write-Host "Publishing $tag"
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # build-release.ps1 skips the installer with a warning when ISCC.exe is
+      # absent, which would silently publish a release missing its Setup.exe.
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress -y
+
+      # A tag that disagrees with the version baked into the binaries would
+      # produce assets whose names do not match the release. Fail before the
+      # build rather than after publishing.
+      - name: Verify tag matches project version
+        shell: pwsh
+        run: |
+          # WinBatLens.csproj is the only place the version is written now:
+          # build-release.ps1 reads it from there and passes it to Inno Setup,
+          # so the tag is the one thing left that can disagree with the build.
+          $tag = $env:RELEASE_TAG
+          $csproj = New-Object System.Xml.XmlDocument
+          $csproj.Load((Join-Path $PWD 'WinBatLens.csproj'))
+          $node = $csproj.SelectSingleNode('/Project/PropertyGroup/Version')
+          if (-not $node) { throw "Could not read <Version> from WinBatLens.csproj" }
+          $csprojVersion = $node.InnerText.Trim()
+
+          Write-Host "tag=$tag csproj=$csprojVersion"
+
+          if ($tag -ne "v$csprojVersion") { throw "Tag $tag does not match WinBatLens.csproj version $csprojVersion" }
+
+      # Publishing the same version twice would either fail late or quietly
+      # replace what people have already downloaded.
+      - name: Verify the release does not already exist
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Continue'
+          gh release view $env:RELEASE_TAG --json tagName 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) { throw "Release $env:RELEASE_TAG already exists" }
+          Write-Host "$env:RELEASE_TAG is free"
+
+          # "Not found" leaves $LASTEXITCODE at 1, and the runner ends every
+          # pwsh step with `exit $LASTEXITCODE` — so without this the step
+          # fails precisely when the check has passed.
+          exit 0
+
+      - name: Build release packages
+        shell: pwsh
+        run: ./build-release.ps1
+
+      - name: Verify all three artifacts exist
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $expected = @(
+            "dist/WinBatLens_v${version}_Setup_x64.exe",
+            "dist/WinBatLens_v${version}_Portable_x64.exe",
+            "dist/WinBatLens_v${version}_Portable_x64.zip"
+          )
+          foreach ($file in $expected) {
+            if (-not (Test-Path $file)) { throw "Expected release artifact is missing: $file" }
+            $mb = [math]::Round((Get-Item $file).Length / 1MB, 2)
+            Write-Host "$file ($mb MB)"
+          }
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: winbatlens-${{ env.RELEASE_TAG }}
+          path: dist/*
+          if-no-files-found: error
+
+      # Release notes live in .github/release-notes/<tag>.md so the published
+      # text is reviewed in the same pull request as the code it describes.
+      # Without one, fall back to GitHub's generated changelog.
+      #
+      # A release is marked pre-release when its tag carries a suffix
+      # (v1.2.0-rc1) or when its notes file opts in with a "<!-- prerelease -->"
+      # marker on any line. Everything else publishes as a normal release, so
+      # this workflow does not quietly hold future versions back.
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          $notes = ".github/release-notes/$tag.md"
+
+          $isPrerelease = $tag -match '^v[0-9.]+-'
+          if ((Test-Path $notes) -and (Select-String -Path $notes -Pattern '<!-- prerelease -->' -Quiet)) {
+            $isPrerelease = $true
+          }
+
+          $ghArgs = @("release", "create", $tag, "--title", "WinBat Lens $tag")
+
+          # On a tag push the tag is already there and must be the one we built.
+          # On a manual run it does not exist yet, so it is created here against
+          # the exact commit that produced these artifacts.
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $ghArgs += @("--target", $env:GITHUB_SHA) }
+          else { $ghArgs += "--verify-tag" }
+
+          if ($isPrerelease) { $ghArgs += "--prerelease" }
+          if (Test-Path $notes) { $ghArgs += @("--notes-file", $notes) }
+          else { $ghArgs += "--generate-notes" }
+          $ghArgs += (Get-ChildItem dist -File | ForEach-Object { $_.FullName })
+
+          Write-Host "prerelease=$isPrerelease"
+          gh @ghArgs

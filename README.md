@@ -2,6 +2,19 @@
 
 Windows 電池健康度與即時功耗監測儀表板，使用 WPF 顯示 `powercfg /batteryreport`、電池驅動資料與可取得的硬體感測值。
 
+## v1.1.3 變更重點
+
+純效能最佳化，顯示的數值、更新頻率與文案都沒有改變。
+
+- GPU Engine 執行個體名稱只解析一次並快取，不再每秒對約 600 個執行個體重做字串切割。
+- 顯示卡名稱、彙總字典改為只算一次或重複使用；每秒只讀一次電池，不再重複發送 IOCTL。
+- 電池 IOCTL 改用釘選堆疊變數，輪詢路徑上不再配置原生記憶體。
+- 縮到系統匣時，硬體感測器掃描從 1 秒放寬到 5 秒，與托盤取樣節奏一致。
+- 工作集回收改由堆積成長觸發，不再每分鐘無條件做一次會封鎖的 GC；並修正每次回收洩漏一個行程 handle 的問題。
+- 系統匣提示文字、波形圖點集合與 Y 軸刻度改為只在內容真的改變時才更新。
+
+此版本標記為預發行版：上述改動動到硬體讀取路徑，CI 已在 Windows 上通過建置與測試，但尚未在具備電池與獨立顯示卡的實機上完整驗證。
+
 ## v1.1.2 變更重點
 
 - 升級至 .NET 10 LTS。
@@ -36,9 +49,9 @@ Windows 可提供外接電源是否足夠的判定（Adequate／Inadequate／Not
 
 最新版本請至 [GitHub Releases](https://github.com/nojackno2-ctrl/WinBat-Lens/releases) 下載：
 
-- `WinBatLens_v1.1.2_Setup_x64.exe`：Inno Setup 安裝版。
-- `WinBatLens_v1.1.2_Portable_x64.exe`：單一可攜執行檔。
-- `WinBatLens_v1.1.2_Portable_x64.zip`：含執行檔、README 與授權檔的 ZIP。
+- `WinBatLens_v1.1.3_Setup_x64.exe`：Inno Setup 安裝版。
+- `WinBatLens_v1.1.3_Portable_x64.exe`：單一可攜執行檔。
+- `WinBatLens_v1.1.3_Portable_x64.zip`：含執行檔、README 與授權檔的 ZIP。
 
 目前公開發行檔的簽章需由發行者在本機提供 Authenticode 憑證或簽章服務後完成；沒有簽章的檔案可能觸發 Windows SmartScreen 提示。
 
