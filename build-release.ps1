@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = $PSScriptRoot
 Set-Location $ProjectRoot
 
-$Version = "1.1.2"
+$Version = "1.1.3"
 $DistDir = Join-Path $ProjectRoot "dist"
 $PortableDirName = "WinBatLens_v$Version`_Portable_x64"
 $PortableDir = Join-Path $DistDir $PortableDirName

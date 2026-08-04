@@ -1,5 +1,32 @@
 # Project State & Handoff
 
+## v1.1.3 release pipeline
+
+Release artifacts are now built by GitHub Actions rather than only by hand.
+`.github/workflows/release.yml` fires on a `v*` tag, runs the very same
+`build-release.ps1` on `windows-latest` (with Inno Setup installed via choco so
+the installer is never silently skipped), and attaches all three artifacts to a
+GitHub Release.
+
+Guards, because a bad release is expensive to retract:
+- The tag, `build-release.ps1`, `WinBatLens.csproj` and `installer/WinBatLens.iss`
+  versions must all agree, checked **before** the build starts.
+- All three expected artifact filenames must exist before anything is published.
+- Release notes come from `.github/release-notes/<tag>.md`, so the published
+  text is reviewed in the same pull request as the code it describes.
+- A release is marked pre-release when the tag carries a suffix (`v1.2.0-rc1`)
+  or its notes file contains a `<!-- prerelease -->` marker. Future normal tags
+  publish as normal releases; the flag is not hardcoded.
+
+v1.1.3 itself is tagged pre-release on purpose: it is the memory/CPU pass
+below, which reworks hardware-read paths that CI cannot exercise (the runner has
+no battery, no discrete GPU and no GPU Engine counters). Promote it to latest
+from the GitHub UI once it has been confirmed on real hardware.
+
+Version bumped to 1.1.3 in `WinBatLens.csproj`, `build-release.ps1`,
+`installer/WinBatLens.iss` and `README.md`.
+
+
 ## Memory + CPU optimization pass (latest)
 
 Goal: cut what this always-on tray monitor costs per tick, in both allocations
