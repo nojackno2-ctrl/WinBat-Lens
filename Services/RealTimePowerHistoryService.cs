@@ -101,22 +101,33 @@ namespace WinBatLens.Services
 
         private static void AddRecord(PowerHistoryRecord record)
         {
-            App.Current?.Dispatcher?.Invoke(() =>
+            // Callers are already on the UI thread (the monitoring loop hands
+            // its snapshot over before touching anything). Dispatcher.Invoke
+            // still builds a DispatcherOperation and walks the queue in that
+            // case, so the same-thread path is taken directly.
+            var dispatcher = App.Current?.Dispatcher;
+            if (dispatcher == null) return;
+
+            if (dispatcher.CheckAccess()) Insert(record);
+            else dispatcher.Invoke(() => Insert(record));
+        }
+
+        private static void Insert(PowerHistoryRecord record)
+        {
+            _records.Insert(0, record);
+            while (_records.Count > MAX_RECORDS)
             {
-                _records.Insert(0, record);
-                while (_records.Count > MAX_RECORDS)
-                {
-                    _records.RemoveAt(_records.Count - 1);
-                }
-            });
+                _records.RemoveAt(_records.Count - 1);
+            }
         }
 
         public static void ClearHistory()
         {
-            App.Current?.Dispatcher?.Invoke(() =>
-            {
-                _records.Clear();
-            });
+            var dispatcher = App.Current?.Dispatcher;
+            if (dispatcher == null) return;
+
+            if (dispatcher.CheckAccess()) _records.Clear();
+            else dispatcher.Invoke(() => _records.Clear());
         }
 
         // Quotes a CSV field, doubling any embedded quote per RFC 4180.

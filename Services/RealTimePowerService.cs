@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Management;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
@@ -95,9 +94,50 @@ namespace WinBatLens.Services
         private static readonly HashSet<string> _gpuEngineSeen
             = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private static readonly List<string> _gpuEngineStale = new List<string>();
+
+        // The LUID and engine type parsed out of a GPU Engine instance name,
+        // cached for as long as that instance exists. Instance names are stable
+        // — the same ~600 strings come back from the counter category every
+        // tick — but parsing them was not: lower-casing plus two Substring
+        // calls each meant roughly 1,800 throwaway strings a second, all of
+        // them identical to the previous second's.
+        private readonly struct GpuEngineKey
+        {
+            public GpuEngineKey(string luid, string engineType)
+            {
+                Luid = luid;
+                EngineType = engineType;
+            }
+
+            public string Luid { get; }
+            public string EngineType { get; }
+
+            // default(GpuEngineKey) is the "this instance name does not parse"
+            // marker, and its strings are null — so this must not dereference.
+            public bool IsValid => !string.IsNullOrEmpty(Luid) && !string.IsNullOrEmpty(EngineType);
+        }
+
+        private static readonly Dictionary<string, GpuEngineKey> _gpuEngineKeys
+            = new Dictionary<string, GpuEngineKey>(StringComparer.OrdinalIgnoreCase);
+
+        // luid -> (engine type -> summed utilization) for the current tick.
+        // Reused across ticks and cleared in place: a machine has two or three
+        // adapters and a handful of engine types, so the same few dictionaries
+        // serve for the life of the process instead of being rebuilt each time.
+        private static readonly Dictionary<string, Dictionary<string, double>> _perAdapter
+            = new Dictionary<string, Dictionary<string, double>>(StringComparer.OrdinalIgnoreCase);
+
         // Maps a GPU Engine LUID token (e.g. "luid_0x00000000_0x00010666") to
         // whether that adapter is the discrete GPU. Built once from DXGI.
         private static Dictionary<string, bool>? _luidIsDiscrete;
+
+        // Adapter names never change while the process runs, so the list is
+        // resolved to the three strings the UI wants exactly once instead of
+        // being re-scanned with LINQ on every tick.
+        private static bool _gpuNamesResolved;
+        private static bool _hasDiscreteGpu;
+        private static string _dgpuName = "無獨立顯示卡";
+        private static string _igpuName = "顯示晶片 (GPU)";
 
         static RealTimePowerService()
         {
@@ -159,7 +199,8 @@ namespace WinBatLens.Services
                 // WinRT activation is COM work; it belongs here rather than on
                 // the first tick. Reads afterwards are effectively free.
                 PowerSupplyService.Initialize();
-                GetWmiBatteryVoltage();
+                bool haveWarmup = BatteryTelemetryService.TryRead(out var warmup);
+                GetBatteryVoltage(haveWarmup, warmup.VoltageV);
                 GetActivePowerPlanName();
             }
             catch { }
@@ -169,22 +210,13 @@ namespace WinBatLens.Services
         {
             var state = new RealTimePowerState();
 
-            // Set GPU Names
-            var dGpu = _cachedGpus.FirstOrDefault(g => g.IsDiscrete);
-            var iGpu = _cachedGpus.FirstOrDefault(g => !g.IsDiscrete);
-
-            if (dGpu != null)
-            {
-                state.HasDiscreteGpu = true;
-                state.DgpuName = dGpu.Name;
-                state.IgpuName = iGpu?.Name ?? "內建顯示晶片 (iGPU)";
-            }
-            else
-            {
-                state.HasDiscreteGpu = false;
-                state.IgpuName = _cachedGpus.FirstOrDefault()?.Name ?? "顯示晶片 (GPU)";
-                state.DgpuName = "無獨立顯示卡";
-            }
+            // Set GPU Names (resolved once — the adapter list cannot change
+            // under a running process, so this used to be two LINQ scans and a
+            // pair of closures per second for a constant answer).
+            EnsureGpuNames();
+            state.HasDiscreteGpu = _hasDiscreteGpu;
+            state.DgpuName = _dgpuName;
+            state.IgpuName = _igpuName;
 
             // 1. CPU Usage & Power. When the counter is unavailable report 0
             // rather than a fabricated value.
@@ -541,8 +573,11 @@ namespace WinBatLens.Services
                 state.SystemPowerLoadStatus = "輕度省電";
             }
 
-            // 11. Battery Physical Telemetry (Voltage, Current, Temperature)
-            double volts = GetWmiBatteryVoltage();
+            // 11. Battery Physical Telemetry (Voltage, Current, Temperature).
+            // The pack voltage arrives in the same IOCTL the rate came from, so
+            // this tick's reading is handed over rather than taken again — the
+            // second read cost three more device IOCTLs every second.
+            double volts = GetBatteryVoltage(haveBatt, batt.VoltageV);
             state.BatteryVoltageV = volts;
             state.IsVoltageMeasured = _voltageMeasured;
 
@@ -569,6 +604,33 @@ namespace WinBatLens.Services
             state.PowerPlanName = GetActivePowerPlanName();
 
             return state;
+        }
+
+        private static void EnsureGpuNames()
+        {
+            if (_gpuNamesResolved) return;
+            _gpuNamesResolved = true;
+
+            GpuInfo? dGpu = null;
+            GpuInfo? iGpu = null;
+            foreach (var gpu in _cachedGpus)
+            {
+                if (gpu.IsDiscrete) dGpu ??= gpu;
+                else iGpu ??= gpu;
+            }
+
+            if (dGpu != null)
+            {
+                _hasDiscreteGpu = true;
+                _dgpuName = dGpu.Name;
+                _igpuName = iGpu?.Name ?? "內建顯示晶片 (iGPU)";
+            }
+            else
+            {
+                _hasDiscreteGpu = false;
+                _igpuName = iGpu?.Name ?? (_cachedGpus.Count > 0 ? _cachedGpus[0].Name : "顯示晶片 (GPU)");
+                _dgpuName = "無獨立顯示卡";
+            }
         }
 
         // Charge/discharge rates come from BatteryTelemetryService via
@@ -666,8 +728,9 @@ namespace WinBatLens.Services
         {
             EnsureLuidMap();
 
-            // luid -> (engtype -> summed utilization)
-            var perAdapter = new Dictionary<string, Dictionary<string, double>>(StringComparer.OrdinalIgnoreCase);
+            // Cleared rather than rebuilt: the adapters and engine types are
+            // the same every tick, so the dictionaries are reused in place.
+            foreach (var engMap in _perAdapter.Values) engMap.Clear();
 
             try
             {
@@ -695,12 +758,6 @@ namespace WinBatLens.Services
                     string inst = id.InstanceName;
                     _gpuEngineSeen.Add(inst);
 
-                    string lower = inst.ToLowerInvariant();
-                    string luid = ExtractToken(lower, "luid_", "_phys_");
-                    string engType = ExtractToken(lower, "engtype_", null);
-                    if (luid.Length == 0 || engType.Length == 0) continue;
-                    luid = "luid_" + luid;
-
                     // A new instance has no baseline and contributes 0; it
                     // becomes accurate on the next tick.
                     double val = 0.0;
@@ -712,19 +769,29 @@ namespace WinBatLens.Services
                     }
                     _gpuEngineSamples[inst] = sample;
 
+                    // Idle instances are the overwhelming majority every tick,
+                    // and they cannot move any adapter's figure — so the name
+                    // is only parsed once something is actually running on it.
                     if (val <= 0) continue;
 
-                    if (!perAdapter.TryGetValue(luid, out var engMap))
+                    if (!_gpuEngineKeys.TryGetValue(inst, out var key))
+                    {
+                        key = ParseGpuEngineInstance(inst);
+                        _gpuEngineKeys[inst] = key;
+                    }
+                    if (!key.IsValid) continue;
+
+                    if (!_perAdapter.TryGetValue(key.Luid, out var engMap))
                     {
                         engMap = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-                        perAdapter[luid] = engMap;
+                        _perAdapter[key.Luid] = engMap;
                     }
-                    engMap.TryGetValue(engType, out double running);
-                    engMap[engType] = running + val;
+                    engMap.TryGetValue(key.EngineType, out double running);
+                    engMap[key.EngineType] = running + val;
                 }
 
                 // Forget instances that no longer exist (e.g. a process that
-                // closed) so the dictionary does not grow without bound.
+                // closed) so the dictionaries do not grow without bound.
                 if (_gpuEngineSamples.Count > _gpuEngineSeen.Count)
                 {
                     _gpuEngineStale.Clear();
@@ -732,7 +799,11 @@ namespace WinBatLens.Services
                     {
                         if (!_gpuEngineSeen.Contains(key)) _gpuEngineStale.Add(key);
                     }
-                    foreach (var key in _gpuEngineStale) _gpuEngineSamples.Remove(key);
+                    foreach (var key in _gpuEngineStale)
+                    {
+                        _gpuEngineSamples.Remove(key);
+                        _gpuEngineKeys.Remove(key);
+                    }
                 }
             }
             catch { }
@@ -740,7 +811,7 @@ namespace WinBatLens.Services
             double iGpuMax = 0.0;
             double dGpuMax = 0.0;
 
-            foreach (var kv in perAdapter)
+            foreach (var kv in _perAdapter)
             {
                 // Busiest single engine on this adapter.
                 double adapterUtil = 0.0;
@@ -827,15 +898,30 @@ namespace WinBatLens.Services
             _luidIsDiscrete = map;
         }
 
+        /// <summary>
+        /// Splits a GPU Engine instance name (e.g.
+        /// "pid_1234_luid_0x00000000_0x00010666_phys_0_eng_0_engtype_3D") into
+        /// the adapter's LUID token and its engine type. Both dictionaries that
+        /// consume these compare case-insensitively, so nothing is lower-cased
+        /// here — that allocation was the point of the exercise.
+        /// </summary>
+        private static GpuEngineKey ParseGpuEngineInstance(string instance)
+        {
+            string luid = ExtractToken(instance, "luid_", "_phys_");
+            string engType = ExtractToken(instance, "engtype_", null);
+            if (luid.Length == 0 || engType.Length == 0) return default;
+            return new GpuEngineKey(string.Concat("luid_", luid), engType);
+        }
+
         // Extracts the text between <start> and <end> markers. If <end> is null,
         // reads to the end of the string. Returns "" if not found.
         private static string ExtractToken(string source, string start, string? end)
         {
-            int s = source.IndexOf(start, StringComparison.Ordinal);
+            int s = source.IndexOf(start, StringComparison.OrdinalIgnoreCase);
             if (s < 0) return string.Empty;
             s += start.Length;
             if (end == null) return source.Substring(s);
-            int e = source.IndexOf(end, s, StringComparison.Ordinal);
+            int e = source.IndexOf(end, s, StringComparison.OrdinalIgnoreCase);
             if (e < 0) return string.Empty;
             return source.Substring(s, e - s);
         }
@@ -863,7 +949,7 @@ namespace WinBatLens.Services
         /// CPU/system thermal zone, which this method used to return and the UI
         /// used to present as the battery's own temperature.
         /// </summary>
-        private static double GetWmiBatteryVoltage()
+        private static double GetBatteryVoltage(bool packReadingValid, double packVoltageV)
         {
             if (Environment.TickCount64 - _lastTelemetryTick < WmiRefreshMs)
                 return _cachedVoltageV;
@@ -872,8 +958,8 @@ namespace WinBatLens.Services
             // The battery IOCTL returns voltage in the same call the rate comes
             // from, so prefer it; the sensor stack is the next best source.
             double voltageV = 0;
-            if (BatteryTelemetryService.TryRead(out var bt) && bt.VoltageV > 0)
-                voltageV = bt.VoltageV;
+            if (packReadingValid && packVoltageV > 0)
+                voltageV = packVoltageV;
             if (voltageV <= 0)
                 voltageV = HardwareSensorService.BatteryVoltageV ?? 0;
 
