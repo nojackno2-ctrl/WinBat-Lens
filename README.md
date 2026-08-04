@@ -2,6 +2,14 @@
 
 Windows 電池健康度與即時功耗監測儀表板，使用 WPF 顯示 `powercfg /batteryreport`、電池驅動資料與可取得的硬體感測值。
 
+## v1.1.4 變更重點
+
+- 主視窗標題顯示目前版本；版號讀自組件，單一來源是 `WinBatLens.csproj`。
+- 重複啟動不再安靜結束，而是把執行中的視窗帶回前景；兩份版本不同時會先詢問是否取代舊版。
+- 安裝與解除安裝先送出具名結束事件並等待互斥物件釋放，不再與拒絕 WM_CLOSE、縮回系統匣的程式互卡（舊版沿用原本的提示流程）。
+- 修正 Inno Setup 編譯失敗仍被回報為發行成功的問題。
+- v1.1.3 的效能最佳化已在具備電池與獨立顯示卡的實機上驗證，因此本版為正式發行版。
+
 ## v1.1.3 變更重點
 
 純效能最佳化，顯示的數值、更新頻率與文案都沒有改變。
@@ -13,7 +21,7 @@ Windows 電池健康度與即時功耗監測儀表板，使用 WPF 顯示 `power
 - 工作集回收改由堆積成長觸發，不再每分鐘無條件做一次會封鎖的 GC；並修正每次回收洩漏一個行程 handle 的問題。
 - 系統匣提示文字、波形圖點集合與 Y 軸刻度改為只在內容真的改變時才更新。
 
-此版本標記為預發行版：上述改動動到硬體讀取路徑，CI 已在 Windows 上通過建置與測試，但尚未在具備電池與獨立顯示卡的實機上完整驗證。
+此版本當時標記為預發行版：上述改動動到硬體讀取路徑，CI 已在 Windows 上通過建置與測試，但尚未在具備電池與獨立顯示卡的實機上驗證。該驗證已於 v1.1.4 完成。
 
 ## v1.1.2 變更重點
 
@@ -49,9 +57,9 @@ Windows 可提供外接電源是否足夠的判定（Adequate／Inadequate／Not
 
 最新版本請至 [GitHub Releases](https://github.com/nojackno2-ctrl/WinBat-Lens/releases) 下載：
 
-- `WinBatLens_v1.1.3_Setup_x64.exe`：Inno Setup 安裝版。
-- `WinBatLens_v1.1.3_Portable_x64.exe`：單一可攜執行檔。
-- `WinBatLens_v1.1.3_Portable_x64.zip`：含執行檔、README 與授權檔的 ZIP。
+- `WinBatLens_v1.1.4_Setup_x64.exe`：Inno Setup 安裝版。
+- `WinBatLens_v1.1.4_Portable_x64.exe`：單一可攜執行檔。
+- `WinBatLens_v1.1.4_Portable_x64.zip`：含執行檔、README 與授權檔的 ZIP。
 
 目前公開發行檔的簽章需由發行者在本機提供 Authenticode 憑證或簽章服務後完成；沒有簽章的檔案可能觸發 Windows SmartScreen 提示。
 
