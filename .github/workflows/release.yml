@@ -79,9 +79,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view $env:RELEASE_TAG 2>$null
+          $ErrorActionPreference = 'Continue'
+          gh release view $env:RELEASE_TAG --json tagName 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) { throw "Release $env:RELEASE_TAG already exists" }
           Write-Host "$env:RELEASE_TAG is free"
+
+          # "Not found" leaves $LASTEXITCODE at 1, and the runner ends every
+          # pwsh step with `exit $LASTEXITCODE` — so without this the step
+          # fails precisely when the check has passed.
+          exit 0
 
       - name: Build release packages
         shell: pwsh
