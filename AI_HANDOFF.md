@@ -1,5 +1,49 @@
 # Project State & Handoff
 
+## v1.1.4 released (latest)
+
+`main` had diverged: the version-display / duplicate-launch work sat locally
+while the v1.1.3 perf pass and the release pipeline landed on the remote. Merged
+both ways and published as **v1.1.4, a normal (non-prerelease) release**.
+
+Two merge conflicts, both resolved in favour of the local single-source rule —
+the version now lives in `WinBatLens.csproj` alone, so the hard-coded
+`$Version = "1.1.3"` in `build-release.ps1` and `#define MyAppVersion` in
+`installer/WinBatLens.iss` are gone for good. **`.github/workflows/release.yml`
+had to change with them**: its "verify tag matches project version" step used to
+regex those two literals out of the script and the .iss, which no longer exist —
+it would have thrown on `.Matches[0]` and failed every release. It now reads
+`<Version>` from the csproj and compares it against the tag, nothing else.
+
+v1.1.3's four unverified items were checked on this machine against the shipped
+portable EXE, read out of the running app's UI Automation tree (probe scripts in
+the session scratchpad):
+
+| item | result |
+|---|---|
+| battery voltage / current | 15.83 V ｜ 1.38 A |
+| charge/discharge wattage | +21.8 W measured, Wh and time-to-full agree |
+| dGPU power | RTX 3060 Laptop 9.8 W idle, moved to 12.8 W across reads |
+| tray → restore | working set 43.8 → 79 MB, values resume at 1 Hz |
+| waveform | three series on the shared 35 W scale, axis labels rendered |
+
+Only "dGPU load % tracks load" was left at idle (0.0%); no 3D load was applied.
+
+Duplicate-launch handling verified end to end: instance A hidden to tray
+(hwnd 0, 43.8 MB), launching the same EXE again exits with code 0 and A's window
+returns (`WindowVisualState.Normal`, on screen), one process left.
+
+**Trap for the next session:** `Get-Process WinBatLens` finds nothing when the
+portable build is running — the process takes its name from the file, which is
+`WinBatLens_v1.1.4_Portable_x64.exe`. Two probes concluded "the app killed
+itself" on that basis when the instance was alive the whole time and later
+launches were correctly stepping aside. Match on `Win32_Process` `Name like
+'%WinBat%'` instead. Same reason `SingleInstanceService.FindRunningInstance`
+(`GetProcessesByName(self.ProcessName)`) cannot see an installed
+`WinBatLens.exe` from a portable build: the mutex still blocks the second
+instance, but the version prompt and the foreground handoff are skipped. Not
+fixed here.
+
 ## v1.1.3 release pipeline
 
 Release artifacts are now built by GitHub Actions rather than only by hand.

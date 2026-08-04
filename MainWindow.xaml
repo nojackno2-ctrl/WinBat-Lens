@@ -30,7 +30,17 @@
                         <Image Source="pack://application:,,,/app_icon.png" Width="28" Height="28"/>
                     </Border>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock x:Name="TxtHeaderAppTitle" Text="WinBat Lens" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="TxtHeaderAppTitle" Text="WinBat Lens" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>
+                            <!-- Version badge. The text is filled in from the
+                                 assembly at startup; the value here is only so
+                                 the designer shows the right width. -->
+                            <Border x:Name="BadgeAppVersion" CornerRadius="6" Background="#14FFFFFF"
+                                    BorderBrush="{StaticResource BorderColor}" BorderThickness="1"
+                                    Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="TxtAppVersion" Text="v1.1.2" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}"/>
+                            </Border>
+                        </StackPanel>
                         <TextBlock x:Name="TxtSystemModel" Text="Windows 電池健康診斷與全系統耗電監測" FontSize="11" Foreground="{StaticResource TextMuted}"/>
                     </StackPanel>
                 </StackPanel>

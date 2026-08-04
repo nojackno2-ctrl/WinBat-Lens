@@ -61,16 +61,19 @@ jobs:
       - name: Verify tag matches project version
         shell: pwsh
         run: |
+          # WinBatLens.csproj is the only place the version is written now:
+          # build-release.ps1 reads it from there and passes it to Inno Setup,
+          # so the tag is the one thing left that can disagree with the build.
           $tag = $env:RELEASE_TAG
-          $scriptVersion = (Select-String -Path build-release.ps1 -Pattern '^\$Version = "(.+)"').Matches[0].Groups[1].Value
-          $csprojVersion = ([xml](Get-Content WinBatLens.csproj)).Project.PropertyGroup.Version | Where-Object { $_ }
-          $issVersion = (Select-String -Path installer/WinBatLens.iss -Pattern '#define MyAppVersion "(.+)"').Matches[0].Groups[1].Value
+          $csproj = New-Object System.Xml.XmlDocument
+          $csproj.Load((Join-Path $PWD 'WinBatLens.csproj'))
+          $node = $csproj.SelectSingleNode('/Project/PropertyGroup/Version')
+          if (-not $node) { throw "Could not read <Version> from WinBatLens.csproj" }
+          $csprojVersion = $node.InnerText.Trim()
 
-          Write-Host "tag=$tag script=$scriptVersion csproj=$csprojVersion iss=$issVersion"
+          Write-Host "tag=$tag csproj=$csprojVersion"
 
-          if ($tag -ne "v$scriptVersion") { throw "Tag $tag does not match build-release.ps1 version $scriptVersion" }
-          if ($csprojVersion -ne $scriptVersion) { throw "WinBatLens.csproj version $csprojVersion does not match $scriptVersion" }
-          if ($issVersion -ne $scriptVersion) { throw "installer/WinBatLens.iss version $issVersion does not match $scriptVersion" }
+          if ($tag -ne "v$csprojVersion") { throw "Tag $tag does not match WinBatLens.csproj version $csprojVersion" }
 
       # Publishing the same version twice would either fail late or quietly
       # replace what people have already downloaded.

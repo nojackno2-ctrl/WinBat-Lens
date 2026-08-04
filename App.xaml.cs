@@ -2,20 +2,19 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using WinBatLens.Services;
 
 namespace WinBatLens
 {
     public partial class App : System.Windows.Application
     {
-        private static System.Threading.Mutex? _singleInstanceMutex;
-
         protected override void OnStartup(StartupEventArgs e)
         {
-            bool createdNew;
-            _singleInstanceMutex = new System.Threading.Mutex(true, "WinBatLens_SingleInstance_Mutex", out createdNew);
-            if (!createdNew)
+            // Another instance owning the session is not an error: it has
+            // already been brought to the front (or replaced, if this build is
+            // a different version), so this process just steps aside.
+            if (!SingleInstanceService.TryClaimOwnership())
             {
-                // App is already running; close duplicate instance
                 Shutdown();
                 return;
             }
@@ -32,6 +31,12 @@ namespace WinBatLens
                 LogException(args.Exception, "DispatcherUnhandledException");
                 args.Handled = true;
             };
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            SingleInstanceService.Release();
+            base.OnExit(e);
         }
 
         private void LogException(Exception? ex, string source)

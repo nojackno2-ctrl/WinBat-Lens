@@ -74,7 +74,15 @@ namespace WinBatLens.Services
             ["TrayExit"] = "❌ 結束程式",
             ["TrayTooltip"] = "WinBat Lens - 電池健康度與即時耗電監測",
             ["TrayBalloonTitle"] = "WinBat Lens 已縮小至托盤",
-            ["TrayBalloonText"] = "程式將在背景持續為您進行即時耗電與電池狀態監測。"
+            ["TrayBalloonText"] = "程式將在背景持續為您進行即時耗電與電池狀態監測。",
+            // Duplicate-launch dialogs. {0} is the running version, {1} the one
+            // being launched.
+            ["InstanceVersionTitle"] = "WinBat Lens - 偵測到不同版本",
+            ["InstanceVersionText"] = "背景已有 WinBat Lens v{0} 正在執行，而您啟動的是 {1}。\n\n要結束執行中的 v{0}，改用 {1} 嗎？\n\n選擇「否」則會叫出執行中的 v{0} 視窗。",
+            ["InstanceReplaceFailedTitle"] = "WinBat Lens - 無法切換版本",
+            ["InstanceReplaceFailedText"] = "無法結束執行中的 WinBat Lens v{0}。\n\n請在系統匣圖示上按右鍵選擇「結束程式」，然後再啟動一次。",
+            ["InstanceRunningTitle"] = "WinBat Lens 已在執行中",
+            ["InstanceRunningText"] = "WinBat Lens 已在背景執行，因此不會重複開啟。\n\n請點擊系統匣（工作列右下角）的 WinBat Lens 圖示來開啟主畫面。"
         };
 
         private static readonly Dictionary<string, string> EnUsStrings = new Dictionary<string, string>
@@ -138,7 +146,13 @@ namespace WinBatLens.Services
             ["TrayExit"] = "❌ Exit",
             ["TrayTooltip"] = "WinBat Lens - Battery Health & Live Power Monitor",
             ["TrayBalloonTitle"] = "WinBat Lens minimized to tray",
-            ["TrayBalloonText"] = "Power and battery monitoring continues in the background."
+            ["TrayBalloonText"] = "Power and battery monitoring continues in the background.",
+            ["InstanceVersionTitle"] = "WinBat Lens - Different Version Running",
+            ["InstanceVersionText"] = "WinBat Lens v{0} is already running in the background, but you launched {1}.\n\nClose the running v{0} and switch to {1}?\n\nChoosing No brings the running v{0} to the front instead.",
+            ["InstanceReplaceFailedTitle"] = "WinBat Lens - Could Not Switch Version",
+            ["InstanceReplaceFailedText"] = "The running WinBat Lens v{0} could not be closed.\n\nRight-click its system tray icon, choose Exit, then launch again.",
+            ["InstanceRunningTitle"] = "WinBat Lens Is Already Running",
+            ["InstanceRunningText"] = "WinBat Lens is already running in the background, so a second copy was not started.\n\nClick its system tray icon to open the main window."
         };
 
         public static string Get(string key)
