@@ -141,6 +141,19 @@ namespace WinBatLens
             catch { }
 
             TxtSystemModel.Text = $"{Environment.MachineName} ({Environment.OSVersion}) - C# WPF";
+            TxtAppVersion.Text = AppInfo.DisplayVersion;
+
+            // Answer duplicate launches. This is deliberately in the constructor
+            // rather than in Loaded: a second copy can put its version prompt on
+            // screen within a few hundred ms of this process starting, and if the
+            // listener is not up by the time the user answers it, the handover
+            // degrades to Process.Kill() and strands our tray icon. Both callbacks
+            // arrive on a thread-pool thread, so they hop onto the dispatcher
+            // before touching the window.
+            SingleInstanceService.StartListening(
+                onActivate: () => Dispatcher.BeginInvoke(new Action(RestoreFromTray)),
+                onExitRequested: () => Dispatcher.BeginInvoke(new Action(ExitApplication)));
+
             Loaded += MainWindow_Loaded;
             Unloaded += MainWindow_Unloaded;
             Closing += MainWindow_Closing;
@@ -474,12 +487,7 @@ namespace WinBatLens
                     }
                 };
 
-                _trayItemExit = new ToolStripMenuItem(LocalizationService.Get("TrayExit"), null, (s, args) => {
-                    _isExitRequested = true;
-                    _notifyIcon.Visible = false;
-                    _notifyIcon.Dispose();
-                    Application.Current.Shutdown();
-                });
+                _trayItemExit = new ToolStripMenuItem(LocalizationService.Get("TrayExit"), null, (s, args) => ExitApplication());
 
                 contextMenu.Items.Add(_trayItemShow);
                 contextMenu.Items.Add(_trayItemCheck);
@@ -567,12 +575,40 @@ namespace WinBatLens
             catch { }
         }
 
+        /// <summary>
+        /// The one real exit path, shared by the tray menu and by a newer
+        /// instance asking this one to stand down. Dropping the tray icon here
+        /// matters: if the process dies without it, the icon lingers in the
+        /// notification area until the user happens to hover over it.
+        /// </summary>
+        private void ExitApplication()
+        {
+            _isExitRequested = true;
+
+            if (_notifyIcon != null)
+            {
+                _notifyIcon.Visible = false;
+                _notifyIcon.Dispose();
+            }
+
+            Application.Current.Shutdown();
+        }
+
         private void RestoreFromTray()
         {
             _isTrayMode = false;
             this.Show();
             this.WindowState = WindowState.Normal;
             this.Activate();
+
+            // Activate() alone is at the mercy of the foreground lock: when the
+            // request comes from a duplicate launch that was not itself the
+            // foreground process, Windows refuses the focus change and only
+            // flashes the taskbar button. Flicking Topmost brings the window out
+            // on top anyway, without leaving it pinned above everything else.
+            this.Topmost = true;
+            this.Topmost = false;
+            this.Focus();
 
             // Visual updates are skipped while hidden; render the latest cached
             // snapshot immediately, then the background loop resumes at 1 Hz.
