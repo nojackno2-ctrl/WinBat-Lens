@@ -11,7 +11,19 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = $PSScriptRoot
 Set-Location $ProjectRoot
 
-$Version = "1.1.2"
+# Single source of truth for the release number: WinBatLens.csproj. This script
+# and installer\WinBatLens.iss both take it from there, so bumping a version is
+# one edit instead of three that can silently drift apart.
+$CsprojPath = Join-Path $ProjectRoot "WinBatLens.csproj"
+# XmlDocument.Load rather than [xml](Get-Content ...): Get-Content hands back an
+# array of lines, and casting that to [xml] fails outright. Load also honours
+# the file's real encoding, which matters because <Title> holds Chinese text.
+$Csproj = New-Object System.Xml.XmlDocument
+$Csproj.Load($CsprojPath)
+$VersionNode = $Csproj.SelectSingleNode('/Project/PropertyGroup/Version')
+if (-not $VersionNode) { throw "Could not read <Version> from $CsprojPath." }
+$Version = $VersionNode.InnerText.Trim()
+
 $DistDir = Join-Path $ProjectRoot "dist"
 $PortableDirName = "WinBatLens_v$Version`_Portable_x64"
 $PortableDir = Join-Path $DistDir $PortableDirName
@@ -82,7 +94,10 @@ if (-not $IsccPath) {
 
 if ($IsccPath) {
     Write-Host "  Using Inno Setup Compiler: $IsccPath" -ForegroundColor Gray
-    & $IsccPath "installer\WinBatLens.iss"
+    & $IsccPath "/DMyAppVersion=$Version" "installer\WinBatLens.iss"
+    # $ErrorActionPreference does not cover native exit codes, so a failed
+    # compile would otherwise be reported below as a successful release.
+    if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE." }
     Write-Host "  -> Installer created: $(Join-Path $DistDir $SetupExeName)" -ForegroundColor Green
 } else {
     Write-Warning "Inno Setup Compiler (ISCC.exe) not found. Installer setup generation skipped."
