@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using WinBatLens.Models;
@@ -39,15 +40,13 @@ namespace WinBatLens.Services
                 if (state.IsCharging && state.IsChargeRateMeasured)
                 {
                     // 充電中：綠色顯示充電功率（如 56W）
-                    int wattVal = (int)Math.Round(state.ChargingRateW);
-                    textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
+                    textToDraw = FormatWattageForIcon(state.ChargingRateW);
                     textColor = Color.FromArgb(255, 16, 185, 129); // #10B981 翡翠綠
                 }
                 else if (state.IsDischargeRateMeasured)
                 {
                     // 放電中：紅色顯示放電功率（如 49W）
-                    int wattVal = (int)Math.Round(state.DischargeRateW);
-                    textToDraw = wattVal > 99 ? "99+" : wattVal.ToString();
+                    textToDraw = FormatWattageForIcon(state.DischargeRateW);
                     textColor = Color.FromArgb(255, 244, 63, 94); // #F43F5E 玫瑰紅
                 }
                 else
@@ -142,6 +141,21 @@ namespace WinBatLens.Services
             _currentCreatedIcon = null;
             _lastDrawnText = null;
             _lastDrawnColor = default;
+        }
+
+        /// <summary>
+        /// Formats tray-icon wattage. Keep sub-watt measurements visible with
+        /// one decimal place instead of rounding them to a misleading zero.
+        /// </summary>
+        internal static string FormatWattageForIcon(double watts)
+        {
+            if (watts < 1.0)
+            {
+                return watts.ToString("F1", CultureInfo.InvariantCulture);
+            }
+
+            int wattVal = (int)Math.Round(watts);
+            return wattVal > 99 ? "99+" : wattVal.ToString(CultureInfo.InvariantCulture);
         }
     }
 }
