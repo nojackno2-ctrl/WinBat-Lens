@@ -69,6 +69,7 @@ namespace WinBatLens
         private readonly PointCollection _chargePoints = new PointCollection(MAX_CHART_POINTS);
         private readonly PointCollection _gpuPoints = new PointCollection(MAX_CHART_POINTS);
         private double _lastAxisScaleW = -1.0;
+        private static readonly SolidColorBrush BrushVoltage = CreateFrozen(MediaColor.FromRgb(0x38, 0xBD, 0xF8));
 
         // Frozen, shared brushes reused across timer ticks. UpdateLivePowerUI
         // runs once per second; allocating fresh SolidColorBrush objects every
@@ -190,6 +191,8 @@ namespace WinBatLens
 
             // Bind Power History List
             LvPowerHistory.ItemsSource = RealTimePowerHistoryService.Records;
+            BatteryVoltageHistoryService.Load();
+            LvBatteryVoltageHistory.ItemsSource = BatteryVoltageHistoryService.Points;
 
             // Initialize System Tray Icon & AutoStart State
             InitSystemTrayIcon();
@@ -204,6 +207,7 @@ namespace WinBatLens
 
             // Draw Background Gridlines
             DrawChartGridlines();
+            RedrawBatteryVoltageChart();
 
             await warmup;
 
@@ -253,6 +257,7 @@ namespace WinBatLens
             // Tabs
             TabRealTime.Header = LocalizationService.Get("TabRealTime");
             TabHistoryLogs.Header = LocalizationService.Get("TabHistoryLogs");
+            TabVoltageHistory.Header = LocalizationService.Get("TabVoltageHistory");
             TabDiagnostics.Header = LocalizationService.Get("TabDiagnostics");
             TabLifeEstimates.Header = LocalizationService.Get("TabLifeEstimates");
             TabRecentUsage.Header = LocalizationService.Get("TabRecentUsage");
@@ -264,6 +269,15 @@ namespace WinBatLens
             TxtLegendDischarge.Text = LocalizationService.Get("LegendDischarge");
             TxtLegendCharge.Text = LocalizationService.Get("LegendCharge");
             TxtLegendGpu.Text = LocalizationService.Get("LegendGpu");
+
+            TxtVoltageHistoryTitle.Text = LocalizationService.Get("VoltageHistoryTitle");
+            TxtVoltageHistoryHint.Text = LocalizationService.Get("VoltageHistoryHint");
+            BtnClearVoltageHistory.Content = LocalizationService.Get("BtnClearVoltageHistory");
+            VoltagePercentColumn.Header = LocalizationService.Get("VoltagePercentColumn");
+            VoltageAverageColumn.Header = LocalizationService.Get("VoltageAverageColumn");
+            VoltageRangeColumn.Header = LocalizationService.Get("VoltageRangeColumn");
+            VoltageSamplesColumn.Header = LocalizationService.Get("VoltageEventsColumn");
+            VoltageLastColumn.Header = LocalizationService.Get("VoltageLastColumn");
 
             TxtHardwareTitle.Text = LocalizationService.Get("HardwareTitle");
             LblHwBatteryTelemetry.Text = LocalizationService.Get("HwBatteryTelemetry");
@@ -279,6 +293,167 @@ namespace WinBatLens
             if (_trayItemCheck != null) _trayItemCheck.Text = LocalizationService.Get("TrayCheck");
             if (_trayItemAutoStart != null) _trayItemAutoStart.Text = LocalizationService.Get("TrayAutoStart");
             if (_trayItemExit != null) _trayItemExit.Text = LocalizationService.Get("TrayExit");
+            RedrawBatteryVoltageChart();
+        }
+
+        private void GridVoltageChartContainer_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            RedrawBatteryVoltageChart();
+        }
+
+        /// <summary>
+        /// Draws the voltage curve against a fixed 0–100% horizontal axis.
+        /// Missing percentages are left as gaps rather than being interpolated
+        /// into values that the battery driver never reported.
+        /// </summary>
+        private void RedrawBatteryVoltageChart()
+        {
+            try
+            {
+                int pointCount = BatteryVoltageHistoryService.RecordedPercentCount;
+                int eventCount = BatteryVoltageHistoryService.TotalSampleCount;
+                TxtVoltageHistorySummary.Text = string.Format(
+                    LocalizationService.Get("VoltageHistorySummary"),
+                    pointCount,
+                    eventCount);
+
+                CanvasVoltageGridlines.Children.Clear();
+                CanvasVoltageLines.Children.Clear();
+                CanvasVoltageMarkers.Children.Clear();
+
+                double width = GridVoltageChartContainer.ActualWidth;
+                double height = GridVoltageChartContainer.ActualHeight;
+                if (width <= 0 || height <= 0 || pointCount == 0)
+                {
+                    SetVoltageAxisLabels(null, null);
+                    return;
+                }
+
+                var points = BatteryVoltageHistoryService.Points;
+                double measuredMin = points.Min(point => point.AverageVoltageV);
+                double measuredMax = points.Max(point => point.AverageVoltageV);
+                double voltageSpan = Math.Max(1.0, measuredMax - measuredMin);
+                double padding = Math.Max(0.2, voltageSpan * 0.1);
+                double axisMin = Math.Floor((measuredMin - padding) * 10.0) / 10.0;
+                double axisMax = Math.Ceiling((measuredMax + padding) * 10.0) / 10.0;
+
+                if (axisMax - axisMin < 1.0)
+                {
+                    double center = (measuredMin + measuredMax) / 2.0;
+                    axisMin = Math.Floor((center - 0.5) * 10.0) / 10.0;
+                    axisMax = axisMin + 1.0;
+                }
+
+                const double plotLeft = 44.0;
+                const double plotRight = 8.0;
+                double plotWidth = Math.Max(1.0, width - plotLeft - plotRight);
+
+                DrawVoltageChartGridlines(plotLeft, plotWidth, width, height);
+                SetVoltageAxisLabels(axisMin, axisMax);
+
+                double axisRange = axisMax - axisMin;
+                Polyline? currentSegment = null;
+                int previousPercent = -2;
+
+                foreach (var item in points)
+                {
+                    double x = plotLeft + (item.BatteryPercent / 100.0 * plotWidth);
+                    double normalized = (item.AverageVoltageV - axisMin) / axisRange;
+                    double y = height - Math.Clamp(normalized, 0.0, 1.0) * height;
+
+                    // Only adjacent percentage events share a segment. A gap
+                    // in the curve therefore remains visibly unmeasured.
+                    if (item.BatteryPercent != previousPercent + 1)
+                    {
+                        currentSegment = new Polyline
+                        {
+                            Stroke = BrushVoltage,
+                            StrokeThickness = 2.5,
+                        };
+                        currentSegment.StrokeLineJoin = PenLineJoin.Round;
+                        CanvasVoltageLines.Children.Add(currentSegment);
+                    }
+
+                    currentSegment!.Points.Add(new WpfPoint(x, y));
+
+                    var marker = new System.Windows.Shapes.Ellipse
+                    {
+                        Width = 6,
+                        Height = 6,
+                        Fill = BrushVoltage,
+                        Stroke = BrushVoltage,
+                        StrokeThickness = 1
+                    };
+                    System.Windows.Controls.Canvas.SetLeft(marker, x - 3);
+                    System.Windows.Controls.Canvas.SetTop(marker, y - 3);
+                    CanvasVoltageMarkers.Children.Add(marker);
+                    previousPercent = item.BatteryPercent;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Voltage chart redraw error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Draws the voltage chart's background grid. The vertical divisions are
+        /// placed across the plot area rather than the whole container, so a
+        /// gridline sits exactly under the percentage it labels.
+        /// </summary>
+        private void DrawVoltageChartGridlines(double plotLeft, double plotWidth, double width, double height)
+        {
+            for (int i = 1; i <= 3; i++)
+            {
+                double y = (height / 4.0) * i;
+                CanvasVoltageGridlines.Children.Add(new Line
+                {
+                    X1 = 0,
+                    Y1 = y,
+                    X2 = width,
+                    Y2 = y,
+                    Stroke = BrushGridStrong,
+                    StrokeThickness = 1,
+                    StrokeDashArray = DashStrong
+                });
+            }
+
+            // 0% and 100% included: the plot area is inset from the container,
+            // so its own edges are not otherwise visible.
+            for (int i = 0; i <= 10; i++)
+            {
+                double x = plotLeft + (plotWidth / 10.0) * i;
+                CanvasVoltageGridlines.Children.Add(new Line
+                {
+                    X1 = x,
+                    Y1 = 0,
+                    X2 = x,
+                    Y2 = height,
+                    Stroke = BrushGridFaint,
+                    StrokeThickness = 1,
+                    StrokeDashArray = DashFaint
+                });
+            }
+        }
+
+        private void SetVoltageAxisLabels(double? axisMin, double? axisMax)
+        {
+            if (!axisMin.HasValue || !axisMax.HasValue)
+            {
+                TxtVoltageYAxis100.Text = "-- V";
+                TxtVoltageYAxis75.Text = "-- V";
+                TxtVoltageYAxis50.Text = "-- V";
+                TxtVoltageYAxis25.Text = "-- V";
+                TxtVoltageYAxis0.Text = "-- V";
+                return;
+            }
+
+            double range = axisMax.Value - axisMin.Value;
+            TxtVoltageYAxis100.Text = $"{axisMax.Value:F2} V";
+            TxtVoltageYAxis75.Text = $"{(axisMin.Value + range * 0.75):F2} V";
+            TxtVoltageYAxis50.Text = $"{(axisMin.Value + range * 0.50):F2} V";
+            TxtVoltageYAxis25.Text = $"{(axisMin.Value + range * 0.25):F2} V";
+            TxtVoltageYAxis0.Text = $"{axisMin.Value:F2} V";
         }
 
         private void GridChartContainer_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -601,6 +776,7 @@ namespace WinBatLens
             // Real exit: Unloaded is not reliably raised for a top-level
             // Window, so stop the polling loop and release sensors/tray here.
             _livePowerCts?.Cancel();
+            BatteryVoltageHistoryService.Flush();
             try { HardwareSensorService.Shutdown(); } catch { }
             try { BatteryTelemetryService.Shutdown(); } catch { }
             try { PowerSupplyService.Shutdown(); } catch { }
@@ -796,6 +972,19 @@ namespace WinBatLens
                 {
                     // Add to Power & Battery Event History Service
                     RealTimePowerHistoryService.AddRecordFromPowerState(state);
+
+                    // Voltage history is event-based: a second-by-second poll
+                    // at the same battery percentage is intentionally ignored.
+                    bool voltageEventRecorded = false;
+                    if (state.IsVoltageMeasured)
+                    {
+                        voltageEventRecorded = BatteryVoltageHistoryService.RecordOnPercentChange(
+                            state.BatteryPercent,
+                            state.BatteryVoltageV,
+                            DateTime.Now);
+                    }
+                    if (voltageEventRecorded)
+                        RedrawBatteryVoltageChart();
 
                     // Update 60-Second Waveform Chart
                     UpdateWaveformChart(state);
@@ -1137,6 +1326,24 @@ namespace WinBatLens
             if (result == MessageBoxResult.Yes)
             {
                 RealTimePowerHistoryService.ClearHistory();
+            }
+        }
+
+        private void BtnClearVoltageHistory_Click(object sender, RoutedEventArgs e)
+        {
+            bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
+            var result = MessageBox.Show(
+                en
+                    ? "Clear all battery voltage-by-percentage history?"
+                    : "要清除所有電量百分比與電壓紀錄嗎？",
+                en ? "Confirm Clear" : "確認清除",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                BatteryVoltageHistoryService.Clear();
+                RedrawBatteryVoltageChart();
             }
         }
 

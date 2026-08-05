@@ -25,6 +25,16 @@ namespace WinBatLens.Services
 
         private static readonly Dictionary<string, string> ZhTwStrings = new Dictionary<string, string>
         {
+            ["TabVoltageHistory"] = " 🔋 電池電壓紀錄 ",
+            ["VoltageHistoryTitle"] = "🔋 電池電壓紀錄（0–100%）",
+            ["VoltageHistorySummary"] = "已記錄 {0} / 101 個電量區間，累積 {1} 次電量變化事件",
+            ["VoltageHistoryHint"] = "僅顯示電池驅動回報的實測電壓；同一電量未變化時不重複記錄。",
+            ["BtnClearVoltageHistory"] = "清除電壓紀錄",
+            ["VoltagePercentColumn"] = "電量 (%)",
+            ["VoltageAverageColumn"] = "平均電壓",
+            ["VoltageRangeColumn"] = "實測範圍",
+            ["VoltageEventsColumn"] = "變化次數",
+            ["VoltageLastColumn"] = "最後紀錄",
             ["AppTitle"] = "WinBat Lens - Windows 電池健康度與即時硬體耗電監測",
             ["SubTitle"] = "Windows 電池健康診斷與全系統耗電監測",
             ["AutoStart"] = "🚀 開機自動啟動",
@@ -95,6 +105,16 @@ namespace WinBatLens.Services
 
         private static readonly Dictionary<string, string> EnUsStrings = new Dictionary<string, string>
         {
+            ["TabVoltageHistory"] = " 🔋 Battery Voltage History ",
+            ["VoltageHistoryTitle"] = "🔋 Battery Voltage by Charge Level (0–100%)",
+            ["VoltageHistorySummary"] = "Recorded {0} / 101 charge-level ranges, {1} percentage-change events",
+            ["VoltageHistoryHint"] = "Only battery-driver measurements are shown; the same percentage is not recorded again until it changes.",
+            ["BtnClearVoltageHistory"] = "Clear Voltage History",
+            ["VoltagePercentColumn"] = "Battery (%)",
+            ["VoltageAverageColumn"] = "Average voltage",
+            ["VoltageRangeColumn"] = "Measured range",
+            ["VoltageEventsColumn"] = "Change events",
+            ["VoltageLastColumn"] = "Last recorded",
             ["AppTitle"] = "WinBat Lens - Windows Battery Health & Real-Time Hardware Power Monitor",
             ["SubTitle"] = "Windows Battery Health Diagnostics & Full System Power Monitor",
             ["AutoStart"] = "🚀 Launch on Windows Startup",
