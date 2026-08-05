@@ -1,29 +1,14 @@
 using System;
 using System.Linq;
+using System.Threading;
 using LibreHardwareMonitor.Hardware;
 
 namespace WinBatLens.Services
 {
     /// <summary>
-    /// Reads real power/temperature sensors via LibreHardwareMonitor.
-    /// Every reading is exposed as a nullable: <c>null</c> means this machine
-    /// genuinely does not report that value, and the caller must fall back to
-    /// an estimate and say so. Nothing here ever invents a number.
+    /// 提供基於 LibreHardwareMonitor 之實體硬體感測器（如 dGPU NVML 功耗與電池電壓）讀取服務。
+    /// 採非同步背景定時輪詢，並支援託管/待機模式切換（前台 1s / 托盤背景 5s）以最小化 CPU 資源佔用。
     /// </summary>
-    /// <remarks>
-    /// Measured on the development machine (Ryzen + RTX 3060 Laptop):
-    /// NVIDIA GPU package power and temperatures work at normal privilege
-    /// because NVML is a userspace API, but CPU package power comes from RAPL
-    /// via a kernel driver and reads 0 W unless the process is elevated. The UI
-    /// does not report CPU power for that reason, so the CPU group is not opened
-    /// at all — which also keeps the ring-0 driver out of the process.
-    /// <para>
-    /// Only sensors something actually displays are swept on the timer. An
-    /// <c>IHardware.Update()</c> is not free — measured per sweep on this
-    /// machine: dGPU 15.6 ms of CPU, iGPU 6.2 ms, CPU 3.1 ms, battery 0.0 ms —
-    /// and at one sweep a second the ones feeding nothing were pure cost.
-    /// </para>
-    /// </remarks>
     public static class HardwareSensorService
     {
         private static Computer? _computer;
@@ -33,35 +18,27 @@ namespace WinBatLens.Services
         private static readonly object _sync = new object();
         private static System.Threading.Timer? _pollTimer;
         private static int _polling;
+        private static int _shuttingDown;
 
-        // A sweep is far too slow to sit on the UI thread's 1 s tick (it was
-        // 85-256 ms when every hardware group was polled, ~16 ms now that only
-        // the dGPU and the battery are). Polling therefore runs on a background
-        // timer and the UI only ever reads cached fields.
+        /// <summary>前台高畫質圖表更新間隔（毫秒）。</summary>
         private const int RefreshMs = 1000;
 
-        // While the window is hidden in the tray the monitoring loop itself
-        // only samples every 5 s, so sweeping the sensors five times per
-        // consumed reading was pure waste — and this sweep is the single
-        // largest piece of background CPU the app spends (~16 ms of it a
-        // second, forever, on a machine nobody is looking at).
+        /// <summary>托盤背景節能更新間隔（毫秒）。</summary>
         private const int IdleRefreshMs = 5000;
 
         private static int _currentIntervalMs = RefreshMs;
 
+        /// <summary>感測器服務是否已成功初始化。</summary>
         public static bool IsInitialized { get; private set; }
 
-        /// <summary>True when discrete GPU package power is actually being reported.</summary>
-        public static bool IsGpuPowerAvailable { get; private set; }
-
+        /// <summary>獨立顯示卡 (dGPU) 實測 Package 功耗（瓦特 W），無數據時為 null。</summary>
         public static double? DgpuPackageW { get; private set; }
-        public static double? DgpuTempC { get; private set; }
-        public static double? BatteryRateW { get; private set; }
+
+        /// <summary>電池端實測電壓（伏特 V），無數據時為 null。</summary>
         public static double? BatteryVoltageV { get; private set; }
 
         /// <summary>
-        /// Opens the sensor stack. Slow (loads a kernel driver on some systems),
-        /// so call it from the background warmup, never on the UI thread.
+        /// 初始化感測器堆疊並建立背景輪詢定時器。建議於背景工作執行緒呼叫。
         /// </summary>
         public static void Initialize()
         {
@@ -71,12 +48,7 @@ namespace WinBatLens.Services
 
                 try
                 {
-                    // Only the hardware we actually report on. Enabling storage
-                    // and motherboard costs real time on Open() and adds
-                    // sensors we never read. The CPU group is off for the same
-                    // reason plus one more: it is the part that loads the ring-0
-                    // driver, and RAPL reads 0 W unelevated on this machine
-                    // anyway. CPU load already comes from a PerformanceCounter.
+                    Volatile.Write(ref _shuttingDown, 0);
                     _computer = new Computer
                     {
                         IsCpuEnabled = false,
@@ -90,75 +62,59 @@ namespace WinBatLens.Services
                     _dGpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuNvidia)
                             ?? _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuIntel);
 
-                    // An AMD-only machine has no NVIDIA/Intel part, so the AMD
-                    // GPU is the discrete one rather than the integrated one.
-                    // Where a discrete part exists the AMD one is integrated,
-                    // and nothing displays its wattage, so it is never polled.
                     _dGpu ??= _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuAmd);
 
                     IsInitialized = true;
 
-                    // Prime the sensors: several report null until the second
-                    // update, which would otherwise look like "unavailable".
+                    // 預熱感測器（避免前兩次採樣為 null）
                     PollOnce();
                     PollOnce();
-
-                    IsGpuPowerAvailable = DgpuPackageW.HasValue;
 
                     DisableValueHistory();
 
                     int interval = System.Threading.Volatile.Read(ref _currentIntervalMs);
                     _pollTimer = new System.Threading.Timer(_ => PollOnce(), null, interval, interval);
 
-                    // A SetIdleMode call that landed while the stack was being
-                    // opened found no timer to retarget, so honour it now.
                     interval = System.Threading.Volatile.Read(ref _currentIntervalMs);
                     try { _pollTimer.Change(interval, interval); } catch (ObjectDisposedException) { }
                 }
                 catch (Exception ex)
                 {
-                    // A locked-down machine, a blocked driver or a hostile AV can
-                    // all fail here. The app must still run on formula estimates.
                     System.Diagnostics.Debug.WriteLine($"HardwareSensorService.Initialize failed: {ex.Message}");
+                    try { _computer?.Close(); } catch { }
+                    _computer = null;
+                    _dGpu = null;
+                    _battery = null;
+                    DgpuPackageW = null;
+                    BatteryVoltageV = null;
                     IsInitialized = false;
                 }
             }
         }
 
         /// <summary>
-        /// Matches the sweep cadence to how often anything actually reads the
-        /// values: 1 s while the dashboard is on screen, 5 s once it is hidden
-        /// in the tray. Safe to call before <see cref="Initialize"/> — the
-        /// chosen period is remembered and applied when the timer starts.
+        /// 設定背景待機模式（視窗隱藏至托盤時傳入 true 以降低採樣率至 5 秒）。
         /// </summary>
+        /// <param name="idle">是否啟用待機節能模式。</param>
         public static void SetIdleMode(bool idle)
         {
             int interval = idle ? IdleRefreshMs : RefreshMs;
             if (System.Threading.Interlocked.Exchange(ref _currentIntervalMs, interval) == interval)
                 return;
 
-            // Deliberately outside _sync: Initialize can hold that lock for
-            // seconds while it opens the sensor stack, and this is called from
-            // the UI thread on minimize/restore, which must never block on it.
-            // Timer.Change is itself thread-safe, and a timer that has not been
-            // created yet picks the interval up when Initialize starts it.
             var timer = _pollTimer;
             if (timer == null) return;
 
-            // Restoring the window asks for fresh values, so the first fast
-            // sweep is due immediately rather than a second later.
             try { timer.Change(idle ? interval : 0, interval); }
             catch (ObjectDisposedException) { }
         }
 
         /// <summary>
-        /// One sensor sweep. Only ever runs on the polling thread (or on the
-        /// warmup thread during <see cref="Initialize"/>), never on the UI
-        /// thread. Re-entrancy is skipped rather than queued: if a sweep is
-        /// still running when the timer fires again, that tick is simply lost.
+        /// 執行單次硬體感測器採樣（於背景 ThreadPool 執行緒運作）。
         /// </summary>
         private static void PollOnce()
         {
+            if (Volatile.Read(ref _shuttingDown) != 0) return;
             if (System.Threading.Interlocked.Exchange(ref _polling, 1) == 1) return;
 
             try
@@ -166,12 +122,10 @@ namespace WinBatLens.Services
                 UpdateAndRead(_dGpu, hw =>
                 {
                     DgpuPackageW = ReadPower(hw, "GPU Package", "GPU Power", "GPU PPT");
-                    DgpuTempC = ReadTemp(hw, "GPU Core", "GPU Hot Spot");
                 });
 
                 UpdateAndRead(_battery, hw =>
                 {
-                    BatteryRateW = ReadPower(hw, "Charge/Discharge Rate", "Charge Rate", "Discharge Rate");
                     var v = hw.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Voltage && s.Value.HasValue && s.Value.Value > 0);
                     BatteryVoltageV = v?.Value;
                 });
@@ -187,11 +141,7 @@ namespace WinBatLens.Services
         }
 
         /// <summary>
-        /// Every ISensor retains a rolling history of past readings — one day's
-        /// worth by default. Polling once a second across every sensor of the
-        /// CPU/GPU/battery, that retention grew private bytes by ~20 MB in three
-        /// minutes. Only the instantaneous value is ever read here, so the
-        /// window is collapsed to zero and any primed values are dropped.
+        /// 關閉 LibreHardwareMonitor 感測器的滾動歷史紀錄，降低記憶體消耗。
         /// </summary>
         private static void DisableValueHistory()
         {
@@ -217,6 +167,9 @@ namespace WinBatLens.Services
             }
         }
 
+        /// <summary>
+        /// 更新硬體感測器並呼叫讀取委派。
+        /// </summary>
         private static void UpdateAndRead(IHardware? hw, Action<IHardware> read)
         {
             if (hw == null) return;
@@ -233,10 +186,7 @@ namespace WinBatLens.Services
         }
 
         /// <summary>
-        /// Returns the first matching power sensor with a usable reading.
-        /// A sensor present but reading exactly 0 W is treated as unavailable:
-        /// that is what RAPL reports when the driver could not be loaded, and a
-        /// powered-on component never genuinely draws 0 W.
+        /// 自指定的硬體物件中尋找匹配名稱之功耗感測器數值。
         /// </summary>
         private static double? ReadPower(IHardware hw, params string[] preferredNames)
         {
@@ -250,28 +200,34 @@ namespace WinBatLens.Services
             return null;
         }
 
-        private static double? ReadTemp(IHardware hw, params string[] preferredNames)
-        {
-            foreach (var name in preferredNames)
-            {
-                var s = hw.Sensors.FirstOrDefault(x =>
-                    x.SensorType == SensorType.Temperature &&
-                    string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
-                if (s?.Value is float v && v > 0.01f) return Math.Round(v, 1);
-            }
-            return null;
-        }
-
+        /// <summary>
+        /// 停止背景輪詢定時器並關閉 LibreHardwareMonitor 資源。
+        /// </summary>
         public static void Shutdown()
         {
+            Volatile.Write(ref _shuttingDown, 1);
+            System.Threading.Timer? timer;
+
             lock (_sync)
             {
-                try { _pollTimer?.Dispose(); } catch { }
+                timer = _pollTimer;
                 _pollTimer = null;
+            }
 
+            try { timer?.Dispose(); } catch { }
+
+            for (int i = 0; i < 1000 && Volatile.Read(ref _polling) != 0; i++)
+                Thread.Sleep(1);
+
+            lock (_sync)
+            {
                 try { _computer?.Close(); }
                 catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Sensor shutdown: {ex.Message}"); }
                 _computer = null;
+                _dGpu = null;
+                _battery = null;
+                DgpuPackageW = null;
+                BatteryVoltageV = null;
                 IsInitialized = false;
             }
         }

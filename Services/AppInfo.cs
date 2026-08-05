@@ -4,26 +4,27 @@ using System.Reflection;
 namespace WinBatLens.Services
 {
     /// <summary>
-    /// The application version, read from the assembly rather than hard-coded,
-    /// so the number on screen can never drift from the &lt;Version&gt; in
-    /// WinBatLens.csproj — bumping the release only touches the project file.
+    /// 提供應用程式版本號統一讀取服務。
+    /// 自動自 Assembly（對應 WinBatLens.csproj 中的 &lt;Version&gt; 屬性）讀取，避免硬編碼版本號與專案檔不一致。
     /// </summary>
     public static class AppInfo
     {
-        /// <summary>Release number alone, e.g. "1.1.2".</summary>
+        /// <summary>純版本號字串（例如："1.1.4"）。</summary>
         public static string Version { get; } = ReadVersion();
 
-        /// <summary>Version as shown in the UI, e.g. "v1.1.2".</summary>
+        /// <summary>顯示於 UI 上的版本字串（例如："v1.1.4"）。</summary>
         public static string DisplayVersion { get; } = "v" + Version;
 
+        /// <summary>
+        /// 自目前執行的 Assembly 讀取 InformationalVersion 或 Assembly Version。
+        /// </summary>
         private static string ReadVersion()
         {
             try
             {
                 var assembly = Assembly.GetExecutingAssembly();
 
-                // AssemblyInformationalVersion carries the <Version> value
-                // verbatim, so it is the closest thing to what the csproj says.
+                // AssemblyInformationalVersion 對應 csproj 內的 <Version> 設定
                 var informational = Normalize(assembly
                     .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
                     .InformationalVersion);
@@ -38,20 +39,17 @@ namespace WinBatLens.Services
             }
             catch
             {
-                // A version string is decoration; never let it stop startup.
-            }
-
+                // 版本號讀取失敗時不影響應用程式啟動
+}
             return "?";
         }
 
         /// <summary>
-        /// Reduces any of the version spellings the build emits to the plain
-        /// three-field release number, so two of them can be compared:
-        /// AssemblyInformationalVersion / ProductVersion arrive as
-        /// "1.1.2+&lt;commit sha&gt;" once SourceLink is active, and FileVersion
-        /// always carries a fourth field the csproj never sets meaningfully.
-        /// Returns null for anything unusable.
+        /// 將版本號字串正規化為標準的「三位數」發行版本格式 (Major.Minor.Build)。
+        /// 去除 SourceLink 產生的 Git Commit Hash 標記 (+sha) 與補零的第四位。
         /// </summary>
+        /// <param name="raw">原始版本字串。</param>
+        /// <returns>正規化後之三欄位版本號，若格式無效則傳回 null。</returns>
         public static string? Normalize(string? raw)
         {
             if (string.IsNullOrWhiteSpace(raw)) return null;

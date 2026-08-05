@@ -3,14 +3,24 @@ using System.Collections.Generic;
 
 namespace WinBatLens.Services
 {
+    /// <summary>
+    /// 表示應用程式支援之語系（繁體中文與英文）。
+    /// </summary>
     public enum AppLanguage
     {
+        /// <summary>繁體中文 (Traditional Chinese)</summary>
         TraditionalChinese,
+
+        /// <summary>英文 (English)</summary>
         English
     }
 
+    /// <summary>
+    /// 提供雙語系（繁體中文 / 英文）UI 字串切換與查詢服務。
+    /// </summary>
     public class LocalizationService
     {
+        /// <summary>目前應用程式顯示語系設定。</summary>
         public static AppLanguage CurrentLanguage { get; set; } = AppLanguage.TraditionalChinese;
 
         private static readonly Dictionary<string, string> ZhTwStrings = new Dictionary<string, string>
@@ -75,8 +85,6 @@ namespace WinBatLens.Services
             ["TrayTooltip"] = "WinBat Lens - 電池健康度與即時耗電監測",
             ["TrayBalloonTitle"] = "WinBat Lens 已縮小至托盤",
             ["TrayBalloonText"] = "程式將在背景持續為您進行即時耗電與電池狀態監測。",
-            // Duplicate-launch dialogs. {0} is the running version, {1} the one
-            // being launched.
             ["InstanceVersionTitle"] = "WinBat Lens - 偵測到不同版本",
             ["InstanceVersionText"] = "背景已有 WinBat Lens v{0} 正在執行，而您啟動的是 {1}。\n\n要結束執行中的 v{0}，改用 {1} 嗎？\n\n選擇「否」則會叫出執行中的 v{0} 視窗。",
             ["InstanceReplaceFailedTitle"] = "WinBat Lens - 無法切換版本",
@@ -155,12 +163,20 @@ namespace WinBatLens.Services
             ["InstanceRunningText"] = "WinBat Lens is already running in the background, so a second copy was not started.\n\nClick its system tray icon to open the main window."
         };
 
+        /// <summary>
+        /// 根據鍵值與目前選擇的語系取得多國語言文字。
+        /// </summary>
+        /// <param name="key">語系鍵值。</param>
+        /// <returns>翻譯後的文字內容，若不存在則傳回原鍵值。</returns>
         public static string Get(string key)
         {
             var dict = CurrentLanguage == AppLanguage.English ? EnUsStrings : ZhTwStrings;
             return dict.TryGetValue(key, out var val) ? val : key;
         }
 
+        /// <summary>
+        /// 切換目前應用程式的語系設定（繁體中文 &lt;-&gt; 英文）。
+        /// </summary>
         public static void ToggleLanguage()
         {
             CurrentLanguage = CurrentLanguage == AppLanguage.TraditionalChinese 

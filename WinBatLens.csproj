@@ -13,9 +13,9 @@
     <Company>WinBat Lens</Company>
     <Product>WinBat Lens</Product>
     <Description>Windows 電池健康度視覺化儀表板與 powercfg /batteryreport 解析工具</Description>
-    <Version>1.1.4</Version>
-    <AssemblyVersion>1.1.4.0</AssemblyVersion>
-    <FileVersion>1.1.4.0</FileVersion>
+    <Version>1.1.5</Version>
+    <AssemblyVersion>1.1.5.0</AssemblyVersion>
+    <FileVersion>1.1.5.0</FileVersion>
 
     <!-- Memory tuning for a long-running background tray app -->
     <!-- Workstation (non-server) GC keeps a single small heap instead of one per CPU core -->

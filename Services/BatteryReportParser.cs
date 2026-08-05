@@ -5,17 +5,20 @@ using WinBatLens.Models;
 
 namespace WinBatLens.Services
 {
+    /// <summary>
+    /// 提供 Windows 電池報告 HTML 檔案（powercfg /batteryreport）之解析與資料提取服務。
+    /// 支援搭配即時電池驅動遙測數據（<see cref="BatteryTelemetryService.PackInfo"/>）進行綜合健康度分析與覆蓋。
+    /// </summary>
     public class BatteryReportParser
     {
         /// <summary>
-        /// Parses a powercfg battery report, optionally overlaying what the
-        /// battery driver reports right now.
+        /// 解析 powercfg 電池報告 HTML 內容，並可選擇性疊加即時電池驅動遙測資料。
         /// </summary>
+        /// <param name="htmlContent">powercfg /batteryreport 所產生的 HTML 檔案內容。</param>
         /// <param name="pack">
-        /// Live pack information from <see cref="BatteryTelemetryService"/>, or
-        /// null to parse the report on its own (as when the user opens someone
-        /// else's saved HTML report).
+        /// 來自 <see cref="BatteryTelemetryService"/> 之即時電池驅動資訊；若為 null，則僅解析報告本文（例如使用者開啟外部 HTML 檔案時）。
         /// </param>
+        /// <returns>解析完成之 <see cref="BatteryReportData"/> 完整報告模型。</returns>
         public static BatteryReportData Parse(string htmlContent, BatteryTelemetryService.PackInfo? pack = null)
         {
             var data = new BatteryReportData();
@@ -27,35 +30,21 @@ namespace WinBatLens.Services
             data.BatteryLifeEstimates = ParseBatteryLifeEstimates(htmlContent);
             data.RecentUsage = ParseRecentUsage(htmlContent);
 
-            // Must run before the metrics: health, wear and every diagnostic is
-            // computed from the merged specs.
+            // 必須在計算指標前執行：健康度、損耗與診斷皆依據合併後的規格計算
             if (pack != null && pack.IsValid) OverlayDriverSpecs(data.BatterySpecs, pack);
 
-            // Compute metrics & diagnostics
+            // 計算健康指標與診斷提示
             data.HealthMetrics = CalculateHealthMetrics(data.BatterySpecs);
             data.Diagnostics = GenerateDiagnostics(data);
 
             return data;
-        }
-
+}
         /// <summary>
-        /// Prefers the battery driver's live figures over the report's snapshot.
+        /// 以即時電池驅動數據覆蓋 powercfg 報告數據，取得最新且精確之容量與製造日期資訊。
         /// </summary>
-        /// <remarks>
-        /// The report is generated from data Windows logged earlier, so its
-        /// full-charge capacity lags: measured on the development machine the
-        /// report said 55,969 mWh while the driver said 56,032 mWh. The driver
-        /// also fills in fields the report leaves blank — cycle count and the
-        /// manufacture date, which powercfg has no column for at all — so a
-        /// machine whose report is empty or unparseable still gets a real
-        /// health score instead of being reported as having no battery.
-        /// </remarks>
         private static void OverlayDriverSpecs(BatterySpecs specs, BatteryTelemetryService.PackInfo pack)
         {
-            // A relative-capacity pack reports capacities in its own arbitrary
-            // units, and a report in mAh cannot be mixed with the driver's mWh.
-            // In both cases the ratio is still sound, so health is left to the
-            // report's own numbers rather than combining incompatible units.
+            // 檢查單位是否一致（避免 mWh 與 mAh 混用）
             bool unitsMatch = !pack.IsCapacityRelative
                 && (specs.Unit == "mWh" || specs.DesignCapacity <= 0);
 
@@ -76,14 +65,12 @@ namespace WinBatLens.Services
                 }
             }
 
-            // Cycle count is blank in the report on a great many laptops; take
-            // the driver's whenever it has one.
+            // 充電循環次數：若報告中缺失則採用驅動程式讀取值
             if (pack.CycleCount.HasValue) specs.CycleCount = pack.CycleCount;
 
             specs.ManufactureDate = pack.ManufactureDate;
 
-            // Identity: keep whatever the report gave, since powercfg tends to
-            // carry the friendlier string, and fall back to the driver's.
+            // 識別資訊：優先保留報告文字，若為空則退回採用驅動程式回報值
             if (IsBlank(specs.Chemistry) && !string.IsNullOrWhiteSpace(pack.Chemistry))
                 specs.Chemistry = pack.Chemistry;
 
@@ -95,8 +82,7 @@ namespace WinBatLens.Services
         }
 
         /// <summary>
-        /// True for an empty cell or one of the defaults the model starts with,
-        /// which are placeholders rather than parsed values.
+        /// 判斷字串是否為空或是預設佔位符（N/A、Primary Battery、Windows PC 等）。
         /// </summary>
         private static bool IsBlank(string? value)
         {
@@ -109,6 +95,9 @@ namespace WinBatLens.Services
                 || v == "Li-ion";
         }
 
+        /// <summary>
+        /// 自 HTML 解析系統基本資訊（電腦名稱、產品名稱、BIOS、OS 版本與報告時間）。
+        /// </summary>
         private static SystemInfo ParseSystemInfo(string html)
         {
             var info = new SystemInfo();
@@ -131,11 +120,14 @@ namespace WinBatLens.Services
             return info;
         }
 
+        /// <summary>
+        /// 自 HTML 解析已安裝電池規格（名稱、製造商、序號、化學材質、設計容量、滿充容量、循環次數）。
+        /// </summary>
         private static BatterySpecs ParseBatterySpecs(string html)
         {
             var specs = new BatterySpecs();
 
-            // Locate INSTALLED BATTERIES section specifically
+            // 定位 INSTALLED BATTERIES 區塊
             var sectionMatch = Regex.Match(html, @"INSTALLED BATTERIES[\s\S]*?<table[^>]*>([\s\S]*?)<\/table>", RegexOptions.IgnoreCase);
             string searchBlock = sectionMatch.Success ? sectionMatch.Groups[1].Value : html;
 
@@ -179,6 +171,9 @@ namespace WinBatLens.Services
             return specs;
         }
 
+        /// <summary>
+        /// 解析歷史電池容量變遷表格。
+        /// </summary>
         private static List<CapacityHistoryItem> ParseCapacityHistory(string html)
         {
             var list = new List<CapacityHistoryItem>();
@@ -214,6 +209,9 @@ namespace WinBatLens.Services
             return list;
         }
 
+        /// <summary>
+        /// 解析歷史使用時間統計表格（電池使用時間 vs 插電時間）。
+        /// </summary>
         private static List<UsageHistoryItem> ParseUsageHistory(string html)
         {
             var list = new List<UsageHistoryItem>();
@@ -249,6 +247,9 @@ namespace WinBatLens.Services
             return list;
         }
 
+        /// <summary>
+        /// 解析電池續航估算表格。
+        /// </summary>
         private static List<BatteryLifeEstimateItem> ParseBatteryLifeEstimates(string html)
         {
             var list = new List<BatteryLifeEstimateItem>();
@@ -284,6 +285,9 @@ namespace WinBatLens.Services
             return list;
         }
 
+        /// <summary>
+        /// 解析近期使用歷程紀錄表格。
+        /// </summary>
         private static List<RecentUsageItem> ParseRecentUsage(string html)
         {
             var list = new List<RecentUsageItem>();
@@ -321,23 +325,36 @@ namespace WinBatLens.Services
             return list;
         }
 
+        /// <summary>
+        /// 計算健康度指標（健康百分比、損耗率、容量差額與狀態等級說明）。
+        /// </summary>
         private static HealthMetrics CalculateHealthMetrics(BatterySpecs specs)
         {
-            // No design capacity means the battery-report contains no battery at
-            // all (e.g. a desktop PC, or the battery was removed). Report a neutral
-            // "no battery" state instead of a misleading 0% "critically degraded"
-            // score, which is what the old (current/1.0)*100 formula produced.
+            // 若無設計容量，代表此裝置無電池（如桌上型電腦或電池已拔除）
             if (specs.DesignCapacity <= 0)
             {
                 return new HealthMetrics
                 {
                     HasBattery = false,
+                    IsHealthMeasured = false,
                     HealthPercent = 0,
                     WearPercent = 0,
                     CapacityLoss = 0,
                     StatusLabel = "無電池裝置",
                     StatusClass = "None",
                     SummaryText = "未偵測到電池，本機可能為桌上型電腦或電池已卸除。電池健康度數據不適用，但全系統即時硬體功耗監測仍可正常使用。"
+                };
+            }
+
+            if (specs.FullChargeCapacity <= 0)
+            {
+                return new HealthMetrics
+                {
+                    HasBattery = true,
+                    IsHealthMeasured = false,
+                    StatusLabel = "無法判定",
+                    StatusClass = "None",
+                    SummaryText = "電池缺少滿電容量資料，無法計算健康度。"
                 };
             }
 
@@ -366,6 +383,7 @@ namespace WinBatLens.Services
 
             return new HealthMetrics
             {
+                IsHealthMeasured = true,
                 HealthPercent = healthPercent,
                 WearPercent = wearPercent,
                 CapacityLoss = Math.Max(0, specs.DesignCapacity - specs.FullChargeCapacity),
@@ -375,14 +393,15 @@ namespace WinBatLens.Services
             };
         }
 
+        /// <summary>
+        /// 根據電池報告數據與指標，自動產生健康與維護診斷提示清單。
+        /// </summary>
         private static List<DiagnosticItem> GenerateDiagnostics(BatteryReportData report)
         {
             var tips = new List<DiagnosticItem>();
             var metrics = report.HealthMetrics;
             var specs = report.BatterySpecs;
 
-            // Desktop / no-battery machine: skip all degradation warnings that
-            // would otherwise be driven by a bogus 0% health score.
             if (!metrics.HasBattery)
             {
                 tips.Add(new DiagnosticItem
@@ -390,6 +409,17 @@ namespace WinBatLens.Services
                     Type = "info",
                     Title = "未偵測到電池裝置",
                     Description = "本機可能為桌上型電腦，或電池已被卸除，因此電池健康度、容量與循環次數等數據不適用。全系統即時硬體功耗監測功能仍可正常運作。"
+                });
+                return tips;
+            }
+
+            if (!metrics.IsHealthMeasured)
+            {
+                tips.Add(new DiagnosticItem
+                {
+                    Type = "info",
+                    Title = "健康度無法判定",
+                    Description = "報告缺少設計容量或滿電容量，未顯示虛假的健康百分比。"
                 });
                 return tips;
             }
@@ -445,8 +475,6 @@ namespace WinBatLens.Services
             }
             else
             {
-                // Worth saying out loud: a blank cycle count is the pack's
-                // firmware declining to keep the tally, not a read failure.
                 tips.Add(new DiagnosticItem
                 {
                     Type = "info",
@@ -476,18 +504,20 @@ namespace WinBatLens.Services
             return tips;
         }
 
+        /// <summary>
+        /// 清除 HTML 標籤、HtmlDecode 並整合連續空白，傳回乾淨文字。
+        /// </summary>
         private static string StripTags(string input)
         {
             if (string.IsNullOrWhiteSpace(input)) return string.Empty;
             string clean = Regex.Replace(input, @"<[^>]+>", " ");
             clean = System.Net.WebUtility.HtmlDecode(clean);
-            // powercfg splits date ranges across source lines, e.g.
-            // "2026-07-12\n - 2026-07-18". Those newlines survive into the cell
-            // text and make a TextBlock render two lines, so collapse every run
-            // of whitespace into a single space.
             return Regex.Replace(clean, @"\s+", " ").Trim();
         }
 
+        /// <summary>
+        /// 從字串中提取所有數字並轉為整數。
+        /// </summary>
         private static int ExtractNumber(string str)
         {
             if (string.IsNullOrWhiteSpace(str)) return 0;

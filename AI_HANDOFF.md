@@ -1,5 +1,31 @@
 # Project State & Handoff
 
+## v1.1.5 release preparation (2026-08-05)
+
+The post-v1.1.4 background-startup and comprehensive audit changes are being
+prepared for publication as v1.1.5. The project version is now 1.1.5 and the
+release notes are in `.github/release-notes/v1.1.5.md`.
+
+The intended release scope is the complete existing working-tree change set:
+background startup, tray warmup/idle behavior, removal of unsupported or dead
+telemetry work, timeout cleanup, cross-build duplicate-launch discovery,
+parser coverage, and related documentation/comments. No unrelated changes were
+found in the current diff. GitHub CLI authentication is valid in the host
+network context. Local validation passed: Debug and Release builds with
+`--no-restore -warnaserror` completed with 0 warnings/errors, the parser suite
+passed 5/5, and `git diff --check` passed. `build-release.ps1` generated all
+three assets; they are unsigned by design in this environment:
+
+- `WinBatLens_v1.1.5_Portable_x64.exe`: SHA-256
+  `4EC0100C5A33479896D96ADE147A946FEC0FA3F299A58B89BB1B9AA3C162B3C9`
+- `WinBatLens_v1.1.5_Portable_x64.zip`: SHA-256
+  `458CA504049B48A10A982F95FDB136E37425BBE039B2D7D146263E5D04C9D525`
+- `WinBatLens_v1.1.5_Setup_x64.exe`: SHA-256
+  `B4F5C013BA3F6CEAF1D1E917C068304A2CD993E3CB8FE90A2A830DAFA4DDA4B9`
+
+The ZIP contains `WinBatLens.exe`, `README.md`, and `LICENSE`. Publication to
+GitHub is the remaining step.
+
 ## v1.1.4 released (latest)
 
 `main` had diverged: the version-display / duplicate-launch work sat locally
@@ -38,11 +64,88 @@ portable build is running — the process takes its name from the file, which is
 `WinBatLens_v1.1.4_Portable_x64.exe`. Two probes concluded "the app killed
 itself" on that basis when the instance was alive the whole time and later
 launches were correctly stepping aside. Match on `Win32_Process` `Name like
-'%WinBat%'` instead. Same reason `SingleInstanceService.FindRunningInstance`
-(`GetProcessesByName(self.ProcessName)`) cannot see an installed
-`WinBatLens.exe` from a portable build: the mutex still blocks the second
-instance, but the version prompt and the foreground handoff are skipped. Not
-fixed here.
+'%WinBat%'` instead. `SingleInstanceService.FindRunningInstance` now matches
+the `WinBatLens` process-name prefix instead of only the current executable
+name, so installed and portable launches can find each other while sharing the
+mutex.
+
+## Background Windows startup (2026-08-05)
+
+The current task is to keep a Windows-started monitor in the background instead
+of briefly opening the dashboard. `StartupService.SetAutoStart(true)` now writes
+the per-user Run value as `"<exe>" --background`, and the Inno Setup autostart
+entry uses the same argument. `MainWindow` detects that argument, initializes
+the tray icon, hides the window during `Loaded`, and suppresses the first tray
+balloon for this launch. Manual launches without the argument still open the
+dashboard normally.
+
+An existing pre-change Run value cannot identify whether the current launch
+came from Windows startup or a manual shortcut, so users with that old value
+must toggle auto-start off and on once (or reinstall with the autostart task)
+to write the new argument.
+
+Code changed: `Services/StartupService.cs`, `MainWindow.xaml.cs`, and
+`installer/WinBatLens.iss`.
+
+Verification: Debug and Release builds passed with `-warnaserror` and no
+warnings/errors; the existing four parser tests passed. `git diff --check`
+also passed. Inno Setup (`ISCC`) is not installed in this environment, and a
+live `--background` startup smoke test was intentionally not run because an
+already-running installed WinBat Lens instance owns the single-instance mutex;
+terminating it would risk interrupting the user's monitor.
+
+## Comprehensive code audit started (2026-08-05)
+
+The working tree already contained the background-startup changes above; they
+remain in place and are not being discarded. Baseline verification before the
+audit: `dotnet build WinBatLens.csproj -c Debug -warnaserror` passed with 0
+warnings/errors, and the parser test project passed 4/4.
+
+Confirmed audit targets for the current pass:
+- `RealTimePowerService` still calculated RAM, disk, network and legacy GPU
+  values that no control or history record consumes; these are dead per-tick
+  work and will be removed rather than left as misleading data fields.
+- Native RAM-read failure still returned a hard-coded 8/16 GB pair; this must
+  become an unavailable result, never a fabricated measurement.
+- Battery metadata retried every tick on no-battery systems because an invalid
+  cache bypassed the refresh interval; invalid battery-temperature replies also
+  never reached the failure threshold.
+- `SingleInstanceService` searched only the exact current process name, so an
+  installed `WinBatLens.exe` and a portable `WinBatLens_v...exe` could share the
+  mutex while version/foreground handoff discovery failed.
+- Timed-out `powercfg` runs could leave temporary report files, and dynamic tray
+  HICON ownership/cleanup needs a safer explicit lifetime.
+
+Audit implementation and verification completed: the dead RAM/disk/network/
+legacy-GPU/load calculations and their unused model fields were removed; RAM
+failure no longer fabricates 8/16 GB; battery metadata and invalid-temperature
+polling are throttled/failure-counted correctly; portable/installed process
+names are matched safely; timed-out `powercfg` reports are cleaned up; tray
+HICON handles and sensor shutdown have explicit cleanup; UI refreshes no longer
+append duplicate history samples; charger deficit is shown as a warning; and
+health is left unmeasured when the report lacks full-charge capacity. Debug and
+Release builds both pass with `-warnaserror` and 0 warnings/errors, the parser
+test suite passes 5/5, and `git diff --check` reports no errors. Inno Setup is
+still unavailable in this environment, and no live hardware/UI smoke test was
+run during this pass.
+
+## Branch consolidation (2026-08-05)
+
+After refreshing `origin`, every branch had no commits outside `main`. The
+already-merged local `feat/show-version-and-handle-duplicate-launch` branch
+and remote `claude/memory-cpu-optimization-p0z5ve` branch were deleted. Only `main` remains locally and on `origin`; the working-tree audit changes remain
+uncommitted.
+
+## Complete Traditional Chinese XML Documentation Pass (2026-08-05)
+
+Added comprehensive Traditional Chinese XML doc comments (`/// <summary>`, `<param>`, `<returns>`) and inline explanatory notes across all project files:
+- **Models**: `BatteryReportData.cs`, `GpuInfo.cs`, `PowerHistoryRecord.cs`
+- **Services**: `AppInfo.cs`, `BatteryReportParser.cs`, `DxgiAdapterService.cs`, `DynamicTrayIconService.cs`, `GpuInfoService.cs`, `HardwareSensorService.cs`, `LocalizationService.cs`, `PowerCfgService.cs`, `PowerSupplyService.cs`, `RealTimePowerHistoryService.cs`, `RealTimePowerService.cs`, `SingleInstanceService.cs`, `StartupService.cs`
+- **UI & Converters**: `App.xaml.cs`, `HealthGradeBrushConverter.cs`, `MainWindow.xaml.cs`
+- **Scripts & Tests**: `build-release.ps1`, `tests/WinBatLens.Tests/BatteryReportParserTests.cs`
+
+Verification: `dotnet build -c Debug -warnaserror` succeeds with 0 errors and 0 warnings. `dotnet test` passes all 5/5 unit tests cleanly.
+
 
 ## v1.1.3 release pipeline
 
