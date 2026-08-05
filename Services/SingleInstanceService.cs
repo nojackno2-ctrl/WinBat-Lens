@@ -6,13 +6,8 @@ using System.Threading;
 namespace WinBatLens.Services
 {
     /// <summary>
-    /// Keeps exactly one WinBat Lens alive per user session.
-    ///
-    /// A duplicate launch used to call Shutdown() and vanish, which looks
-    /// identical to the app failing to start. Instead it now hands the running
-    /// instance the foreground so its window appears — which is what
-    /// double-clicking the shortcut was asking for — and, when the two builds
-    /// are different versions, offers to replace the running one.
+    /// 提供單一執行個體 (Single-Instance) 檢測、重複開啟聚焦喚醒與跨版本更換啟動機制服務。
+    /// 使用具名 Mutex 與 EventWaitHandle 進行跨行程協調。
     /// </summary>
     public static class SingleInstanceService
     {
