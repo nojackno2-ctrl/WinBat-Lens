@@ -1,10 +1,58 @@
 # Project State & Handoff
 
-## v1.1.5 release preparation (2026-08-05)
+## v1.1.6: battery voltage history by percentage (2026-08-05)
+
+Added a battery voltage history feature. The monitor records a real
+battery-driver voltage only when the integer battery percentage changes; the
+same percentage is ignored on subsequent one-second polls. The first
+observation seeds a percentage that has no prior record, while a percentage
+seen again after the battery moves is aggregated as another change event.
+
+`BatteryVoltageHistoryService` persists per-percentage average/minimum/maximum
+voltage, event count, and last timestamp in the user's LocalAppData. The new
+Battery Voltage History tab plots the observed 0-100% curve, leaves gaps for
+unmeasured percentages, and includes an exact-value table plus clear action.
+The chart never uses `RealTimePowerState.BatteryVoltageV` when
+`IsVoltageMeasured` is false, because that state can carry an internal nominal
+voltage used only for power math.
+
+Shipped together with the sub-watt tray icon fix below as **v1.1.6**; release
+notes are in `.github/release-notes/v1.1.6.md`.
+
+### Review pass before release
+
+Four defects were found and fixed in the new tab before publication, all in
+presentation rather than in the recorded measurements:
+
+1. **The vertical gridlines did not line up with the data.** They were drawn
+   across the whole container in tenths (`width/10*i`), but the curve is
+   plotted into an inset area (`plotLeft = 44`, `plotRight = 8`) that leaves
+   room for the Y-axis labels. `DrawVoltageChartGridlines` now takes
+   `plotLeft`/`plotWidth` and draws `i = 0..10` across the plot area, so a
+   gridline sits exactly under the percentage it marks and the plot's own
+   0%/100% edges are visible.
+2. **The 25% and 75% X-axis labels were in the wrong place.** Five equal
+   columns with the outer two edge-aligned put their centres at 30% and 70%.
+   The end columns are now `0.5*`, which lands every label on its true
+   position.
+3. **`LastRecordedAt` was bound raw**, so the column rendered a
+   culture-dependent `DateTime.ToString()` instead of the app's
+   `yyyy-MM-dd HH:mm:ss` convention. A `LastRecordedAtText` property was added
+   (and change-notified from `AddSample`) to match `PowerHistoryRecord`.
+4. **The XAML placeholder text and the samples-column header disagreed with
+   the localization strings** they are overwritten with at runtime — the header
+   said 樣本數 where the string is 變化次數, which is the more accurate name for
+   what is counted.
+
+Validation after the fixes: Debug and Release solution builds passed with
+`-warnaserror` at 0 warnings / 0 errors, `dotnet test` passed 17/17, and
+`git diff --check` passed.
+
+## v1.1.5 release and publication (2026-08-05)
 
 The post-v1.1.4 background-startup and comprehensive audit changes are being
-prepared for publication as v1.1.5. The project version is now 1.1.5 and the
-release notes are in `.github/release-notes/v1.1.5.md`.
+published as v1.1.5. The project version is 1.1.5 and the release notes are in
+`.github/release-notes/v1.1.5.md`.
 
 The intended release scope is the complete existing working-tree change set:
 background startup, tray warmup/idle behavior, removal of unsupported or dead
@@ -23,8 +71,31 @@ three assets; they are unsigned by design in this environment:
 - `WinBatLens_v1.1.5_Setup_x64.exe`: SHA-256
   `B4F5C013BA3F6CEAF1D1E917C068304A2CD993E3CB8FE90A2A830DAFA4DDA4B9`
 
-The ZIP contains `WinBatLens.exe`, `README.md`, and `LICENSE`. Publication to
-GitHub is the remaining step.
+The ZIP contains `WinBatLens.exe`, `README.md`, and `LICENSE`. PR #8 was merged
+to `main` at `c9fdbed`, tag `v1.1.5` triggered Release workflow run
+`30962533960`, and the normal GitHub Release is published at
+`https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v1.1.5`.
+
+The GitHub runner rebuilt the release assets, so the authoritative downloaded
+asset hashes are:
+
+- `WinBatLens_v1.1.5_Portable_x64.exe`: SHA-256
+  `1c8e0757439a0bde196149022bf048f6f7faf91574ff5496d640a07abaf798c9`
+- `WinBatLens_v1.1.5_Portable_x64.zip`: SHA-256
+  `1cdd0edf0908228021ef1ae34e0beec903c670fab2dc4b72ca889d16d6b35d2a`
+- `WinBatLens_v1.1.5_Setup_x64.exe`: SHA-256
+  `c66ca8fe3e8928240917a29d4df8a4364c2b1a3fe571fe443244fd973164cd76`
+
+## Sub-watt tray icon power display (2026-08-05)
+
+`DynamicTrayIconService` previously rounded every measured charge/discharge
+rate to an integer before drawing it. A real rate between 0.1W and 0.9W was
+therefore rendered as `0`, hiding the fact that power was flowing. The shared
+`FormatWattageForIcon` formatter now keeps one decimal place below 1W while
+preserving the existing integer and `99+` display rules at higher values.
+
+Added `TrayIconPowerFormattingTests` covering sub-watt, whole-watt, and
+overflow formatting. Released as part of v1.1.6.
 
 ## v1.1.4 released (latest)
 
@@ -131,10 +202,12 @@ run during this pass.
 
 ## Branch consolidation (2026-08-05)
 
-After refreshing `origin`, every branch had no commits outside `main`. The
-already-merged local `feat/show-version-and-handle-duplicate-launch` branch
-and remote `claude/memory-cpu-optimization-p0z5ve` branch were deleted. Only `main` remains locally and on `origin`; the working-tree audit changes remain
-uncommitted.
+After refreshing `origin`, `codex/v1.1.5-release` was confirmed to have no
+commits outside `main`; `main` already contained its release commit via the
+`c9fdbed` merge. The local and `origin` copies of that already-merged branch
+were deleted. Only `main` remains locally and on `origin`. The battery-voltage
+history and sub-watt tray-formatting changes in the working tree remain
+uncommitted and were preserved.
 
 ## Complete Traditional Chinese XML Documentation Pass (2026-08-05)
 

@@ -505,7 +505,91 @@
                         </Grid>
                     </TabItem>
 
-                    <!-- TAB 3: Smart Diagnostics -->
+                    <!-- TAB 3: Battery Voltage by State of Charge (0–100%) -->
+                    <TabItem x:Name="TabVoltageHistory" Header=" 🔋 電池電壓紀錄 ">
+                        <Grid Margin="0,8,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="270"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Grid Grid.Row="0" Margin="0,0,0,7">
+                                <StackPanel>
+                                    <TextBlock x:Name="TxtVoltageHistoryTitle" Text="🔋 電池電壓紀錄（0–100%）" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>
+                                    <TextBlock x:Name="TxtVoltageHistorySummary" Text="已記錄 0 / 101 個電量區間，累積 0 次電量變化事件" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="TxtVoltageHistoryHint" Text="僅顯示電池驅動回報的實測電壓；同一電量未變化時不重複記錄。" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <Button x:Name="BtnClearVoltageHistory" Content="清除電壓紀錄" Style="{StaticResource SecondaryButtonStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="10,4" Click="BtnClearVoltageHistory_Click"/>
+                            </Grid>
+
+                            <Border Grid.Row="1" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="0,0,0,7">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Border Grid.Row="0" Background="#060910" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+                                        <Grid x:Name="GridVoltageChartContainer" SizeChanged="GridVoltageChartContainer_SizeChanged">
+                                            <Canvas x:Name="CanvasVoltageGridlines"/>
+
+                                            <Grid VerticalAlignment="Stretch" HorizontalAlignment="Left" Margin="8,4,0,4" IsHitTestVisible="False">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="*"/>
+                                                    <RowDefinition Height="*"/>
+                                                    <RowDefinition Height="*"/>
+                                                    <RowDefinition Height="*"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <TextBlock x:Name="TxtVoltageYAxis100" Grid.Row="0" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis75" Grid.Row="1" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis50" Grid.Row="2" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis25" Grid.Row="3" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis0" Grid.Row="4" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Bottom"/>
+                                            </Grid>
+
+                                            <!-- Segments are split at missing percentages, so the line never
+                                                 implies a voltage that has not actually been observed. -->
+                                            <Canvas x:Name="CanvasVoltageLines" IsHitTestVisible="False"/>
+                                            <Canvas x:Name="CanvasVoltageMarkers" IsHitTestVisible="False"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Half-width end columns so 25% / 50% / 75% land on their true
+                                         positions: five equal columns would centre them at 30% and 70%. -->
+                                    <Grid Grid.Row="1" Margin="44,3,8,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="0.5*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="0.5*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="0%" Grid.Column="0" FontSize="10" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="25%" Grid.Column="1" FontSize="10" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="50%" Grid.Column="2" FontSize="10" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="75%" Grid.Column="3" FontSize="10" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="100%" Grid.Column="4" FontSize="10" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <ListView x:Name="LvBatteryVoltageHistory" Grid.Row="2" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn x:Name="VoltagePercentColumn" Header="電量 (%)" Width="100" DisplayMemberBinding="{Binding BatteryPercentText}"/>
+                                        <GridViewColumn x:Name="VoltageAverageColumn" Header="平均電壓" Width="120" DisplayMemberBinding="{Binding AverageVoltageText}"/>
+                                        <GridViewColumn x:Name="VoltageRangeColumn" Header="實測範圍" Width="150" DisplayMemberBinding="{Binding VoltageRangeText}"/>
+                                        <GridViewColumn x:Name="VoltageSamplesColumn" Header="變化次數" Width="100" DisplayMemberBinding="{Binding SampleCount}"/>
+                                        <GridViewColumn x:Name="VoltageLastColumn" Header="最後紀錄" Width="170" DisplayMemberBinding="{Binding LastRecordedAtText}"/>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                        </Grid>
+                    </TabItem>
+
+                    <!-- TAB 4: Smart Diagnostics -->
                     <TabItem x:Name="TabDiagnostics" Header=" 💡 智慧診斷與維護建議 ">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
                             <ItemsControl x:Name="IcDiagnostics">
@@ -523,7 +607,7 @@
                         </ScrollViewer>
                     </TabItem>
 
-                    <!-- TAB 4: Life Estimates -->
+                    <!-- TAB 5: Life Estimates -->
                     <TabItem x:Name="TabLifeEstimates" Header=" ⏱️ 續航估算表 ">
                         <ListView x:Name="LvLifeEstimates" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}" Margin="0,8,0,0">
                             <ListView.View>
@@ -536,7 +620,7 @@
                         </ListView>
                     </TabItem>
 
-                    <!-- TAB 5: Recent Usage -->
+                    <!-- TAB 6: Recent Usage -->
                     <TabItem x:Name="TabRecentUsage" Header=" 📊 最近使用紀錄 ">
                         <ListView x:Name="LvRecentUsage" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}" Margin="0,8,0,0">
                             <ListView.View>
