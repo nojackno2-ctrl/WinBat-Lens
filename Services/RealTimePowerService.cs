@@ -8,6 +8,10 @@ using WinBatLens.Models;
 
 namespace WinBatLens.Services
 {
+    /// <summary>
+    /// 提供 1Hz 全系統即時電源與硬體功耗遙測整合主服務。
+    /// 整合 CPU 使用率、iGPU/dGPU 負載與功耗 (DXGI/NVML)、電池端原生充放電功率 (IOCTL) 與螢幕亮度等數據。
+    /// </summary>
     public class RealTimePowerService
     {
         [StructLayout(LayoutKind.Sequential)]
@@ -179,12 +183,7 @@ namespace WinBatLens.Services
         }
 
         /// <summary>
-        /// <summary>
-        /// Warms up everything the first monitoring tick would otherwise pay
-        /// for on the UI thread: the static constructor (PerformanceCounter and
-        /// GPU WMI enumeration), the GPU Engine counter category, and the slow
-        /// WMI caches. Intended to be called once from a background thread
-        /// before the 1-second timer starts.
+        /// 預熱監測服務所需的效能計數器、GPU 分類與底層硬體感測器（應於背景 ThreadPool 執行緒呼叫）。
         /// </summary>
         public static void Initialize()
         {
@@ -206,6 +205,10 @@ namespace WinBatLens.Services
             catch { }
         }
 
+        /// <summary>
+        /// 採樣並傳回當前 1Hz 全系統即時功耗與硬體狀態模型。
+        /// </summary>
+        /// <returns><see cref="RealTimePowerState"/> 即時狀態。</returns>
         public static RealTimePowerState GetCurrentPowerState()
         {
             var state = new RealTimePowerState();
@@ -262,55 +265,9 @@ namespace WinBatLens.Services
                 state.DgpuStatusText = "無獨立顯示卡";
             }
 
-            // Legacy total GPU
-            state.GpuUsagePercent = Math.Max(iGpuVal, dGpuVal);
-            state.GpuName = state.HasDiscreteGpu ? state.DgpuName : state.IgpuName;
-
-            // 3. Disk (SSD / HDD) usage and throughput
-            try
-            {
-                if (_diskTimeCounter != null)
-                {
-                    double dTime = _diskTimeCounter.NextValue();
-                    state.DiskUsagePercent = Math.Min(100.0, Math.Round(dTime, 1));
-                }
-
-                if (_diskBytesCounter != null)
-                {
-                    double bytesPerSec = _diskBytesCounter.NextValue();
-                    double mbps = Math.Round(bytesPerSec / (1024.0 * 1024.0), 1);
-                    state.DiskReadWriteMbps = mbps;
-                    state.DiskStatusText = $"即時吞吐量: {mbps:F1} MB/s";
-                }
-            }
-            catch
-            {
-                state.DiskUsagePercent = 0.0;
-                state.DiskReadWriteMbps = 0.0;
-                state.DiskStatusText = "即時吞吐量: --";
-            }
-
             // 4. Screen brightness
             state.ScreenBrightnessPercent = GetScreenBrightnessPercent();
             state.IsBrightnessMeasured = _brightnessMeasured;
-
-            // 5. Wi-Fi throughput
-            state.WifiThroughputKbps = GetWifiThroughputKbps();
-
-            // 6. Memory (RAM) usage
-            try
-            {
-                var ramInfo = GetSystemRamInfo();
-                state.RamUsageGB = ramInfo.UsedGb;
-                state.TotalRamGB = ramInfo.TotalGb;
-                state.RamUsagePercent = Math.Round((ramInfo.UsedGb / ramInfo.TotalGb) * 100.0, 1);
-            }
-            catch
-            {
-                state.TotalRamGB = 0.0;
-                state.RamUsageGB = 0.0;
-                state.RamUsagePercent = 0.0;
-            }
 
             // There is no system-total wattage. Screen, disk, Wi-Fi, RAM and
             // chipset power were all linear guesses over utilisation and are
@@ -559,19 +516,7 @@ namespace WinBatLens.Services
                 }
             }
 
-            // 10. Load rating, from utilisation only — no wattage involved.
-            if (state.CpuUsagePercent > 70.0 || state.DgpuUsagePercent > 40.0)
-            {
-                state.SystemPowerLoadStatus = "高負載 (高耗電)";
-            }
-            else if (state.CpuUsagePercent > 30.0 || state.IgpuUsagePercent > 30.0)
-            {
-                state.SystemPowerLoadStatus = "中度運算";
-            }
-            else
-            {
-                state.SystemPowerLoadStatus = "輕度省電";
-            }
+
 
             // 11. Battery Physical Telemetry (Voltage, Current, Temperature).
             // The pack voltage arrives in the same IOCTL the rate came from, so

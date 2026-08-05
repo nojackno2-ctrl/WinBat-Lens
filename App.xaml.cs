@@ -6,19 +6,24 @@ using WinBatLens.Services;
 
 namespace WinBatLens
 {
+    /// <summary>
+    /// WinBat Lens WPF 應用程式入口點與全域例外狀況處理器。
+    /// 包含單一執行個體鎖定控制與崩潰日誌記錄。
+    /// </summary>
     public partial class App : System.Windows.Application
     {
+        /// <summary>
+        /// 應用程式啟動入口邏輯。
+        /// </summary>
+        /// <param name="e">啟動參數事件。</param>
         protected override void OnStartup(StartupEventArgs e)
         {
-            // Another instance owning the session is not an error: it has
-            // already been brought to the front (or replaced, if this build is
-            // a different version), so this process just steps aside.
+            // 若已知有其他同版本執行個體運作中，即交由其喚醒，本行程自動結束。
             if (!SingleInstanceService.TryClaimOwnership())
             {
                 Shutdown();
                 return;
-            }
-
+}
             base.OnStartup(e);
 
             AppDomain.CurrentDomain.UnhandledException += (s, args) =>
@@ -33,12 +38,19 @@ namespace WinBatLens
             };
         }
 
+        /// <summary>
+        /// 應用程式結束清理邏輯。
+        /// </summary>
+        /// <param name="e">結束參數事件。</param>
         protected override void OnExit(ExitEventArgs e)
         {
             SingleInstanceService.Release();
             base.OnExit(e);
         }
 
+        /// <summary>
+        /// 記錄未擷取的非預期例外狀況並彈出錯誤對話盒與日誌檔。
+        /// </summary>
         private void LogException(Exception? ex, string source)
         {
             if (ex == null) return;

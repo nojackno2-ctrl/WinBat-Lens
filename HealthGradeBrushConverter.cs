@@ -3,18 +3,15 @@ using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
 
-// Implicit usings pull in both System.Drawing and System.Windows.Media, and
-// each has a Color; this file means the WPF one.
+// 顯式指定 WPF 的 System.Windows.Media.Color
 using MediaColor = System.Windows.Media.Color;
 
 namespace WinBatLens
 {
     /// <summary>
-    /// Turns a health percentage into the colour for its grade, so a degraded
-    /// pack never gets painted the same green as a healthy one. The 80% / 60%
-    /// cuts are the ones <c>BatteryReportParser</c> uses for the status label —
-    /// they must stay in step, or the colour and the wording disagree.
-    /// Pass "Badge" as the converter parameter for the translucent pill fill.
+    /// 提供將電池健康度百分比 (0-100%) 轉換為對應評級顏色 (綠/黃/紅 SolidColorBrush) 之 WPF 值轉換器 (IValueConverter)。
+    /// 80% 與 60% 門檻與 <c>BatteryReportParser</c> 判定邏輯保持同步。
+    /// 若 ConverterParameter 設為 "Badge"，則傳回半透明背景填滿 Brush。
     /// </summary>
     public sealed class HealthGradeBrushConverter : IValueConverter
     {
@@ -31,8 +28,10 @@ namespace WinBatLens
             var brush = new SolidColorBrush(MediaColor.FromArgb(a, r, g, b));
             brush.Freeze();
             return brush;
-        }
-
+}
+        /// <summary>
+        /// 將健康度百分比數值轉換為對應之 SolidColorBrush。
+        /// </summary>
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             double percent = value switch
@@ -50,6 +49,9 @@ namespace WinBatLens
             return badge ? GoodBadge : Good;
         }
 
+        /// <summary>
+        /// 不支援反向轉換。
+        /// </summary>
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotSupportedException();
     }

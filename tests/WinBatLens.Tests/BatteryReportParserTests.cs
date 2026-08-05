@@ -1,8 +1,12 @@
+using System;
 using WinBatLens.Services;
 using Xunit;
 
 namespace WinBatLens.Tests;
 
+/// <summary>
+/// 電池報告 HTML 解析器 (BatteryReportParser) 之 xUnit 單元測試套件。
+/// </summary>
 public sealed class BatteryReportParserTests
 {
     private const string Report = """
@@ -29,6 +33,9 @@ public sealed class BatteryReportParserTests
         </body></html>
         """;
 
+    /// <summary>
+    /// 測試正確解析規格、歷史紀錄並轉置換行空白。
+    /// </summary>
     [Fact]
     public void ParsesSpecsHistoryAndNormalizesWhitespace()
     {
@@ -45,6 +52,9 @@ public sealed class BatteryReportParserTests
         Assert.Equal(73.6, history.HealthPercent, 1);
     }
 
+    /// <summary>
+    /// 測試結合驅動程式實測 PackInfo 進行數值覆蓋。
+    /// </summary>
     [Fact]
     public void OverlaysCompatibleLiveDriverPackInfo()
     {
@@ -68,6 +78,9 @@ public sealed class BatteryReportParserTests
         Assert.Equal(73.7, report.HealthMetrics.HealthPercent, 1);
     }
 
+    /// <summary>
+    /// 測試當報告單位為 mAh 時，不強行混合 mWh 的驅動實測數據。
+    /// </summary>
     [Fact]
     public void DoesNotMixDriverMwhWithReportMah()
     {
@@ -92,6 +105,32 @@ public sealed class BatteryReportParserTests
         Assert.False(report.BatterySpecs.CapacitiesFromDriver);
     }
 
+    /// <summary>
+    /// 測試當滿電容量缺失時，不會誤判為 0% 健康度。
+    /// </summary>
+    [Fact]
+    public void DoesNotTreatMissingFullChargeCapacityAsZeroPercentHealth()
+    {
+        const string incompleteReport = """
+            <h2>INSTALLED BATTERIES</h2><table>
+            <tr><th>DESIGN CAPACITY</th><td>50,000 mWh</td></tr>
+            <tr><th>FULL CHARGE CAPACITY</th><td>--</td></tr>
+            </table>
+            """;
+
+        var report = BatteryReportParser.Parse(incompleteReport);
+
+        Assert.True(report.HealthMetrics.HasBattery);
+        Assert.False(report.HealthMetrics.IsHealthMeasured);
+        Assert.Equal("無法判定", report.HealthMetrics.StatusLabel);
+        var diagnostic = Assert.Single(report.Diagnostics);
+        Assert.Equal("info", diagnostic.Type);
+        Assert.Equal("健康度無法判定", diagnostic.Title);
+    }
+
+    /// <summary>
+    /// 測試無電池裝置（例如桌上型電腦）時顯示中性診斷訊息。
+    /// </summary>
     [Fact]
     public void ReportsNeutralDiagnosticsWhenNoBatteryExists()
     {

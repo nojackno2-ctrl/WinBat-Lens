@@ -6,26 +6,34 @@ using System.Runtime.InteropServices;
 namespace WinBatLens.Services
 {
     /// <summary>
-    /// Enumerates physical display adapters via DXGI so that each GPU Engine
-    /// performance-counter instance (identified by its LUID) can be mapped back
-    /// to the correct physical GPU (discrete vs. integrated). This is required
-    /// because on many laptops every counter instance reports "phys_0" and only
-    /// the LUID distinguishes the adapters.
+    /// 提供 DXGI (DirectX Graphics Infrastructure) 顯示轉接卡枚舉服務。
+    /// 用於將 GPU Engine 效能計數器實例（依 LUID 識別）精確對映至實體顯示卡（獨顯 dGPU 或內顯 iGPU）。
     /// </summary>
     public static class DxgiAdapterService
     {
+        /// <summary>
+        /// 表示單一 DXGI 顯示轉接卡的規格與 LUID 識別資訊。
+        /// </summary>
         public class DxgiAdapter
         {
-            /// <summary>Lower-cased LUID token as it appears inside a GPU Engine
-            /// counter instance name, e.g. "luid_0x00000000_0x00010666".</summary>
+            /// <summary>小寫格式之 LUID 鍵值（例如："luid_0x00000000_0x00010666"），用於對映效能計數器。</summary>
             public string LuidKey { get; set; } = string.Empty;
-            public string Description { get; set; } = string.Empty;
-            public uint VendorId { get; set; }
-            public ulong DedicatedVideoMemoryBytes { get; set; }
-            public bool IsSoftware { get; set; }
-            public bool IsDiscrete { get; set; }
-        }
 
+            /// <summary>顯示卡名稱描述。</summary>
+            public string Description { get; set; } = string.Empty;
+
+            /// <summary>製造商 Vendor ID（例如 NVIDIA: 0x10DE, AMD: 0x1002, Intel: 0x8086）。</summary>
+            public uint VendorId { get; set; }
+
+            /// <summary>專用視訊記憶體容量（位元組 Bytes）。</summary>
+            public ulong DedicatedVideoMemoryBytes { get; set; }
+
+            /// <summary>是否為軟體模擬顯示轉接卡（如 WARP）。</summary>
+            public bool IsSoftware { get; set; }
+
+            /// <summary>是否判斷為獨立顯示卡 (dGPU)。</summary>
+            public bool IsDiscrete { get; set; }
+}
         private const uint VendorNvidia = 0x10DE;
         private const uint VendorAmd = 0x1002;
         private const uint VendorIntel = 0x8086;
@@ -88,9 +96,10 @@ namespace WinBatLens.Services
         private static extern int CreateDXGIFactory1(ref Guid riid, out IntPtr factory);
 
         /// <summary>
-        /// Returns all physical adapters known to DXGI. Never throws; returns an
-        /// empty list if DXGI is unavailable so callers can fall back gracefully.
+        /// 枚舉系統中所有由 DXGI 識別之實體顯示轉接卡。
+        /// 即使失敗亦傳回空清單，不拋出例外。
         /// </summary>
+        /// <returns><see cref="DxgiAdapter"/> 清單。</returns>
         public static List<DxgiAdapter> GetAdapters()
         {
             var result = new List<DxgiAdapter>();
@@ -121,9 +130,7 @@ namespace WinBatLens.Services
                         ulong dedicatedVram = (ulong)desc.DedicatedVideoMemory.ToUInt64();
                         bool isSoftware = (desc.Flags & DxgiAdapterFlagSoftware) != 0;
 
-                        // NVIDIA is always discrete on these laptops; otherwise treat
-                        // anything with >= 1 GB dedicated VRAM as discrete. Integrated
-                        // GPUs (AMD/Intel iGPU) carve out far less dedicated memory.
+                        // NVIDIA 視為獨顯；其餘廠商若專用 VRAM >= 1GB 亦判定為獨顯
                         bool isDiscrete = !isSoftware &&
                             (desc.VendorId == VendorNvidia || dedicatedVram >= (ulong)OneGigabyte);
 

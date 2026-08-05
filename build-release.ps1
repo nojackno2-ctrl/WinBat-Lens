@@ -4,7 +4,8 @@ param(
     [string]$TimestampUrl = "http://timestamp.digicert.com"
 )
 
-# WinBat Lens Release Packaging Script
+# WinBat Lens 自動化發布與打包腳本 (Powershell)
+# 包含 .NET 獨立單一執行檔發布、便攜版 ZIP 打包、Inno Setup 安裝檔編譯與數位簽署驗證
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 

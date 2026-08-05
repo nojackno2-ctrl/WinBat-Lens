@@ -7,7 +7,6 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
@@ -25,6 +24,9 @@ using WpfPoint = System.Windows.Point;
 
 namespace WinBatLens
 {
+    /// <summary>
+    /// WinBat Lens 主儀表板視窗，負責電池報告解析展示、1Hz 即時功耗圖表渲染、系統托盤常駐與多國語言切換。
+    /// </summary>
     public partial class MainWindow : Window
     {
         private BatteryReportData? _currentReport;
@@ -32,6 +34,8 @@ namespace WinBatLens
         private Task? _livePowerTask;
         private RealTimePowerState? _latestPowerState;
         private bool _isTrayMode;
+        private readonly bool _startInTray = Environment.GetCommandLineArgs()
+            .Any(argument => string.Equals(argument, StartupService.BackgroundArgument, StringComparison.OrdinalIgnoreCase));
 
         // Re-trimming the working set is not free: it is a blocking gen2
         // collection followed by a page-out, so doing it on a fixed timer meant
@@ -191,6 +195,13 @@ namespace WinBatLens
             InitSystemTrayIcon();
             InitAutoStartState();
 
+            // Windows startup passes --background so the monitor can begin in
+            // the tray without briefly showing the dashboard.
+            if (_startInTray)
+            {
+                HideToTray(showBalloon: false);
+            }
+
             // Draw Background Gridlines
             DrawChartGridlines();
 
@@ -208,7 +219,7 @@ namespace WinBatLens
         {
             LocalizationService.ToggleLanguage();
             ApplyLanguage();
-            if (_latestPowerState != null) UpdateLivePowerUI(_latestPowerState);
+            if (_latestPowerState != null) UpdateLivePowerUI(_latestPowerState, recordSample: false);
         }
 
         private void ApplyLanguage()
@@ -506,7 +517,15 @@ namespace WinBatLens
                             using (var bitmap = new System.Drawing.Bitmap(pngStreamInfo.Stream))
                             {
                                 IntPtr hIcon = bitmap.GetHicon();
-                                _notifyIcon.Icon = System.Drawing.Icon.FromHandle(hIcon);
+                                try
+                                {
+                                    using var temporaryIcon = System.Drawing.Icon.FromHandle(hIcon);
+                                    _notifyIcon.Icon = (System.Drawing.Icon)temporaryIcon.Clone();
+                                }
+                                finally
+                                {
+                                    DestroyIcon(hIcon);
+                                }
                             }
                         }
                     }
@@ -591,9 +610,11 @@ namespace WinBatLens
                 {
                     _notifyIcon.Visible = false;
                     _notifyIcon.Dispose();
+                    _notifyIcon = null;
                 }
             }
             catch { }
+            DynamicTrayIconService.Dispose();
         }
 
         [DllImport("psapi.dll")]
@@ -605,7 +626,11 @@ namespace WinBatLens
         [DllImport("kernel32.dll")]
         private static extern IntPtr GetCurrentProcess();
 
-        private void HideToTray()
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool DestroyIcon(IntPtr handle);
+
+        private void HideToTray(bool showBalloon = true)
         {
             Volatile.Write(ref _isTrayMode, true);
             this.Hide();
@@ -616,7 +641,7 @@ namespace WinBatLens
 
             // Only explain the tray behaviour the first time; after that the
             // balloon is just noise on every minimize.
-            if (_notifyIcon != null && !_trayBalloonShown)
+            if (showBalloon && _notifyIcon != null && !_trayBalloonShown)
             {
                 _trayBalloonShown = true;
                 _notifyIcon.ShowBalloonTip(2000,
@@ -663,7 +688,9 @@ namespace WinBatLens
             {
                 _notifyIcon.Visible = false;
                 _notifyIcon.Dispose();
+                _notifyIcon = null;
             }
+            DynamicTrayIconService.Dispose();
 
             Application.Current.Shutdown();
         }
@@ -687,7 +714,7 @@ namespace WinBatLens
 
             // Visual updates are skipped while hidden; render the latest cached
             // snapshot immediately, then the background loop resumes at 1 Hz.
-            if (_latestPowerState != null) UpdateLivePowerUI(_latestPowerState);
+            if (_latestPowerState != null) UpdateLivePowerUI(_latestPowerState, recordSample: false);
         }
 
         private void MainWindow_Unloaded(object sender, RoutedEventArgs e)
@@ -697,11 +724,15 @@ namespace WinBatLens
             {
                 _notifyIcon.Visible = false;
                 _notifyIcon.Dispose();
+                _notifyIcon = null;
             }
+            DynamicTrayIconService.Dispose();
         }
 
         private void StartLivePowerMonitoring()
         {
+            if (_livePowerTask is { IsCompleted: false }) return;
+
             _livePowerCts = new CancellationTokenSource();
             _livePowerTask = Task.Run(() => PollLivePowerAsync(_livePowerCts.Token));
         }
@@ -755,17 +786,20 @@ namespace WinBatLens
                 : $"~{watts:F1} W ({(en ? "estimated" : "推估")})";
         }
 
-        private void UpdateLivePowerUI(RealTimePowerState state)
+        private void UpdateLivePowerUI(RealTimePowerState state, bool recordSample = true)
         {
             try
             {
                 _latestPowerState = state;
 
-                // Add to Power & Battery Event History Service
-                RealTimePowerHistoryService.AddRecordFromPowerState(state);
+                if (recordSample)
+                {
+                    // Add to Power & Battery Event History Service
+                    RealTimePowerHistoryService.AddRecordFromPowerState(state);
 
-                // Update 60-Second Waveform Chart
-                UpdateWaveformChart(state);
+                    // Update 60-Second Waveform Chart
+                    UpdateWaveformChart(state);
+                }
 
                 // Update Dynamic Real-Time Wattage System Tray Icon (Green for Charging > Power, Red for Discharging)
                 if (_notifyIcon != null)
@@ -946,7 +980,8 @@ namespace WinBatLens
                 TxtLiveBatteryTelemetry.Text = state.BatteryTelemetryText;
                 TxtHwTelemetryVal.Text = state.BatteryTelemetryText;
 
-                SolidColorBrush flowBrush = state.IsCharging ? BrushEmerald
+                SolidColorBrush flowBrush = state.IsChargerDeficit ? BrushRose
+                    : state.IsCharging ? BrushEmerald
                     : state.IsAcOnline ? BrushAmber
                     : BrushRose;
                 TxtLiveBatteryTelemetry.Foreground = flowBrush;
@@ -1213,15 +1248,16 @@ namespace WinBatLens
             string dash = "—";
 
             // Score & Badge
-            TxtHealthPercent.Text = metrics.HasBattery ? metrics.HealthPercent.ToString("F1") : dash;
-            TxtHealthPercentSign.Visibility = metrics.HasBattery ? Visibility.Visible : Visibility.Collapsed;
+            bool healthMeasured = metrics.HasBattery && metrics.IsHealthMeasured;
+            TxtHealthPercent.Text = healthMeasured ? metrics.HealthPercent.ToString("F1") : dash;
+            TxtHealthPercentSign.Visibility = healthMeasured ? Visibility.Visible : Visibility.Collapsed;
             TxtStatusLabel.Text = metrics.StatusLabel;
             TxtSummary.Text = metrics.SummaryText;
 
             // Grade the health card by colour. The ring used to be painted a
             // fixed green and, with a full-circle dash offset, never drew at
             // all — so a pack at 73.6% looked exactly like one at 100%.
-            if (metrics.HasBattery)
+            if (healthMeasured)
             {
                 var healthBrush = HealthBrush(metrics.HealthPercent);
                 RingHealthProgress.Stroke = healthBrush;
@@ -1260,7 +1296,7 @@ namespace WinBatLens
             TxtSpecChem.Text = specs.Chemistry;
             TxtSpecDesign.Text = specs.DesignCapacity > 0 ? $"{specs.DesignCapacity:N0} {specs.Unit}" : dash;
             TxtSpecFull.Text = specs.FullChargeCapacity > 0 ? $"{specs.FullChargeCapacity:N0} {specs.Unit}" : dash;
-            TxtSpecLoss.Text = metrics.HasBattery ? $"{metrics.CapacityLoss:N0} {specs.Unit} ({metrics.WearPercent}%)" : dash;
+            TxtSpecLoss.Text = healthMeasured ? $"{metrics.CapacityLoss:N0} {specs.Unit} ({metrics.WearPercent}%)" : dash;
             TxtSpecCycles.Text = specs.CycleCount.HasValue
                 ? (isEn ? $"{specs.CycleCount.Value} cycles" : $"{specs.CycleCount.Value} 次")
                 : naText;
