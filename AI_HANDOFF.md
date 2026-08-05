@@ -48,6 +48,28 @@ Validation after the fixes: Debug and Release solution builds passed with
 `-warnaserror` at 0 warnings / 0 errors, `dotnet test` passed 17/17, and
 `git diff --check` passed.
 
+### Published
+
+PR #9 passed the `build-test` CI job and was merged to `main` as `96162b0`;
+its branch was deleted on both sides, so only `main` remains locally and on
+`origin`. Tag `v1.1.6` triggered Release workflow run `31007842363`, which
+published the normal (non-prerelease) release at
+`https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v1.1.6`.
+
+The runner built the assets, so these are the authoritative hashes:
+
+- `WinBatLens_v1.1.6_Portable_x64.exe` (85,605,398 bytes): SHA-256
+  `f32153d3865f585da70d0d9956bdcf1ca65a574f482873563bc196dbe3ba1150`
+- `WinBatLens_v1.1.6_Portable_x64.zip` (79,666,324 bytes): SHA-256
+  `e5f8d1ed17ed7be6fbbfb54af508756c76da3140d527d82f17a775989fa6c948`
+- `WinBatLens_v1.1.6_Setup_x64.exe` (80,147,082 bytes): SHA-256
+  `edcc950f19373ba0c30bd936a16c49dcd1c4b0b0b059c4fd7310bc6120440aca`
+
+The executables are unsigned, the repository's standing distribution
+limitation. **Not verified on hardware:** the 0–100% voltage curve needs a full
+discharge cycle to fill in, so only the empty-data and axis behaviour were
+exercised.
+
 ## v1.1.5 release and publication (2026-08-05)
 
 The post-v1.1.4 background-startup and comprehensive audit changes are being
