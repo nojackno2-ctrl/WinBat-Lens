@@ -1,5 +1,15 @@
 # Project State & Handoff
 
+## Public Documentation Refresh (2026-08-10)
+
+Updated `README.md` to a comprehensive, professional, user-facing Traditional
+Chinese document matching v1.1.6 capabilities. Replaced old change-log dumps with
+clear feature highlights (honest battery health metrics, real-time power with
+unified-scale waveform, charger deficit detection, 0-100% voltage history curve,
+sub-watt tray icon, zero fabricated metrics), UI walkthrough, release download
+table (Setup, Portable EXE, ZIP), system requirements, architecture overview, and
+developer build instructions.
+
 ## v1.1.6: battery voltage history by percentage (2026-08-05)
 
 Added a battery voltage history feature. The monitor records a real
