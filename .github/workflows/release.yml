@@ -29,6 +29,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # Passed through the environment rather than interpolated into the script
       # body, so the input cannot inject PowerShell.
@@ -81,10 +83,27 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
         run: |
-          $ErrorActionPreference = 'Continue'
-          gh release view $env:RELEASE_TAG --json tagName 2>$null | Out-Null
-          if ($LASTEXITCODE -eq 0) { throw "Release $env:RELEASE_TAG already exists" }
+          $releaseProbe = @(gh api "repos/$env:RELEASE_REPOSITORY/releases/tags/$env:RELEASE_TAG" 2>&1)
+          $releaseExit = $LASTEXITCODE
+          if ($releaseExit -eq 0) { throw "Release $env:RELEASE_TAG already exists" }
+          if (($releaseProbe -join "`n") -notmatch 'HTTP 404') {
+            throw "Unable to prove release $env:RELEASE_TAG is unused: $($releaseProbe -join ' ')"
+          }
+
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            git ls-remote --exit-code --tags origin "refs/tags/$env:RELEASE_TAG" | Out-Null
+            $tagExit = $LASTEXITCODE
+            if ($tagExit -eq 0) {
+              throw "Tag $env:RELEASE_TAG already exists; refusing to attach this commit's assets to another ref."
+            }
+            if ($tagExit -ne 2) {
+              throw "Unable to prove tag $env:RELEASE_TAG is unused (git ls-remote exit $tagExit)."
+            }
+          } elseif ($env:GITHUB_REF_NAME -ne $env:RELEASE_TAG) {
+            throw "Pushed tag '$env:GITHUB_REF_NAME' does not match resolved tag '$env:RELEASE_TAG'."
+          }
           Write-Host "$env:RELEASE_TAG is free"
 
           # "Not found" leaves $LASTEXITCODE at 1, and the runner ends every

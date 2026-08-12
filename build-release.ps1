@@ -1,7 +1,8 @@
 param(
     [string]$SigningCertificate = $env:WINBAT_SIGNING_CERTIFICATE,
     [string]$SigningPassword = $env:WINBAT_SIGNING_PASSWORD,
-    [string]$TimestampUrl = "http://timestamp.digicert.com"
+    [string]$TimestampUrl = "http://timestamp.digicert.com",
+    [switch]$AllowMissingInstaller
 )
 
 # WinBat Lens 自動化發布與打包腳本 (Powershell)
@@ -47,9 +48,16 @@ New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
 Write-Host "[2/5] Publishing .NET 10 WPF Single-File Executable..." -ForegroundColor Yellow
 # Packaging flags (single-file, self-contained, ReadyToRun, compression) all
 # live in WinBatLens.csproj so this script and a plain `dotnet publish` agree.
+$PublishDir = Join-Path $ProjectRoot "bin\Release\net10.0-windows\win-x64\publish"
+$PublishExePath = Join-Path $PublishDir "WinBatLens.exe"
+if (Test-Path -LiteralPath $PublishDir) {
+    Remove-Item -LiteralPath $PublishDir -Recurse -Force
+}
 dotnet publish WinBatLens.csproj -c Release
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet publish failed with exit code $LASTEXITCODE."
+}
 
-$PublishExePath = Join-Path $ProjectRoot "bin\Release\net10.0-windows\win-x64\publish\WinBatLens.exe"
 if (-not (Test-Path $PublishExePath)) {
     throw "Publish failed: $PublishExePath does not exist!"
 }
@@ -101,7 +109,21 @@ if ($IsccPath) {
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE." }
     Write-Host "  -> Installer created: $(Join-Path $DistDir $SetupExeName)" -ForegroundColor Green
 } else {
-    Write-Warning "Inno Setup Compiler (ISCC.exe) not found. Installer setup generation skipped."
+    $message = "Inno Setup Compiler (ISCC.exe) was not found, so the required installer cannot be built."
+    if (-not $AllowMissingInstaller) {
+        throw "$message Install Inno Setup 6, or use -AllowMissingInstaller only for a portable-only development package."
+    }
+    Write-Warning "$message Continuing only because -AllowMissingInstaller was explicitly supplied."
+}
+
+$ExpectedArtifacts = @($PortableExe, $PortableZip)
+if (-not $AllowMissingInstaller) {
+    $ExpectedArtifacts += Join-Path $DistDir $SetupExeName
+}
+foreach ($artifact in $ExpectedArtifacts) {
+    if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+        throw "Required release artifact was not created: $artifact"
+    }
 }
 
 # 5. Optional Authenticode signing and verification
