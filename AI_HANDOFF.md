@@ -1,5 +1,10 @@
 # Project State & Handoff
 
+## 2026-08-12 v1.1.7 publication and installed update
+
+- Published GitHub Release `v1.1.7` from `66e4f3f147fad925841a09528f8a73f9cd2d0cf6`; branch CI and tag Release succeeded. Downloaded server digests: portable EXE `352B0A73...BC9497`, ZIP `3FB557F0...82D17`, Setup `1CD18AEC...B16AA`.
+- Updated the installation from `1.1.5` to `1.1.7`; installed product version is `1.1.7+66e4f3f147fad925841a09528f8a73f9cd2d0cf6`, and the process remained responsive.
+
 ## 2026-08-12 v1.1.7 optimization baseline
 
 - Baseline was inspected before edits: clean `main` at `a76b7e3`, tracking `origin/main`, with no uncommitted diff. `AGENTS.md`, this handoff, and the latest eight commits were reviewed.
