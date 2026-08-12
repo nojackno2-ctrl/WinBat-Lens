@@ -1,5 +1,32 @@
 # Project State & Handoff
 
+## 2026-08-12 v1.1.7 optimization baseline
+
+- Baseline was inspected before edits: clean `main` at `a76b7e3`, tracking `origin/main`, with no uncommitted diff. `AGENTS.md`, this handoff, and the latest eight commits were reviewed.
+- Current scope is limited to evidence-backed removal of unused performance-counter/network/RAM work, release packaging safeguards, regression tests, and version 1.1.7. No hardware/UI behavior is to be claimed without fresh runtime evidence.
+
+### Implementation milestone
+
+- Global reference search proved `_diskTimeCounter`, `_diskBytesCounter`, `GetWifiThroughputKbps`, and `GetSystemRamInfo` had no consumer outside their own declarations/initializers. Their disk counter startup work, network enumeration/cache, RAM P/Invoke/struct, and unreachable helpers were removed. The consumed `_cpuCounter` and `_gpuEngineCategory` paths remain unchanged.
+- Added reflection-based regression coverage fixing that boundary: only the CPU counter and GPU Engine category may remain, and the deleted network/RAM helpers must stay absent.
+- Version metadata is now 1.1.7 and `.github/release-notes/v1.1.7.md` records this scope. `build-release.ps1` now requires Inno Setup and the installer by default; portable-only developer packaging must explicitly pass `-AllowMissingInstaller`.
+- The first static absence gate falsely failed because it searched the regression test's `InlineData` method-name strings as well as production source. This was a verifier-scope error, not a product/build failure; the rerun excludes `tests/**` and checks production source only.
+- The first Release solution build reached the main application successfully, then the new test file failed to compile because it omitted `using Xunit;`. The missing import was added; this was a test-source compile error and no product code was changed in response.
+- Full-solution `dotnet format --verify-no-changes` currently fails on pre-existing whitespace in 11 unrelated files (including `App.xaml.cs`, `MainWindow.xaml.cs`, and several model/service files); none is part of this pass. To avoid a broad unrelated rewrite, format verification is being rerun only against the changed C# production/test files. Release build already passes and all 20 tests pass.
+- The first packaging run exposed an existing release-script hazard: sandboxed `dotnet publish` failed to read the user NuGet config, but PowerShell continued and packaged an old publish-directory EXE before ISCC itself was denied. `build-release.ps1` now removes the exact publish output first and explicitly fails on a non-zero `dotnet publish` exit code, so stale binaries cannot be packaged. The failed run's `dist` files are invalid and will be replaced by the next successful run.
+
+### Final local validation and packages
+
+- Release solution build with `--no-restore -warnaserror`: passed, 0 warnings / 0 errors.
+- Tests: passed 20/20, including the new optimization contracts.
+- Changed-file format verification: passed for `Services/RealTimePowerService.cs` and `tests/WinBatLens.Tests/OptimizationContractTests.cs`. Full-solution formatting remains blocked only by the pre-existing unrelated whitespace listed above.
+- `git diff --check`, PowerShell parser validation, production-source dead-symbol search, exact three-artifact set, file-version check, ZIP entry/content check, and SHA-256 hashing all passed.
+- `build-release.ps1` completed from a freshly deleted publish directory with .NET 10 publish and Inno Setup 6.7.3. Final unsigned artifacts:
+  - `WinBatLens_v1.1.7_Portable_x64.exe`: 85,604,190 bytes, SHA-256 `C4CF465AC1AF7F12D9275D7E9C10AB56F426486090F97C67BAD691666FE45019`, file version 1.1.7.0.
+  - `WinBatLens_v1.1.7_Portable_x64.zip`: 79,421,692 bytes, SHA-256 `2425EB573D5C61492122060CFDF4E4878CB7236F30E02A290B6B55F016A84A9D`; contains `WinBatLens.exe`, `README.md`, and `LICENSE`, and the packaged README names all 1.1.7 assets and the final 20/20 test badge.
+  - `WinBatLens_v1.1.7_Setup_x64.exe`: 80,148,307 bytes, SHA-256 `27D5CA41E5BACCC99B8A7521D6C318D45D5DF8CAAD2FFA616CA07E72A28CA03A`, product version 1.1.7.
+- No fresh live battery/GPU/UI/startup test was performed, so existing monitoring behavior is supported by unchanged consumed paths plus build/tests, not claimed as new hardware/UI evidence. No commit, push, tag, release, branch mutation, or installed-app update was performed by this workstream.
+
 ## Public Documentation Refresh (2026-08-10)
 
 Updated `README.md` to a comprehensive, professional, user-facing Traditional

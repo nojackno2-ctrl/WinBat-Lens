@@ -5,9 +5,9 @@
 ![Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64)-0078D6?logo=windows&logoColor=white)
 ![.NET 10](https://img.shields.io/badge/.NET-10.0%20LTS-512BD4?logo=dotnet&logoColor=white)
 ![WPF](https://img.shields.io/badge/UI-WPF%20XAML-blue)
-![Version](https://img.shields.io/badge/Release-v1.1.6-brightgreen)
+![Version](https://img.shields.io/badge/Release-v1.1.7-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Tests](https://img.shields.io/badge/Tests-17%20Passed-success)
+![Tests](https://img.shields.io/badge/Tests-20%20Passed-success)
 
 **專為 Windows 筆電與行動裝置設計的高精準度電池健康度診斷、即時充放電功耗與硬體分析儀表板**
 
@@ -65,7 +65,7 @@
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│  ⚡ WinBat Lens                                              v1.1.6    │
+│  ⚡ WinBat Lens                                              v1.1.7    │
 ├────────────────────────────────────────────────────────────────────────┤
 │ [健康度: 94.2% A]  [即時功率: -14.2 W]  [外接電源: 🔌 供電充足]  [42 循環] │
 ├────────────────────────────────────────────────────────────────────────┤
@@ -90,13 +90,13 @@
 
 ## 📥 下載與安裝
 
-請至 [GitHub Releases](https://github.com/nojackno2-ctrl/WinBat-Lens/releases) 下載最新版本（**v1.1.6**）：
+請至 [GitHub Releases](https://github.com/nojackno2-ctrl/WinBat-Lens/releases) 下載最新版本（**v1.1.7**）：
 
 | 格式 | 檔案名稱 | 說明 |
 | :--- | :--- | :--- |
-| **🚀 安裝版** | `WinBatLens_v1.1.6_Setup_x64.exe` | Inno Setup 安裝程式，支援開機啟動設定與乾淨解除安裝。 |
-| **📦 免安裝單檔版** | `WinBatLens_v1.1.6_Portable_x64.exe` | 單一可執行檔（Single-File），免安裝、隨開即用。 |
-| **📁 免安裝壓縮包** | `WinBatLens_v1.1.6_Portable_x64.zip` | 包含可執行檔、README 與授權說明的 ZIP 封裝包。 |
+| **🚀 安裝版** | `WinBatLens_v1.1.7_Setup_x64.exe` | Inno Setup 安裝程式，支援開機啟動設定與乾淨解除安裝。 |
+| **📦 免安裝單檔版** | `WinBatLens_v1.1.7_Portable_x64.exe` | 單一可執行檔（Single-File），免安裝、隨開即用。 |
+| **📁 免安裝壓縮包** | `WinBatLens_v1.1.7_Portable_x64.zip` | 包含可執行檔、README 與授權說明的 ZIP 封裝包。 |
 
 > [!NOTE]
 > **Windows SmartScreen 提示說明**：

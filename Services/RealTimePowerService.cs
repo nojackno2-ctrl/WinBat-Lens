@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Management;
-using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using WinBatLens.Models;
 
@@ -28,24 +27,6 @@ namespace WinBatLens.Services
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern bool GetSystemPowerStatus(out SYSTEM_POWER_STATUS lpSystemPowerStatus);
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct MEMORYSTATUSEX
-        {
-            public uint dwLength;
-            public uint dwMemoryLoad;
-            public ulong ullTotalPhys;
-            public ulong ullAvailPhys;
-            public ulong ullTotalPageFile;
-            public ulong ullAvailPageFile;
-            public ulong ullTotalVirtual;
-            public ulong ullAvailVirtual;
-            public ulong ullAvailExtendedVirtual;
-        }
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
-
         [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
         private static extern uint PowerGetActiveScheme(IntPtr UserPowerKey, out IntPtr ActivePolicyGuid);
 
@@ -62,12 +43,7 @@ namespace WinBatLens.Services
         private static extern IntPtr LocalFree(IntPtr hMem);
 
         private static PerformanceCounter? _cpuCounter;
-        private static PerformanceCounter? _diskTimeCounter;
-        private static PerformanceCounter? _diskBytesCounter;
         private static List<GpuInfo> _cachedGpus = new List<GpuInfo>();
-        private static long _lastNetBytes = 0;
-        private static long _lastNetSampleTick = 0;
-        private static double _cachedWifiKbps = 0;
 
         // WMI (System.Management) queries are memory-heavy and allocate COM
         // objects on every call. The UI ticks once per second, but brightness
@@ -153,26 +129,6 @@ namespace WinBatLens.Services
             catch (Exception ex)
             {
                 Debug.WriteLine($"CPU PerformanceCounter init warning: {ex.Message}");
-            }
-
-            try
-            {
-                _diskTimeCounter = new PerformanceCounter("PhysicalDisk", "% Disk Time", "_Total", true);
-                _diskTimeCounter.NextValue();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"DiskTime PerformanceCounter init warning: {ex.Message}");
-            }
-
-            try
-            {
-                _diskBytesCounter = new PerformanceCounter("PhysicalDisk", "Disk Bytes/sec", "_Total", true);
-                _diskBytesCounter.NextValue();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"DiskBytes PerformanceCounter init warning: {ex.Message}");
             }
 
             try
@@ -618,53 +574,6 @@ namespace WinBatLens.Services
             return -1;
         }
 
-        // Enumerating every network interface and reading its IP statistics is
-        // the heaviest remaining per-tick call, so it is throttled like the WMI
-        // queries. The reported value is the average over the sampling window,
-        // which also smooths out the second-to-second spikes.
-        private static double GetWifiThroughputKbps()
-        {
-            long nowTick = Environment.TickCount64;
-            if (_lastNetSampleTick != 0 && nowTick - _lastNetSampleTick < WmiRefreshMs)
-                return _cachedWifiKbps;
-
-            try
-            {
-                long currentBytes = 0;
-                foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (ni.OperationalStatus == OperationalStatus.Up &&
-                       (ni.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet))
-                    {
-                        var stats = ni.GetIPStatistics();
-                        currentBytes += stats.BytesReceived + stats.BytesSent;
-                    }
-                }
-
-                double speedKbps = 0;
-                if (_lastNetSampleTick != 0 && _lastNetBytes > 0)
-                {
-                    double seconds = (nowTick - _lastNetSampleTick) / 1000.0;
-                    long diffBytes = currentBytes - _lastNetBytes;
-                    if (seconds > 0 && diffBytes > 0)
-                    {
-                        speedKbps = Math.Round((diffBytes / 1024.0) / seconds, 1);
-                    }
-                }
-
-                _lastNetBytes = currentBytes;
-                _lastNetSampleTick = nowTick;
-                _cachedWifiKbps = speedKbps;
-            }
-            catch
-            {
-                _lastNetSampleTick = nowTick;
-                _cachedWifiKbps = 0.0;
-            }
-
-            return _cachedWifiKbps;
-        }
-
         // Maps each GPU's LUID token to its per-engine-type utilization sums for
         // the current tick. Task Manager reports a GPU's headline utilization as
         // the busiest single engine, so we sum instances within an engine type
@@ -869,23 +778,6 @@ namespace WinBatLens.Services
             int e = source.IndexOf(end, s, StringComparison.OrdinalIgnoreCase);
             if (e < 0) return string.Empty;
             return source.Substring(s, e - s);
-        }
-
-        private static (double UsedGb, double TotalGb) GetSystemRamInfo()
-        {
-            // Native GlobalMemoryStatusEx avoids the heavy per-tick WMI/COM
-            // allocations of a Win32_OperatingSystem query. The UI polls this
-            // once per second, so keeping it allocation-free matters.
-            var mem = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>() };
-            if (GlobalMemoryStatusEx(ref mem) && mem.ullTotalPhys > 0)
-            {
-                const double gib = 1024.0 * 1024.0 * 1024.0;
-                double totalGb = Math.Round(mem.ullTotalPhys / gib, 1);
-                double usedGb = Math.Round((mem.ullTotalPhys - mem.ullAvailPhys) / gib, 1);
-                return (usedGb, totalGb);
-            }
-
-            return (8.0, 16.0);
         }
 
         /// <summary>
