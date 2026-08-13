@@ -283,10 +283,19 @@ namespace WinBatLens
             LblHwBatteryTelemetry.Text = LocalizationService.Get("HwBatteryTelemetry");
             LblHwEnergy.Text = LocalizationService.Get("HwEnergy");
             LblHwPowerPlan.Text = LocalizationService.Get("HwPowerPlan");
+            TxtHwTelemetrySource.Text = LocalizationService.Get("HwTelemetrySource");
+            TxtHwPowerPlanState.Text = LocalizationService.Get("HwPowerPlanState");
 
             TxtHistoryLogHeader.Text = LocalizationService.Get("HistoryLogHeader");
             BtnExportPowerCsv.Content = LocalizationService.Get("BtnExportCsv");
             BtnClearPowerHistory.Content = LocalizationService.Get("BtnClearHistory");
+            TxtPowerHistoryEmpty.Text = LocalizationService.Get("PowerHistoryEmpty");
+            TxtVoltageHistoryEmpty.Text = LocalizationService.Get("VoltageHistoryEmpty");
+            TxtDiagnosticsEmpty.Text = LocalizationService.Get("DiagnosticsEmpty");
+            TxtLifeEstimatesEmpty.Text = LocalizationService.Get("LifeEstimatesEmpty");
+            TxtRecentUsageEmpty.Text = LocalizationService.Get("RecentUsageEmpty");
+            TxtLoadingTitle.Text = LocalizationService.Get("LoadingTitle");
+            TxtLoadingDetail.Text = LocalizationService.Get("LoadingDetail");
 
             // System tray menu follows the same language as the window.
             if (_trayItemShow != null) _trayItemShow.Text = LocalizationService.Get("TrayShow");
@@ -723,14 +732,16 @@ namespace WinBatLens
                 _trayItemShow = new ToolStripMenuItem(LocalizationService.Get("TrayShow"), null, (s, args) => RestoreFromTray());
                 _trayItemShow.Font = new System.Drawing.Font(_trayItemShow.Font, System.Drawing.FontStyle.Bold);
 
-                _trayItemCheck = new ToolStripMenuItem(LocalizationService.Get("TrayCheck"), null, async (s, args) => {
+                _trayItemCheck = new ToolStripMenuItem(LocalizationService.Get("TrayCheck"), null, async (s, args) =>
+                {
                     RestoreFromTray();
                     await RunBatteryCheckAsync();
                 });
 
                 _trayItemAutoStart = new ToolStripMenuItem(LocalizationService.Get("TrayAutoStart"));
                 _trayItemAutoStart.Checked = StartupService.IsAutoStartEnabled();
-                _trayItemAutoStart.Click += (s, args) => {
+                _trayItemAutoStart.Click += (s, args) =>
+                {
                     bool newState = !_trayItemAutoStart!.Checked;
                     if (StartupService.SetAutoStart(newState))
                     {
@@ -1057,8 +1068,8 @@ namespace WinBatLens
                     TxtLiveAcState.Foreground = BrushRose;
 
                     TxtLiveAcState.Text = en
-                        ? $"🔌⚠️ Charger cannot keep up — battery covering -{state.DischargeRateW:F1}W (measured at the pack)"
-                        : $"🔌⚠️ 外接電源供電不足 — 電池補上 -{state.DischargeRateW:F1}W（電池實測）";
+                        ? $"Charger cannot keep up. Battery covering -{state.DischargeRateW:F1}W (measured at the pack)"
+                        : $"外接電源供電不足。電池補上 -{state.DischargeRateW:F1}W（電池實測）";
                 }
                 else if (state.IsAcOnline)
                 {
@@ -1077,20 +1088,20 @@ namespace WinBatLens
                     if (state.IsCharging && state.IsChargeRateMeasured)
                     {
                         TxtLiveAcState.Text = en
-                            ? $"🔌 Charging the battery at +{state.ChargingRateW:F1}W (measured at the pack)"
-                            : $"🔌 電池充電中 +{state.ChargingRateW:F1}W（電池實測）";
+                            ? $"Charging the battery at +{state.ChargingRateW:F1}W (measured at the pack)"
+                            : $"電池充電中 +{state.ChargingRateW:F1}W（電池實測）";
                     }
                     else if (state.IsCharging)
                     {
                         TxtLiveAcState.Text = en
-                            ? "🔌 Charging — this battery does not report a charge rate"
-                            : "🔌 電池充電中 — 此電池未回報充電功率";
+                            ? "Charging. This battery does not report a charge rate"
+                            : "電池充電中。此電池未回報充電功率";
                     }
                     else
                     {
                         TxtLiveAcState.Text = en
-                            ? "🔌 On AC, battery idle — no current in or out, so there is nothing to measure"
-                            : "🔌 市電直供中，電池無充放電電流 — 此狀態下沒有可量測的功率";
+                            ? "On AC, battery idle. No current in or out, so there is nothing to measure"
+                            : "市電直供中，電池無充放電電流。此狀態下沒有可量測的功率";
                     }
                 }
                 else
@@ -1109,14 +1120,14 @@ namespace WinBatLens
                     if (state.IsDischargeRateMeasured)
                     {
                         TxtLiveAcState.Text = en
-                            ? $"🔋 Battery Discharging (-{state.DischargeRateW:F1}W measured at the pack — whole system)"
-                            : $"🔋 電池放電中 (-{state.DischargeRateW:F1}W 電池實測 — 全系統真實耗電)";
+                            ? $"Battery Discharging (-{state.DischargeRateW:F1}W measured at the pack, whole system)"
+                            : $"電池放電中 (-{state.DischargeRateW:F1}W 電池實測，為全系統真實耗電)";
                     }
                     else
                     {
                         TxtLiveAcState.Text = en
-                            ? $"🔋 Battery Discharging (~-{state.DischargeRateW:F1}W estimated)"
-                            : $"🔋 電池放電中 (~-{state.DischargeRateW:F1}W 推估)";
+                            ? $"Battery Discharging (~-{state.DischargeRateW:F1}W estimated)"
+                            : $"電池放電中 (~-{state.DischargeRateW:F1}W 推估)";
                     }
                 }
 
@@ -1131,16 +1142,16 @@ namespace WinBatLens
                         // Amber, not red: red means power leaving the pack, and
                         // this line is a warning about the supply, not a rate.
                         TxtLiveChargerSupply.Text = en
-                            ? "⚠️ Windows reports the external supply as inadequate for this system"
-                            : "⚠️ Windows 判定：外接電源供電能力不足以支撐目前的系統負載";
+                            ? "Windows reports the external supply as inadequate for this system"
+                            : "Windows 判定：外接電源供電能力不足以支撐目前的系統負載";
                         TxtLiveChargerSupply.Foreground = BrushAmber;
                         TxtLiveChargerSupply.Visibility = Visibility.Visible;
                         break;
 
                     case PowerSupplyCapability.Adequate:
                         TxtLiveChargerSupply.Text = en
-                            ? "🔌 Windows reports the external supply as adequate. The adapter's own wattage is not exposed by Windows."
-                            : "🔌 Windows 判定：外接電源供電充足（變壓器 / USB-C 充電器本身的瓦數，Windows 並未提供）";
+                            ? "Windows reports the external supply as adequate. The adapter's own wattage is not exposed by Windows."
+                            : "Windows 判定：外接電源供電充足（變壓器 / USB-C 充電器本身的瓦數，Windows 並未提供）";
                         TxtLiveChargerSupply.Foreground = BrushSlate;
                         TxtLiveChargerSupply.Visibility = Visibility.Visible;
                         break;
@@ -1209,7 +1220,7 @@ namespace WinBatLens
 
                     TxtHwEnergySub.Text = state.DriverHealthPercent > 0
                         ? (en
-                            ? $"Full charge {state.BatteryCapacityHealthText} — health {state.DriverHealthPercent:F1}%"
+                            ? $"Full charge {state.BatteryCapacityHealthText}, health {state.DriverHealthPercent:F1}%"
                             : $"滿電 {state.BatteryCapacityHealthText}，健康度 {state.DriverHealthPercent:F1}%")
                         : (en ? "Measured by the battery driver" : "電池驅動實測容量");
                 }
@@ -1220,7 +1231,7 @@ namespace WinBatLens
 
                 // The discrete GPU is the only component with a real power
                 // sensor, so it is the only component row left on this page.
-                TxtDgpuName.Text = $"🎮 {state.DgpuName}";
+                TxtDgpuName.Text = state.DgpuName;
                 PbDgpuUsage.Value = state.DgpuUsagePercent;
                 TxtDgpuUsageVal.Text = state.DgpuStatusText;
                 TxtDgpuPowerW.Text = state.IsDgpuPowerMeasured
@@ -1248,22 +1259,22 @@ namespace WinBatLens
                 if (state.IsChargerDeficit)
                 {
                     TxtLivePowerTip.Text = en
-                        ? $"🔌⚠️ Plugged in but still discharging: the charger is short by at least {state.DischargeRateW:F1} W, which the battery is covering.{dgpuPart} Typical of charging over USB-C — a PD charger rated below this machine's draw cannot hold it up. Use a higher-wattage charger, or reduce load, to charge while working."
-                        : $"🔌⚠️ 已接上外接電源，但電池仍在放電：充電器至少差 {state.DischargeRateW:F1} W，缺口由電池補上。{dgpuPart}這是 USB-C 充電最常見的情況 — PD 充電器的瓦數低於本機耗電就撐不住。請改用瓦數更高的充電器，或降低負載才能邊用邊充。";
+                        ? $"Plugged in but still discharging: the charger is short by at least {state.DischargeRateW:F1} W, which the battery is covering.{dgpuPart} This is common with USB-C charging. A PD charger rated below this machine's draw cannot sustain it. Use a higher-wattage charger or reduce load to charge while working."
+                        : $"已接上外接電源，但電池仍在放電：充電器至少差 {state.DischargeRateW:F1} W，缺口由電池補上。{dgpuPart}這是 USB-C 充電常見的情況。PD 充電器的瓦數低於本機耗電就無法維持供電。請改用瓦數更高的充電器，或降低負載才能邊用邊充。";
                 }
                 else if (state.IsAcOnline)
                 {
                     if (state.IsCharging && state.IsChargeRateMeasured)
                     {
                         TxtLivePowerTip.Text = en
-                            ? $"🔌 On AC. Battery charging at {state.ChargingRateW:F1} W (measured at the pack). {state.EstimatedTimeRemainingText}.{dgpuPart}"
-                            : $"🔌 市電供電中，電池充電功率 {state.ChargingRateW:F1} W（電池實測）。{state.EstimatedTimeRemainingText}。{dgpuPart}";
+                            ? $"On AC. Battery charging at {state.ChargingRateW:F1} W (measured at the pack). {state.EstimatedTimeRemainingText}.{dgpuPart}"
+                            : $"市電供電中，電池充電功率 {state.ChargingRateW:F1} W（電池實測）。{state.EstimatedTimeRemainingText}。{dgpuPart}";
                     }
                     else
                     {
                         TxtLivePowerTip.Text = en
-                            ? $"🔌 On AC, no current flowing to or from the battery — there is no measurable system wattage in this state. Adapter input is not exposed by Windows.{dgpuPart}"
-                            : $"🔌 市電直供中，電池無充放電電流，此狀態下沒有可量測的系統功率（變壓器輸入功率 Windows 並未提供）。{dgpuPart}";
+                            ? $"On AC, no current is flowing to or from the battery. There is no measurable system wattage in this state. Adapter input is not exposed by Windows.{dgpuPart}"
+                            : $"市電直供中，電池無充放電電流，此狀態下沒有可量測的系統功率（變壓器輸入功率 Windows 並未提供）。{dgpuPart}";
                     }
                 }
                 else if (state.IsDischargeRateMeasured)
@@ -1271,21 +1282,21 @@ namespace WinBatLens
                     if (state.DischargeRateW > 20.0 || state.DgpuUsagePercent > 40.0)
                     {
                         TxtLivePowerTip.Text = en
-                            ? $"⚠️ High draw: {state.DischargeRateW:F1} W measured at the battery — the whole machine.{dgpuPart} Lowering screen brightness (now {state.ScreenBrightnessPercent}%) extends runtime."
-                            : $"⚠️ 目前放電 {state.DischargeRateW:F1} W（電池實測，為整機真實耗電）。{dgpuPart}建議調低螢幕亮度（目前 {state.ScreenBrightnessPercent}%）以延長續航。";
+                            ? $"High draw: {state.DischargeRateW:F1} W measured at the battery for the whole machine.{dgpuPart} Lowering screen brightness (now {state.ScreenBrightnessPercent}%) extends runtime."
+                            : $"目前放電 {state.DischargeRateW:F1} W（電池實測，為整機真實耗電）。{dgpuPart}建議調低螢幕亮度（目前 {state.ScreenBrightnessPercent}%）以延長續航。";
                     }
                     else
                     {
                         TxtLivePowerTip.Text = en
-                            ? $"💡 On battery: {state.DischargeRateW:F1} W measured at the pack — the whole machine's real draw.{dgpuPart}"
-                            : $"💡 電池供電中，實測放電 {state.DischargeRateW:F1} W（量測自電池，即整機真實耗電）。{dgpuPart}";
+                            ? $"On battery: {state.DischargeRateW:F1} W measured at the pack, the whole machine's real draw.{dgpuPart}"
+                            : $"電池供電中，實測放電 {state.DischargeRateW:F1} W（量測自電池，即整機真實耗電）。{dgpuPart}";
                     }
                 }
                 else
                 {
                     TxtLivePowerTip.Text = en
-                        ? $"💡 On battery. This machine's battery does not report a discharge rate, so no wattage can be shown.{dgpuPart}"
-                        : $"💡 電池供電中。此裝置的電池未回報放電功率，因此無法顯示瓦數。{dgpuPart}";
+                        ? $"On battery. This machine's battery does not report a discharge rate, so no wattage can be shown.{dgpuPart}"
+                        : $"電池供電中。此裝置的電池未回報放電功率，因此無法顯示瓦數。{dgpuPart}";
                 }
             }
             catch (Exception ex)
@@ -1308,12 +1319,12 @@ namespace WinBatLens
                 bool success = RealTimePowerHistoryService.ExportToCsv(saveDialog.FileName);
                 if (success)
                 {
-                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出歷史日誌至:\n{saveDialog.FileName}", 
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出歷史日誌至:\n{saveDialog.FileName}",
                         LocalizationService.CurrentLanguage == AppLanguage.English ? "Export Success" : "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 else
                 {
-                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Export failed due to write permissions." : "匯出失敗，請確認檔案寫入權限。", 
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Export failed due to write permissions." : "匯出失敗，請確認檔案寫入權限。",
                         LocalizationService.CurrentLanguage == AppLanguage.English ? "Error" : "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
@@ -1321,7 +1332,7 @@ namespace WinBatLens
 
         private void BtnClearPowerHistory_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Clear all live power and event history logs?" : "確定要清除所有即時功耗與充放電事件紀錄嗎？", 
+            var result = MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Clear all live power and event history logs?" : "確定要清除所有即時功耗與充放電事件紀錄嗎？",
                 LocalizationService.CurrentLanguage == AppLanguage.English ? "Confirm Clear" : "確認清除", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result == MessageBoxResult.Yes)
             {
@@ -1416,7 +1427,7 @@ namespace WinBatLens
         {
             if (_currentReport == null)
             {
-                MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "No battery report data available to export." : "目前尚無可供匯出的電池資料。", 
+                MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "No battery report data available to export." : "目前尚無可供匯出的電池資料。",
                     LocalizationService.CurrentLanguage == AppLanguage.English ? "Info" : "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -1434,7 +1445,7 @@ namespace WinBatLens
                 {
                     string json = JsonSerializer.Serialize(_currentReport, new JsonSerializerOptions { WriteIndented = true });
                     File.WriteAllText(saveDialog.FileName, json);
-                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出至:\n{saveDialog.FileName}", 
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出至:\n{saveDialog.FileName}",
                         LocalizationService.CurrentLanguage == AppLanguage.English ? "Export Success" : "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
@@ -1452,7 +1463,7 @@ namespace WinBatLens
 
             bool isEn = LocalizationService.CurrentLanguage == AppLanguage.English;
             string naText = isEn ? "N/A" : "未提供";
-            string dash = "—";
+            string dash = "-";
 
             // Score & Badge
             bool healthMeasured = metrics.HasBattery && metrics.IsHealthMeasured;
@@ -1527,8 +1538,8 @@ namespace WinBatLens
                 SepSpecMade.Visibility = Visibility.Collapsed;
             }
 
-            TxtReportTime.Text = string.IsNullOrWhiteSpace(report.SystemInfo.ReportTime) 
-                ? $"{DateTime.Now:yyyy-MM-dd HH:mm}" 
+            TxtReportTime.Text = string.IsNullOrWhiteSpace(report.SystemInfo.ReportTime)
+                ? $"{DateTime.Now:yyyy-MM-dd HH:mm}"
                 : report.SystemInfo.ReportTime;
 
             // Bind Lists

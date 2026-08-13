@@ -1,5 +1,96 @@
 # Project State & Handoff
 
+## 2026-08-13 GitHub upload (in progress)
+
+- User authorized uploading the complete current verified worktree, including the WPF redesign and installer-experience hardening. Scope is this repository only.
+- Remote audit after `fetch --prune --tags`: local `main` and `origin/main` are identical with no other local/remote branches. Publish through `agent/ui-installer-experience`, one intentional commit, and a Draft PR targeting `main`.
+- This authorization does not include a GitHub Release, tag, installer execution, or installed-application update.
+
+## 2026-08-13 installer experience hardening (complete, uncommitted)
+
+- Scope is limited to `installer/WinBatLens.iss` and a new installer contract test; the concurrent uncommitted WPF redesign remains preserved and untouched.
+- Start Menu application/uninstall shortcuts are now always created with a stable AppUserModelID and `{app}` working directory. Desktop and Windows-startup choices now default unchecked, and upgrades continue to restore previous task choices.
+- Added GitHub support/update metadata, installed README registration, setup/uninstall logging, explicit uninstall identity/version fields, narrowed Restart Manager filtering from every executable to `WinBatLens.exe`, and matching README guidance for manual Start/Taskbar pinning.
+- First test compile failed only because the new standalone contract test omitted the repository's explicit `using Xunit`; the import was added before the successful rerun. No product or installer failure was observed in that attempt.
+- Verification after correction: tests passed 22/22 with no warnings; changed-file `dotnet format --verify-no-changes --no-restore` and `git diff --check` passed; .NET 10 self-contained publish, portable packaging, and Inno Setup 6.7.3 compilation succeeded. Final installer: `dist/WinBatLens_v1.1.7_Setup_x64.exe`, 80,174,427 bytes, SHA-256 `9918D06B8EB4B43B94FD635E789A80B2AFC7ED30EF47B9AFB66631BE4CB10DBC`, file version 1.1.7. The full-solution format check still reports pre-existing whitespace in unrelated files, so only the new test was used as the scoped format gate. Inno's existing, documented admin/HKCU startup warning remains expected.
+- No installer was executed, no installed application was updated, and no commit/push/release was performed.
+
+## 2026-08-13 UI redesign baseline and design audit
+
+- Scope is a preserve-mode redesign of the active WPF application. The legacy
+  Electron prototype under `src/` is not part of the shipped .NET build and is
+  not being treated as the product UI.
+- Baseline before edits: clean `main` at `6c4d5b2`, tracking `origin/main`, with
+  no uncommitted diff. `AGENTS.md`, this handoff, the latest five commits,
+  `App.xaml`, `MainWindow.xaml`, localization wiring, and the relevant code-behind
+  state transitions were reviewed.
+- Design read: dense Windows battery and hardware monitoring for laptop users,
+  with a precise, quiet, instrument-like dark UI. Native WPF remains the only UI
+  system and no dependency will be added.
+- Dials: `DESIGN_VARIANCE 4`, `MOTION_INTENSITY 2`, `VISUAL_DENSITY 8`.
+  Redesign mode is `Redesign - Preserve / targeted evolution`.
+- Preserve: all six information areas, control names and event handlers, report
+  and history data, measured-versus-unavailable telemetry boundaries, the shared
+  physical watt scale, and semantic power colours. The historical compact-layout
+  constraint remains: recover space from padding and chrome before reducing type.
+- Retire: scattered one-off colours, emoji-dependent labels, weak or missing
+  keyboard focus/disabled/pressed states, inconsistent radii and nested-card
+  contrast, and blank data surfaces with no empty-state explanation.
+- Planned design system: one cyan interaction accent; graphite neutral surfaces;
+  red/green/blue/amber reserved only for real telemetry and health semantics;
+  Segoe UI Variable/Segoe UI with tabular numerals for measurements; 10 px cards,
+  6 px controls, and pill radii only for semantic status badges.
+- No hardware/UI runtime result is claimed yet. Release build, tests, formatting,
+  `git diff --check`, XAML parsing/build validation, and safe visual QA remain to
+  be completed. No commit, push, release, deployment, or installed-app update is
+  authorized.
+
+### Implementation milestone
+
+- `App.xaml` now defines one graphite instrument-dark token system, one cyan
+  interaction accent, shared card/data-row/status shapes, and complete hover,
+  pressed, keyboard-focus, selected, and disabled states for buttons, tabs,
+  checkboxes, list rows, headers, and progress bars.
+- `MainWindow.xaml` keeps the existing 1200x780 compact architecture and six
+  information areas, but replaces scattered one-off surfaces with the shared
+  system, gives the primary measured-power card slightly more weight, uses
+  tabular numerals on live measurements and axes, and adds contextual empty
+  states plus a focused report-loading surface.
+- Emoji-dependent product labels were removed from the window and bilingual
+  localization. Runtime dGPU/tip text follows the same rule. Visible range text
+  now uses regular hyphens instead of typographic dash separators.
+- New bilingual strings cover hardware-source labels, empty states, and loading
+  states. Existing names, handlers, bindings, report content, history data, and
+  measured/unavailable telemetry decisions remain intact.
+- Validation has started; no build, test, render, or live hardware result is
+  claimed at this milestone.
+
+### Final validation
+
+- The first Release solution build with the repository's normal self-contained
+  settings and `--no-restore` failed before compilation with `NETSDK1112` because
+  this local restore state lacks the .NET 10 `win-x64` runtime packs. No product
+  or XAML error was reported. To validate source without downloading anything,
+  the build was rerun with `SelfContained=false` and an empty
+  `RuntimeIdentifier`; it passed with 0 warnings and 0 errors.
+- Release tests passed 20/20. Changed-file `dotnet format
+  --verify-no-changes` passed for `MainWindow.xaml.cs` and
+  `Services/LocalizationService.cs` after applying its whitespace fixes.
+- Both XAML files parse as XML, WPF XAML compilation passed as part of the
+  Release build, `git diff --check` passed, and scans found no emoji in the
+  redesigned window/runtime/localization labels and no em/en dash in visible
+  C# strings.
+- No live UI screenshot or hardware smoke test was performed. An installed
+  monitor may already own the single-instance mutex, so launching this build
+  could foreground the old installed UI and produce false evidence or disturb
+  ongoing monitoring. Visual QA is therefore limited to source audit plus
+  successful WPF compilation; live layout, focus appearance, and min-size
+  behaviour remain unverified.
+- Final working tree intentionally contains only `App.xaml`,
+  `MainWindow.xaml`, `MainWindow.xaml.cs`, `Services/LocalizationService.cs`,
+  and this handoff. No commit, push, release, deployment, or installed-app
+  update was performed.
+
 ## 2026-08-12 v1.1.7 publication and installed update
 
 - Published GitHub Release `v1.1.7` from `66e4f3f147fad925841a09528f8a73f9cd2d0cf6`; branch CI and tag Release succeeded. Downloaded server digests: portable EXE `352B0A73...BC9497`, ZIP `3FB557F0...82D17`, Setup `1CD18AEC...B16AA`.

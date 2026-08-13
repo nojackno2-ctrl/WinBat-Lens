@@ -6,18 +6,22 @@
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgDark}"
         Foreground="{StaticResource TextMain}"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
+        FontSize="12"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
         Icon="pack://application:,,,/app_icon.png">
 
-    <Grid Margin="10">
+    <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <!-- Top Header Bar -->
-        <Border Grid.Row="0" Background="{StaticResource BgCard}" 
-                BorderBrush="{StaticResource BorderColor}" BorderThickness="1"
-                CornerRadius="10" Padding="12,8" Margin="0,0,0,10">
+        <Border Grid.Row="0" Style="{StaticResource PanelCardStyle}"
+                Padding="13,9" Margin="0,0,0,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -26,8 +30,11 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Width="30" Height="30" CornerRadius="8" Background="Transparent" Margin="0,0,9,0">
-                        <Image Source="pack://application:,,,/app_icon.png" Width="28" Height="28"/>
+                    <Border Width="34" Height="34" CornerRadius="6"
+                            Background="{StaticResource BgInset}"
+                            BorderBrush="{StaticResource BorderColor}"
+                            BorderThickness="1" Margin="0,0,10,0">
+                        <Image Source="pack://application:,,,/app_icon.png" Width="26" Height="26"/>
                     </Border>
                     <StackPanel VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
@@ -35,9 +42,10 @@
                             <!-- Version badge. The text is filled in from the
                                  assembly at startup; the value here is only so
                                  the designer shows the right width. -->
-                            <Border x:Name="BadgeAppVersion" CornerRadius="6" Background="#14FFFFFF"
-                                    BorderBrush="{StaticResource BorderColor}" BorderThickness="1"
-                                    Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                            <Border x:Name="BadgeAppVersion" Style="{StaticResource StatusPillStyle}"
+                                    Background="{StaticResource BgControl}"
+                                    BorderBrush="{StaticResource BorderColor}"
+                                    Padding="7,1" Margin="8,0,0,0" VerticalAlignment="Center">
                                 <TextBlock x:Name="TxtAppVersion" Text="v1.1.2" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextMuted}"/>
                             </Border>
                         </StackPanel>
@@ -47,14 +55,14 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Language Switcher Button -->
-                    <Button x:Name="BtnLanguageToggle" Content="🌐 English" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0" Padding="9,4" Click="BtnLanguageToggle_Click"/>
+                    <Button x:Name="BtnLanguageToggle" Content="English" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,8,0" Padding="10,4" Click="BtnLanguageToggle_Click"/>
 
                     <!-- Auto Startup Toggle CheckBox -->
-                    <CheckBox x:Name="ChkAutoStart" Content="🚀 開機自動啟動" Foreground="{StaticResource TextMain}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,10,0" Cursor="Hand" Click="ChkAutoStart_Click"/>
+                    <CheckBox x:Name="ChkAutoStart" Content="開機自動啟動" VerticalAlignment="Center" Margin="0,0,12,0" Click="ChkAutoStart_Click"/>
 
-                    <Button x:Name="BtnOpenReport" Content="📁 開啟 HTML 報告" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,6,0" Click="BtnOpenReport_Click"/>
-                    <Button x:Name="BtnGenerateReport" Content="⚡ 執行電池檢測" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,6,0" Click="BtnGenerateReport_Click"/>
-                    <Button x:Name="BtnExportData" Content="📥 匯出 JSON" Style="{StaticResource SecondaryButtonStyle}" Click="BtnExportData_Click"/>
+                    <Button x:Name="BtnOpenReport" Content="開啟 HTML 報告" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,6,0" Click="BtnOpenReport_Click"/>
+                    <Button x:Name="BtnGenerateReport" Content="執行電池檢測" Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,6,0" Click="BtnGenerateReport_Click"/>
+                    <Button x:Name="BtnExportData" Content="匯出 JSON" Style="{StaticResource SecondaryButtonStyle}" Click="BtnExportData_Click"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -77,8 +85,8 @@
                 </Grid.RowDefinitions>
 
                 <!-- Health Gauge Card -->
-                <Border Grid.Row="0" Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}"
-                        BorderThickness="1" CornerRadius="10" Padding="12,9" Margin="0,0,0,9">
+                <Border Grid.Row="0" Style="{StaticResource PanelCardStyle}"
+                        Padding="13,10" Margin="0,0,0,9">
                     <StackPanel HorizontalAlignment="Center">
                         <TextBlock x:Name="TxtHealthCardTitle" Text="電池健康度 (Health Score)" FontSize="11" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center"/>
 
@@ -88,7 +96,7 @@
                              the status wording uses. The arc is rotated so it
                              starts at twelve o'clock instead of three. -->
                         <Grid Margin="0,6">
-                            <Ellipse Width="84" Height="84" Stroke="#1E293B" StrokeThickness="8"/>
+                            <Ellipse Width="84" Height="84" Stroke="{StaticResource BgControl}" StrokeThickness="8"/>
                             <Ellipse x:Name="RingHealthProgress" Width="84" Height="84" Stroke="{StaticResource HealthGood}" StrokeThickness="8" StrokeDashArray="0,1000" RenderTransformOrigin="0.5,0.5">
                                 <Ellipse.RenderTransform>
                                     <RotateTransform Angle="-90"/>
@@ -103,7 +111,7 @@
                         </Grid>
 
                         <!-- Status Badge -->
-                        <Border x:Name="BadgeStatus" CornerRadius="10" Background="#2010B981" BorderBrush="{StaticResource HealthGood}" BorderThickness="1" Padding="9,2" HorizontalAlignment="Center">
+                        <Border x:Name="BadgeStatus" Style="{StaticResource StatusPillStyle}" Background="#2034D399" BorderBrush="{StaticResource HealthGood}" HorizontalAlignment="Center">
                             <TextBlock x:Name="TxtStatusLabel" Text="--" FontWeight="Bold" FontSize="11" Foreground="{StaticResource HealthGood}"/>
                         </Border>
 
@@ -113,10 +121,10 @@
                 </Border>
 
                 <!-- Battery Specs Card -->
-                <Border Grid.Row="1" Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}"
-                        BorderThickness="1" CornerRadius="10" Padding="12,9" Margin="0,0,0,9">
+                <Border Grid.Row="1" Style="{StaticResource PanelCardStyle}"
+                        Padding="13,10" Margin="0,0,0,9">
                     <StackPanel>
-                        <TextBlock x:Name="TxtBatterySpecsTitle" Text="🔋 電池規格參數" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,7"/>
+                        <TextBlock x:Name="TxtBatterySpecsTitle" Text="電池規格參數" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextMain}" Margin="0,0,0,8"/>
                             
                         <Grid Margin="0,1">
                             <TextBlock x:Name="LblSpecName" Text="電池名稱" Foreground="{StaticResource TextMuted}" FontSize="12"/>
@@ -160,7 +168,7 @@
 
                         <Grid Margin="0,1">
                             <TextBlock x:Name="LblSpecLoss" Text="容量損耗" Foreground="{StaticResource TextMuted}" FontSize="12"/>
-                            <TextBlock x:Name="TxtSpecLoss" Text="-- mWh" Foreground="{StaticResource AccentRose}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right"/>
+                            <TextBlock x:Name="TxtSpecLoss" Text="-- mWh" Foreground="{StaticResource PowerDischarge}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"/>
                         </Grid>
                         <Separator Background="#10FFFFFF" Margin="0,2"/>
 
@@ -173,8 +181,8 @@
 
                 <!-- Capacity Degradation History Card: fills the leftover sidebar
                      height so its bottom edge matches the right panel exactly. -->
-                <Border Grid.Row="2" Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}"
-                        BorderThickness="1" CornerRadius="10" Padding="11,9" Margin="0">
+                <Border Grid.Row="2" Style="{StaticResource PanelCardStyle}"
+                        Padding="12,10" Margin="0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -182,14 +190,14 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <Grid Grid.Row="0" Margin="0,0,0,7">
-                            <TextBlock x:Name="TxtCapacityHistoryTitle" Text="📈 容量歷史紀錄" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>
+                            <TextBlock x:Name="TxtCapacityHistoryTitle" Text="容量歷史紀錄" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
                             <TextBlock x:Name="TxtReportTime" Text="尚未載入" FontSize="11" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
 
                         <!-- Table Header Row. The right margin matches the data
                              list's always-visible scrollbar so both grids use the
                              same usable width and the columns line up exactly. -->
-                        <Border Grid.Row="1" Background="#101B2E" CornerRadius="6" Padding="8,4" Margin="0,0,17,4">
+                        <Border Grid.Row="1" Background="{StaticResource BgControl}" CornerRadius="6" Padding="8,5" Margin="0,0,17,4">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="150"/>
@@ -209,7 +217,7 @@
                             <ItemsControl x:Name="LvCapacityHistory">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="#0C1322" BorderBrush="#182338" BorderThickness="1" CornerRadius="6" Padding="7,4" Margin="0,0,0,3">
+                                        <Border Style="{StaticResource DataRowStyle}" Padding="7,5" Margin="0,0,0,3">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="150"/>
@@ -218,12 +226,12 @@
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="{Binding Period}" FontSize="11" Foreground="{StaticResource TextMain}" VerticalAlignment="Center" Grid.Column="0" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding FullChargeCapacity}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentCyan}" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="1" Margin="0,0,5,0"/>
+                                                <TextBlock Text="{Binding FullChargeCapacity}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentCyan}" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="1" Margin="0,0,5,0" Typography.NumeralAlignment="Tabular"/>
                                                 <TextBlock Text="{Binding DesignCapacity}" FontSize="11" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="2" Margin="0,0,8,0"/>
                                                 <!-- Each row is graded on its own percentage, so a period
                                                      where the pack dropped below a grade boundary stands
                                                      out from the rows around it. -->
-                                                <Border Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="8" Padding="5,1"
+                                                <Border Grid.Column="3" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="999" Padding="6,1"
                                                         Background="{Binding HealthPercent, Converter={StaticResource HealthGradeBrush}, ConverterParameter=Badge}"
                                                         BorderBrush="{Binding HealthPercent, Converter={StaticResource HealthGradeBrush}}" BorderThickness="1">
                                                     <StackPanel Orientation="Horizontal">
@@ -246,31 +254,30 @@
             </Grid>
 
             <!-- RIGHT PANEL: Full-Height Real-Time Monitoring Dashboard -->
-            <Border Grid.Column="1" Background="{StaticResource BgCard}" BorderBrush="{StaticResource BorderColor}"
-                    BorderThickness="1" CornerRadius="10" Padding="12">
+            <Border Grid.Column="1" Style="{StaticResource PanelCardStyle}" Padding="12">
                 <TabControl x:Name="TabMainControl" Background="Transparent" BorderThickness="0" Foreground="{StaticResource TextMain}">
                     
                     <!-- TAB 1: Full System Real-Time Power Monitor -->
-                    <TabItem x:Name="TabRealTime" Header=" ⚡ 全系統硬體功耗分佈 ">
+                    <TabItem x:Name="TabRealTime" Header=" 全系統硬體功耗分佈 ">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
                             <StackPanel>
                                 <!-- Power Discharge & Time Cards -->
                                 <Grid Margin="0,0,0,9">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="1.2*"/>
+                                        <ColumnDefinition Width="0.9*"/>
+                                        <ColumnDefinition Width="0.9*"/>
                                     </Grid.ColumnDefinitions>
 
                                     <!-- Live Discharge Rate Card -->
-                                    <Border Grid.Column="0" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="0,0,5,0">
+                                    <Border Grid.Column="0" Style="{StaticResource MetricCardStyle}" Margin="0,0,5,0">
                                         <StackPanel>
-                                            <TextBlock x:Name="TxtCardTotalPower" Text="⚡ 電池總放電 / AC 變壓器總供電功率" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock x:Name="TxtCardTotalPower" Text="電池充放電功率 (實測)" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
                                             <!-- Repainted every tick: red while discharging, green while
                                                  charging. Red is the resting state because the app is
                                                  opened on battery far more often than on AC. -->
-                                            <TextBlock x:Name="TxtLiveDischargeRate" Text="-- W" FontSize="24" FontWeight="ExtraBold" Foreground="{StaticResource PowerDischarge}" Margin="0,3"/>
-                                            <Border x:Name="BadgeLiveAcState" Background="#20F43F5E" BorderBrush="{StaticResource PowerDischarge}" BorderThickness="1" CornerRadius="10" Padding="8,2" HorizontalAlignment="Left">
+                                            <TextBlock x:Name="TxtLiveDischargeRate" Text="-- W" FontSize="25" FontWeight="Bold" Foreground="{StaticResource PowerDischarge}" Margin="0,4,0,3" Typography.NumeralAlignment="Tabular"/>
+                                            <Border x:Name="BadgeLiveAcState" Style="{StaticResource StatusPillStyle}" Background="#20FB7185" BorderBrush="{StaticResource PowerDischarge}" HorizontalAlignment="Left">
                                                 <TextBlock x:Name="TxtLiveAcState" Text="電源狀態讀取中..." FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource PowerDischarge}"/>
                                             </Border>
                                             <!-- Windows' own verdict on the attached charger. Windows exposes
@@ -283,33 +290,33 @@
                                     </Border>
 
                                     <!-- Live Remaining Battery Time Card -->
-                                    <Border Grid.Column="1" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="3,0,3,0">
+                                    <Border Grid.Column="1" Style="{StaticResource MetricCardStyle}" Margin="3,0,3,0">
                                         <StackPanel>
-                                            <TextBlock x:Name="TxtCardEstTime" Text="⏱️ 電腦估算剩餘續航時間" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock x:Name="TxtCardEstTime" Text="電腦估算剩餘續航時間" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
                                             <!-- Amber, not green: green is reserved for charging, and a
                                                  runtime estimate is neither charge nor discharge. -->
-                                            <TextBlock x:Name="TxtLiveRemainingTime" Text="--" FontSize="21" FontWeight="Bold" Foreground="{StaticResource PowerNeutral}" Margin="0,4"/>
-                                            <TextBlock x:Name="TxtLiveBatteryPercent" Text="目前電量: --%" FontSize="12" Foreground="{StaticResource TextMuted}"/>
+                                            <TextBlock x:Name="TxtLiveRemainingTime" Text="--" FontSize="22" FontWeight="Bold" Foreground="{StaticResource PowerNeutral}" Margin="0,5,0,4" Typography.NumeralAlignment="Tabular"/>
+                                            <TextBlock x:Name="TxtLiveBatteryPercent" Text="目前電量: --%" FontSize="12" Foreground="{StaticResource TextMuted}" Typography.NumeralAlignment="Tabular"/>
                                         </StackPanel>
                                     </Border>
 
                                     <!-- Live Battery Hardware Telemetry Card -->
-                                    <Border Grid.Column="2" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="5,0,0,0">
+                                    <Border Grid.Column="2" Style="{StaticResource MetricCardStyle}" Margin="5,0,0,0">
                                         <StackPanel>
-                                            <TextBlock x:Name="TxtCardTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流)" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock x:Name="TxtCardTelemetry" Text="電池物理狀態 (電壓 / 電流)" FontSize="12" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
                                             <!-- Also repainted per tick: current flowing out of the pack
                                                  is red, current flowing into it is green. -->
-                                            <TextBlock x:Name="TxtLiveBatteryTelemetry" Text="-- V | -- A" FontSize="19" FontWeight="Bold" Foreground="{StaticResource PowerDischarge}" Margin="0,5,0,4"/>
+                                            <TextBlock x:Name="TxtLiveBatteryTelemetry" Text="-- V | -- A" FontSize="20" FontWeight="Bold" Foreground="{StaticResource PowerDischarge}" Margin="0,6,0,4" Typography.NumeralAlignment="Tabular"/>
                                             <TextBlock x:Name="TxtLiveBatteryTelemetrySub" Text="WMI &amp; ACPI 即時硬體感測" FontSize="11" Foreground="{StaticResource TextMuted}"/>
                                         </StackPanel>
                                     </Border>
                                 </Grid>
 
                                 <!-- Task Manager Style Real-Time Waveform Chart Card -->
-                                <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="0,0,0,9">
+                                <Border Style="{StaticResource MetricCardStyle}" Margin="0,0,0,9">
                                     <StackPanel>
                                         <Grid Margin="0,0,0,7">
-                                            <TextBlock x:Name="TxtWaveformTitle" Text="📈 60 秒即時動態走勢波形圖 (Task Manager Style Live Graph)" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>
+                                            <TextBlock x:Name="TxtWaveformTitle" Text="60 秒即時功率走勢" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
                                             
                                             <!-- Legend -->
                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -328,7 +335,7 @@
                                         </Grid>
 
                                         <!-- Waveform Canvas Box with Y-Axis Wattage Coordinates -->
-                                        <Border Height="136" Background="#060910" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+                                        <Border Height="142" Style="{StaticResource DataSurfaceStyle}" ClipToBounds="True">
                                             <Grid x:Name="GridChartContainer" SizeChanged="GridChartContainer_SizeChanged">
                                                 <!-- Background Gridlines -->
                                                 <Canvas x:Name="CanvasGridlines"/>
@@ -343,11 +350,11 @@
                                                         <RowDefinition Height="Auto"/>
                                                     </Grid.RowDefinitions>
                                                     
-                                                    <TextBlock x:Name="TxtYAxis100" Grid.Row="0" Text="35 W (100%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtYAxis75" Grid.Row="1" Text="26 W (75%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtYAxis50" Grid.Row="2" Text="18 W (50%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtYAxis25" Grid.Row="3" Text="9 W (25%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
-                                                    <TextBlock x:Name="TxtYAxis0" Grid.Row="4" Text="0 W (0%)" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Bottom"/>
+                                                    <TextBlock x:Name="TxtYAxis100" Grid.Row="0" Text="35 W (100%)" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Top" Typography.NumeralAlignment="Tabular"/>
+                                                    <TextBlock x:Name="TxtYAxis75" Grid.Row="1" Text="26 W (75%)" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Top" Typography.NumeralAlignment="Tabular"/>
+                                                    <TextBlock x:Name="TxtYAxis50" Grid.Row="2" Text="18 W (50%)" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Top" Typography.NumeralAlignment="Tabular"/>
+                                                    <TextBlock x:Name="TxtYAxis25" Grid.Row="3" Text="9 W (25%)" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Top" Typography.NumeralAlignment="Tabular"/>
+                                                    <TextBlock x:Name="TxtYAxis0" Grid.Row="4" Text="0 W (0%)" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Bottom" Typography.NumeralAlignment="Tabular"/>
                                                 </Grid>
 
                                                 <!-- Discharge, charge and dGPU share this single wattage
@@ -363,12 +370,12 @@
                                 </Border>
 
                                 <!-- Hardware Resource Load Breakdown Card -->
-                                <Border Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="0,0,0,9">
+                                <Border Style="{StaticResource MetricCardStyle}" Margin="0,0,0,9">
                                     <StackPanel>
-                                        <TextBlock x:Name="TxtHardwareTitle" Text="💻 全系統各硬體元件功耗明細 (Full System Hardware Power Breakdown)" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextMain}" Margin="0,0,0,8"/>
+                                        <TextBlock x:Name="TxtHardwareTitle" Text="硬體實測功耗" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextMain}" Margin="0,0,0,8"/>
 
                                         <!-- Battery Hardware Telemetry Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="7" Padding="10,6" Margin="0,0,0,6">
+                                        <Border Style="{StaticResource DataRowStyle}" Margin="0,0,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="238"/>
@@ -376,20 +383,20 @@
                                                     <ColumnDefinition Width="150"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwBatteryTelemetry" Text="🔋 電池物理狀態 (電壓 / 電流)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
+                                                    <TextBlock x:Name="LblHwBatteryTelemetry" Text="電池物理狀態 (電壓 / 電流)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
                                                     <!-- Voltage comes from the battery driver IOCTL, not WMI,
                                                          which the old subtitle here claimed. -->
                                                     <TextBlock x:Name="TxtTelemetrySub" Text="電池驅動 IOCTL 即時電氣感測" Foreground="{StaticResource PowerDischarge}" FontSize="11" Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                                <TextBlock x:Name="TxtHwTelemetryVal" Grid.Column="1" Text="-- V  |  -- A" Foreground="{StaticResource PowerDischarge}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
-                                                <TextBlock Text="ACPI 感測器運作中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="TxtHwTelemetryVal" Grid.Column="1" Text="-- V  |  -- A" Foreground="{StaticResource PowerDischarge}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0" Typography.NumeralAlignment="Tabular"/>
+                                                <TextBlock x:Name="TxtHwTelemetrySource" Text="Battery class driver" Grid.Column="2" Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
 
                                         <!-- Battery Energy & Capacity Row. Hidden on a pack whose
                                              driver reports no capacity, or reports it in relative
                                              units that cannot honestly be called watt-hours. -->
-                                        <Border x:Name="RowHwEnergy" Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="7" Padding="10,6" Margin="0,0,0,6">
+                                        <Border x:Name="RowHwEnergy" Style="{StaticResource DataRowStyle}" Margin="0,0,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="238"/>
@@ -397,7 +404,7 @@
                                                     <ColumnDefinition Width="150"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwEnergy" Text="🔋 電池蓄電量 (Wh)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
+                                                    <TextBlock x:Name="LblHwEnergy" Text="電池蓄電量 (Wh)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
                                                     <!-- Stored energy is neither spending nor saving power,
                                                          so it takes the neutral amber rather than borrowing
                                                          a colour that means something else. -->
@@ -409,7 +416,7 @@
                                         </Border>
 
                                         <!-- Windows Power Scheme Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="7" Padding="10,6" Margin="0,0,0,6">
+                                        <Border Style="{StaticResource DataRowStyle}" Margin="0,0,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="238"/>
@@ -417,14 +424,14 @@
                                                     <ColumnDefinition Width="150"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="LblHwPowerPlan" Text="⚙️ Windows 運作電源計劃" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
+                                                    <TextBlock x:Name="LblHwPowerPlan" Text="Windows 運作電源計劃" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12"/>
                                                     <!-- Coloured by what the plan costs: a performance plan
                                                          spends power (red), a saver plan conserves it
                                                          (green), balanced sits between (amber). -->
                                                     <TextBlock x:Name="TxtHwPowerPlanSub" Text="PowrProf 電源管理策略" Foreground="{StaticResource PowerNeutral}" FontSize="11" Margin="0,1,0,0"/>
                                                 </StackPanel>
                                                 <TextBlock x:Name="TxtHwPowerPlanVal" Grid.Column="1" Text="平衡 (Balanced)" Foreground="{StaticResource PowerNeutral}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" Margin="8,0"/>
-                                                <TextBlock Text="電源配置生效中" Grid.Column="2" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="TxtHwPowerPlanState" Text="Active scheme" Grid.Column="2" Foreground="{StaticResource TextMuted}" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
 
@@ -434,7 +441,7 @@
                                              for any of them on this hardware. -->
 
                                         <!-- Discrete GPU (dGPU) Row -->
-                                        <Border Background="#0C1322" BorderBrush="#1A2438" BorderThickness="1" CornerRadius="7" Padding="10,6" Margin="0,0,0,6">
+                                        <Border Style="{StaticResource DataRowStyle}" Margin="0,0,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="238"/>
@@ -442,14 +449,14 @@
                                                     <ColumnDefinition Width="150"/>
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                    <TextBlock x:Name="TxtDgpuName" Text="🎮 獨立顯示卡 (dGPU)" Foreground="{StaticResource TextMain}" FontWeight="Bold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock x:Name="TxtDgpuName" Text="獨立顯示卡 (dGPU)" Foreground="{StaticResource TextMain}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
                                                     <!-- The wattage keeps the blue of the dGPU chart series
                                                          so the two read as the same thing. The load bar and
                                                          its label are repainted per tick by how much power
                                                          the card is actually spending. -->
                                                     <TextBlock x:Name="TxtDgpuPowerW" Text="~0.0 W" Foreground="{StaticResource PowerGpu}" FontSize="11" Margin="0,1,0,0"/>
                                                 </StackPanel>
-                                                <ProgressBar x:Name="PbDgpuUsage" Grid.Column="1" Height="9" Value="0" Maximum="100" Foreground="{StaticResource PowerCharge}" Background="#090D16" BorderThickness="0" Margin="8,0" VerticalAlignment="Center"/>
+                                                <ProgressBar x:Name="PbDgpuUsage" Grid.Column="1" Value="0" Maximum="100" Foreground="{StaticResource PowerCharge}" Margin="8,0" VerticalAlignment="Center"/>
                                                 <TextBlock x:Name="TxtDgpuUsageVal" Grid.Column="2" Text="0% (待機省電)" Foreground="{StaticResource PowerCharge}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
@@ -462,15 +469,15 @@
                                 </Border>
 
                                 <!-- Live Power Tip Box -->
-                                <Border Background="#1038BDF8" BorderBrush="{StaticResource AccentCyan}" BorderThickness="1" CornerRadius="7" Padding="10,7">
-                                    <TextBlock x:Name="TxtLivePowerTip" Text="💡 即時監測每 1 秒自動更新一次。" FontSize="12" Foreground="{StaticResource TextMain}" TextWrapping="Wrap"/>
+                                <Border Background="{StaticResource AccentTint}" BorderBrush="{StaticResource AccentCyan}" BorderThickness="1" CornerRadius="6" Padding="10,8">
+                                    <TextBlock x:Name="TxtLivePowerTip" Text="即時監測每 1 秒自動更新一次。" FontSize="12" Foreground="{StaticResource TextMain}" TextWrapping="Wrap"/>
                                 </Border>
                             </StackPanel>
                         </ScrollViewer>
                     </TabItem>
 
                     <!-- TAB 2: Live Power & Charge/Discharge History -->
-                    <TabItem x:Name="TabHistoryLogs" Header=" 📉 即時功耗與充放電歷史紀錄 ">
+                    <TabItem x:Name="TabHistoryLogs" Header=" 即時功耗與充放電歷史紀錄 ">
                         <Grid Margin="0,8,0,0">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -478,35 +485,51 @@
                             </Grid.RowDefinitions>
 
                             <!-- Action Buttons Header -->
-                            <Grid Grid.Row="0" Margin="0,0,0,7">
-                                <TextBlock x:Name="TxtHistoryLogHeader" Text="📋 即時動態功耗與充放電事件歷史日誌 (Live Power &amp; Event Logs)" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextMain}" VerticalAlignment="Center"/>
+                            <Grid Grid.Row="0" Margin="0,0,0,8">
+                                <TextBlock x:Name="TxtHistoryLogHeader" Text="即時功耗與充放電事件紀錄" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextMain}" VerticalAlignment="Center"/>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button x:Name="BtnExportPowerCsv" Content="📥 匯出 CSV 紀錄" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,6,0" Padding="10,4" Click="BtnExportPowerCsv_Click"/>
-                                    <Button x:Name="BtnClearPowerHistory" Content="🗑️ 清除紀錄" Style="{StaticResource SecondaryButtonStyle}" Padding="10,4" Click="BtnClearPowerHistory_Click"/>
+                                    <Button x:Name="BtnExportPowerCsv" Content="匯出 CSV 紀錄" Style="{StaticResource SecondaryButtonStyle}" Margin="0,0,6,0" Padding="10,4" Click="BtnExportPowerCsv_Click"/>
+                                    <Button x:Name="BtnClearPowerHistory" Content="清除紀錄" Style="{StaticResource SecondaryButtonStyle}" Padding="10,4" Click="BtnClearPowerHistory_Click"/>
                                 </StackPanel>
                             </Grid>
 
                             <!-- History Event Log ListView -->
-                            <ListView x:Name="LvPowerHistory" Grid.Row="1" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
-                                <ListView.View>
-                                    <GridView>
-                                        <GridViewColumn Header="時間戳記" Width="140" DisplayMemberBinding="{Binding TimestampText}"/>
-                                        <GridViewColumn Header="事件類型" Width="100" DisplayMemberBinding="{Binding EventType}"/>
-                                        <GridViewColumn Header="放電/充電功率" Width="108" DisplayMemberBinding="{Binding DischargeRateText}"/>
-                                        <GridViewColumn Header="電量 (%)" Width="76" DisplayMemberBinding="{Binding BatteryPercentText}"/>
-                                        <GridViewColumn Header="電池狀態 (V / A)" Width="124" DisplayMemberBinding="{Binding TelemetryText}"/>
-                                        <GridViewColumn Header="CPU 負載" Width="84" DisplayMemberBinding="{Binding CpuUsageText}"/>
-                                        <GridViewColumn Header="獨顯負載" Width="84" DisplayMemberBinding="{Binding DgpuUsageText}"/>
-                                        <GridViewColumn Header="獨顯功耗" Width="84" DisplayMemberBinding="{Binding DgpuPowerText}"/>
-                                        <GridViewColumn Header="詳細狀態記錄" Width="220" DisplayMemberBinding="{Binding SummaryText}"/>
-                                    </GridView>
-                                </ListView.View>
-                            </ListView>
+                            <Grid Grid.Row="1">
+                                <ListView x:Name="LvPowerHistory" Background="{StaticResource BgInset}" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="時間戳記" Width="140" DisplayMemberBinding="{Binding TimestampText}"/>
+                                            <GridViewColumn Header="事件類型" Width="100" DisplayMemberBinding="{Binding EventType}"/>
+                                            <GridViewColumn Header="放電/充電功率" Width="108" DisplayMemberBinding="{Binding DischargeRateText}"/>
+                                            <GridViewColumn Header="電量 (%)" Width="76" DisplayMemberBinding="{Binding BatteryPercentText}"/>
+                                            <GridViewColumn Header="電池狀態 (V / A)" Width="124" DisplayMemberBinding="{Binding TelemetryText}"/>
+                                            <GridViewColumn Header="CPU 負載" Width="84" DisplayMemberBinding="{Binding CpuUsageText}"/>
+                                            <GridViewColumn Header="獨顯負載" Width="84" DisplayMemberBinding="{Binding DgpuUsageText}"/>
+                                            <GridViewColumn Header="獨顯功耗" Width="84" DisplayMemberBinding="{Binding DgpuPowerText}"/>
+                                            <GridViewColumn Header="詳細狀態記錄" Width="220" DisplayMemberBinding="{Binding SummaryText}"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                                <TextBlock x:Name="TxtPowerHistoryEmpty" Text="監測開始後，功耗事件會顯示在這裡。"
+                                           Foreground="{StaticResource TextMuted}" FontSize="12"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ElementName=LvPowerHistory, Path=HasItems}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </Grid>
                     </TabItem>
 
-                    <!-- TAB 3: Battery Voltage by State of Charge (0–100%) -->
-                    <TabItem x:Name="TabVoltageHistory" Header=" 🔋 電池電壓紀錄 ">
+                    <!-- TAB 3: Battery Voltage by State of Charge (0-100%) -->
+                    <TabItem x:Name="TabVoltageHistory" Header=" 電池電壓紀錄 ">
                         <Grid Margin="0,8,0,0">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -516,21 +539,21 @@
 
                             <Grid Grid.Row="0" Margin="0,0,0,7">
                                 <StackPanel>
-                                    <TextBlock x:Name="TxtVoltageHistoryTitle" Text="🔋 電池電壓紀錄（0–100%）" FontSize="13" FontWeight="Bold" Foreground="{StaticResource TextMain}"/>
+                                    <TextBlock x:Name="TxtVoltageHistoryTitle" Text="電池電壓紀錄 (0-100%)" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextMain}"/>
                                     <TextBlock x:Name="TxtVoltageHistorySummary" Text="已記錄 0 / 101 個電量區間，累積 0 次電量變化事件" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,3,0,0"/>
                                     <TextBlock x:Name="TxtVoltageHistoryHint" Text="僅顯示電池驅動回報的實測電壓；同一電量未變化時不重複記錄。" FontSize="11" Foreground="{StaticResource TextMuted}" Margin="0,2,0,0"/>
                                 </StackPanel>
                                 <Button x:Name="BtnClearVoltageHistory" Content="清除電壓紀錄" Style="{StaticResource SecondaryButtonStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="10,4" Click="BtnClearVoltageHistory_Click"/>
                             </Grid>
 
-                            <Border Grid.Row="1" Background="#182338" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="11,9" Margin="0,0,0,7">
+                            <Border Grid.Row="1" Style="{StaticResource MetricCardStyle}" Margin="0,0,0,7">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="*"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <Border Grid.Row="0" Background="#060910" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+                                    <Border Grid.Row="0" Style="{StaticResource DataSurfaceStyle}" ClipToBounds="True">
                                         <Grid x:Name="GridVoltageChartContainer" SizeChanged="GridVoltageChartContainer_SizeChanged">
                                             <Canvas x:Name="CanvasVoltageGridlines"/>
 
@@ -542,11 +565,11 @@
                                                     <RowDefinition Height="*"/>
                                                     <RowDefinition Height="Auto"/>
                                                 </Grid.RowDefinitions>
-                                                <TextBlock x:Name="TxtVoltageYAxis100" Grid.Row="0" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
-                                                <TextBlock x:Name="TxtVoltageYAxis75" Grid.Row="1" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
-                                                <TextBlock x:Name="TxtVoltageYAxis50" Grid.Row="2" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
-                                                <TextBlock x:Name="TxtVoltageYAxis25" Grid.Row="3" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Top"/>
-                                                <TextBlock x:Name="TxtVoltageYAxis0" Grid.Row="4" Text="-- V" FontSize="10" Foreground="#94A3B8" FontFamily="Consolas, Segoe UI" VerticalAlignment="Bottom"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis100" Grid.Row="0" Text="-- V" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Top" Typography.NumeralAlignment="Tabular"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis75" Grid.Row="1" Text="-- V" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Top" Typography.NumeralAlignment="Tabular"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis50" Grid.Row="2" Text="-- V" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Top" Typography.NumeralAlignment="Tabular"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis25" Grid.Row="3" Text="-- V" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Top" Typography.NumeralAlignment="Tabular"/>
+                                                <TextBlock x:Name="TxtVoltageYAxis0" Grid.Row="4" Text="-- V" FontSize="10" Foreground="{StaticResource TextMuted}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Bottom" Typography.NumeralAlignment="Tabular"/>
                                             </Grid>
 
                                             <!-- Segments are split at missing percentages, so the line never
@@ -575,63 +598,127 @@
                                 </Grid>
                             </Border>
 
-                            <ListView x:Name="LvBatteryVoltageHistory" Grid.Row="2" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
-                                <ListView.View>
-                                    <GridView>
-                                        <GridViewColumn x:Name="VoltagePercentColumn" Header="電量 (%)" Width="100" DisplayMemberBinding="{Binding BatteryPercentText}"/>
-                                        <GridViewColumn x:Name="VoltageAverageColumn" Header="平均電壓" Width="120" DisplayMemberBinding="{Binding AverageVoltageText}"/>
-                                        <GridViewColumn x:Name="VoltageRangeColumn" Header="實測範圍" Width="150" DisplayMemberBinding="{Binding VoltageRangeText}"/>
-                                        <GridViewColumn x:Name="VoltageSamplesColumn" Header="變化次數" Width="100" DisplayMemberBinding="{Binding SampleCount}"/>
-                                        <GridViewColumn x:Name="VoltageLastColumn" Header="最後紀錄" Width="170" DisplayMemberBinding="{Binding LastRecordedAtText}"/>
-                                    </GridView>
-                                </ListView.View>
-                            </ListView>
+                            <Grid Grid.Row="2">
+                                <ListView x:Name="LvBatteryVoltageHistory" Background="{StaticResource BgInset}" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn x:Name="VoltagePercentColumn" Header="電量 (%)" Width="100" DisplayMemberBinding="{Binding BatteryPercentText}"/>
+                                            <GridViewColumn x:Name="VoltageAverageColumn" Header="平均電壓" Width="120" DisplayMemberBinding="{Binding AverageVoltageText}"/>
+                                            <GridViewColumn x:Name="VoltageRangeColumn" Header="實測範圍" Width="150" DisplayMemberBinding="{Binding VoltageRangeText}"/>
+                                            <GridViewColumn x:Name="VoltageSamplesColumn" Header="變化次數" Width="100" DisplayMemberBinding="{Binding SampleCount}"/>
+                                            <GridViewColumn x:Name="VoltageLastColumn" Header="最後紀錄" Width="170" DisplayMemberBinding="{Binding LastRecordedAtText}"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                                <TextBlock x:Name="TxtVoltageHistoryEmpty" Text="電量百分比改變且驅動回報實測電壓後，紀錄會顯示在這裡。"
+                                           Foreground="{StaticResource TextMuted}" FontSize="12" TextWrapping="Wrap" MaxWidth="420" TextAlignment="Center"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ElementName=LvBatteryVoltageHistory, Path=HasItems}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </Grid>
                     </TabItem>
 
                     <!-- TAB 4: Smart Diagnostics -->
-                    <TabItem x:Name="TabDiagnostics" Header=" 💡 智慧診斷與維護建議 ">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
-                            <ItemsControl x:Name="IcDiagnostics">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="#182338" CornerRadius="7" Padding="10,8" Margin="0,0,0,7" BorderBrush="{StaticResource AccentCyan}" BorderThickness="4,0,0,0">
-                                            <StackPanel>
-                                                <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" Foreground="{StaticResource TextMain}"/>
-                                                <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,3,0,0" TextWrapping="Wrap"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                    <TabItem x:Name="TabDiagnostics" Header=" 智慧診斷與維護建議 ">
+                        <Grid Margin="0,8,0,0">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="IcDiagnostics">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{StaticResource BgRaised}" CornerRadius="6" Padding="11,9" Margin="0,0,0,7" BorderBrush="{StaticResource AccentCyan}" BorderThickness="3,0,0,0">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextMain}"/>
+                                                    <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock x:Name="TxtDiagnosticsEmpty" Text="執行電池檢測後，診斷與維護建議會顯示在這裡。"
+                                       Foreground="{StaticResource TextMuted}" FontSize="12"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=IcDiagnostics, Path=HasItems}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
                     </TabItem>
 
                     <!-- TAB 5: Life Estimates -->
-                    <TabItem x:Name="TabLifeEstimates" Header=" ⏱️ 續航估算表 ">
-                        <ListView x:Name="LvLifeEstimates" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}" Margin="0,8,0,0">
-                            <ListView.View>
-                                <GridView>
-                                    <GridViewColumn Header="記錄期間" Width="170" DisplayMemberBinding="{Binding Period}"/>
-                                    <GridViewColumn Header="實測滿電續航" Width="170" DisplayMemberBinding="{Binding FullChargeEstimate}"/>
-                                    <GridViewColumn Header="原廠設計續航" Width="170" DisplayMemberBinding="{Binding DesignCapEstimate}"/>
-                                </GridView>
-                            </ListView.View>
-                        </ListView>
+                    <TabItem x:Name="TabLifeEstimates" Header=" 續航估算表 ">
+                        <Grid Margin="0,8,0,0">
+                            <ListView x:Name="LvLifeEstimates" Background="{StaticResource BgInset}" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="記錄期間" Width="170" DisplayMemberBinding="{Binding Period}"/>
+                                        <GridViewColumn Header="實測滿電續航" Width="170" DisplayMemberBinding="{Binding FullChargeEstimate}"/>
+                                        <GridViewColumn Header="原廠設計續航" Width="170" DisplayMemberBinding="{Binding DesignCapEstimate}"/>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                            <TextBlock x:Name="TxtLifeEstimatesEmpty" Text="載入含續航資料的電池報告後，估算結果會顯示在這裡。"
+                                       Foreground="{StaticResource TextMuted}" FontSize="12"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=LvLifeEstimates, Path=HasItems}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
                     </TabItem>
 
                     <!-- TAB 6: Recent Usage -->
-                    <TabItem x:Name="TabRecentUsage" Header=" 📊 最近使用紀錄 ">
-                        <ListView x:Name="LvRecentUsage" Background="#0C1322" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}" Margin="0,8,0,0">
-                            <ListView.View>
-                                <GridView>
-                                    <GridViewColumn Header="開始時間" Width="170" DisplayMemberBinding="{Binding StartTime}"/>
-                                    <GridViewColumn Header="狀態" Width="110" DisplayMemberBinding="{Binding State}"/>
-                                    <GridViewColumn Header="電源來源" Width="110" DisplayMemberBinding="{Binding Source}"/>
-                                    <GridViewColumn Header="剩餘電量" Width="130" DisplayMemberBinding="{Binding CapacityRemaining}"/>
-                                </GridView>
-                            </ListView.View>
-                        </ListView>
+                    <TabItem x:Name="TabRecentUsage" Header=" 最近使用紀錄 ">
+                        <Grid Margin="0,8,0,0">
+                            <ListView x:Name="LvRecentUsage" Background="{StaticResource BgInset}" BorderBrush="{StaticResource BorderColor}" BorderThickness="1" Foreground="{StaticResource TextMain}">
+                                <ListView.View>
+                                    <GridView>
+                                        <GridViewColumn Header="開始時間" Width="170" DisplayMemberBinding="{Binding StartTime}"/>
+                                        <GridViewColumn Header="狀態" Width="110" DisplayMemberBinding="{Binding State}"/>
+                                        <GridViewColumn Header="電源來源" Width="110" DisplayMemberBinding="{Binding Source}"/>
+                                        <GridViewColumn Header="剩餘電量" Width="130" DisplayMemberBinding="{Binding CapacityRemaining}"/>
+                                    </GridView>
+                                </ListView.View>
+                            </ListView>
+                            <TextBlock x:Name="TxtRecentUsageEmpty" Text="載入含使用紀錄的電池報告後，資料會顯示在這裡。"
+                                       Foreground="{StaticResource TextMuted}" FontSize="12"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=LvRecentUsage, Path=HasItems}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
                     </TabItem>
 
                 </TabControl>
@@ -639,12 +726,14 @@
         </Grid>
 
         <!-- Loading Overlay -->
-        <Border x:Name="OverlayLoading" Grid.RowSpan="2" Background="#D0090D16" Visibility="Collapsed">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="⚡" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                <TextBlock Text="正在執行 Windows 電池健康檢測 (powercfg /batteryreport)..." FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextMain}" HorizontalAlignment="Center"/>
-                <TextBlock Text="請稍候..." FontSize="12" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center" Margin="0,5,0,0"/>
-            </StackPanel>
+        <Border x:Name="OverlayLoading" Grid.RowSpan="2" Background="#E60A0E13" Visibility="Collapsed">
+            <Border Style="{StaticResource PanelCardStyle}" Padding="24,20" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520">
+                <StackPanel HorizontalAlignment="Center">
+                    <Image Source="pack://application:,,,/app_icon.png" Width="40" Height="40" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="TxtLoadingTitle" Text="正在執行 Windows 電池健康檢測" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextMain}" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="TxtLoadingDetail" Text="powercfg /batteryreport 正在產生並分析最新報告。" FontSize="12" Foreground="{StaticResource TextMuted}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
         </Border>
     </Grid>
 </Window>

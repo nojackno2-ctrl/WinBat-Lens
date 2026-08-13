@@ -1,8 +1,10 @@
 ; WinBat Lens Inno Setup Script
 #define MyAppName "WinBat Lens"
 #define MyAppPublisher "WinBat Lens Team"
+#define MyAppURL "https://github.com/nojackno2-ctrl/WinBat-Lens"
 #define MyAppExeName "WinBatLens.exe"
 #define MyAppId "{{D2B3F0E1-8E4B-4D2A-9A2C-5F1B3E7A902A}"
+#define MyAppUserModelId "nojackno2.WinBatLens"
 #define MyPublishExe "..\bin\Release\net10.0-windows\win-x64\publish\WinBatLens.exe"
 
 ; Named kernel objects the running app owns. Both are part of a cross-version
@@ -25,29 +27,45 @@
 AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} v{#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}/issues
+AppUpdatesURL={#MyAppURL}/releases
+AppReadmeFile={app}\README.md
+VersionInfoVersion={#MyAppVersion}.0
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} installer
+VersionInfoTextVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}.0
+VersionInfoProductName={#MyAppName}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 LicenseFile=..\LICENSE
 SetupIconFile=..\app_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayName={#MyAppName} v{#MyAppVersion}
+Uninstallable=yes
 OutputDir=..\dist
 OutputBaseFilename=WinBatLens_v{#MyAppVersion}_Setup_x64
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-; The Start Menu folder is fixed to DefaultGroupName; whether shortcuts get
-; created is controlled by the "startmenuicon" task on the Tasks page instead.
+; Always create an application and uninstall shortcut in this stable folder so
+; Windows Search and the user's manual Pin to Start/Taskbar actions can find it.
 DisableProgramGroupPage=yes
 ShowLanguageDialog=yes
+PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=commandline dialog
 AppMutex={#MyAppMutex}
 UsePreviousAppDir=yes
 UsePreviousGroup=yes
 UsePreviousTasks=yes
 CreateUninstallRegKey=yes
+SetupLogging=yes
+UninstallLogging=yes
 CloseApplications=yes
-CloseApplicationsFilter=*.exe
+CloseApplicationsFilter={#MyAppExeName}
 RestartApplications=no
 
 [Languages]
@@ -58,9 +76,8 @@ Name: "chinesetrad"; MessagesFile: "ChineseTraditional.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startmenuicon"; Description: "{cm:CreateStartMenuIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "autostart"; Description: "{cm:AutoStartTask}"; GroupDescription: "{cm:StartupOptions}"
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "autostart"; Description: "{cm:AutoStartTask}"; GroupDescription: "{cm:StartupOptions}"; Flags: unchecked
 
 [Files]
 Source: "{#MyPublishExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -68,15 +85,13 @@ Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startmenuicon
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"; Tasks: startmenuicon
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; AppUserModelID: "{#MyAppUserModelId}"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; AppUserModelID: "{#MyAppUserModelId}"; Tasks: desktopicon
 
 [CustomMessages]
-chinesetrad.CreateStartMenuIcon=建立開始功能表捷徑
 chinesetrad.AutoStartTask=開機時自動於背景啟動 WinBat Lens
 chinesetrad.StartupOptions=啟動選項：
-english.CreateStartMenuIcon=Create a &Start Menu shortcut
 english.AutoStartTask=Automatically start WinBat Lens in the background on Windows startup
 english.StartupOptions=Startup options:
 

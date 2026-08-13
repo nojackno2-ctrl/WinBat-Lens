@@ -5,90 +5,126 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <ResourceDictionary>
-            <!-- Grades a health percentage into its colour; "Badge" returns the
-                 translucent fill for the pill behind it. -->
             <local:HealthGradeBrushConverter x:Key="HealthGradeBrush"/>
-            <!-- Theme Colors -->
-            <SolidColorBrush x:Key="BgDark" Color="#090D16"/>
-            <SolidColorBrush x:Key="BgCard" Color="#121A2C"/>
-            <SolidColorBrush x:Key="BgCardHover" Color="#1C2740"/>
-            <SolidColorBrush x:Key="BorderColor" Color="#20FFFFFF"/>
-            
-            <SolidColorBrush x:Key="AccentCyan" Color="#38BDF8"/>
-            <SolidColorBrush x:Key="AccentBlue" Color="#6366F1"/>
-            <SolidColorBrush x:Key="AccentPurple" Color="#A855F7"/>
-            <SolidColorBrush x:Key="AccentEmerald" Color="#10B981"/>
-            <SolidColorBrush x:Key="AccentAmber" Color="#F59E0B"/>
-            <SolidColorBrush x:Key="AccentRose" Color="#F43F5E"/>
 
-            <!-- Semantic power colours: one colour per meaning, used by the
-                 headline cards, the waveform, the hardware rows and the tray
-                 icon alike, so the same idea never changes colour between them.
-                   red   = the machine is spending power (discharging, heavy load)
-                   green = the machine is gaining or saving power (charging, idle)
-                   blue  = the discrete GPU series
-                   amber = battery figures that are neither (stored energy, runtime) -->
-            <SolidColorBrush x:Key="PowerDischarge" Color="#F43F5E"/>
-            <SolidColorBrush x:Key="PowerCharge" Color="#10B981"/>
-            <SolidColorBrush x:Key="PowerGpu" Color="#3B82F6"/>
-            <SolidColorBrush x:Key="PowerNeutral" Color="#F59E0B"/>
+            <!-- Instrument-dark design tokens. Cyan is the only interaction
+                 accent. Power and health colours below are semantic data, not
+                 decorative accents, and retain their established meanings. -->
+            <SolidColorBrush x:Key="BgDark" Color="#0A0E13"/>
+            <SolidColorBrush x:Key="BgCard" Color="#111820"/>
+            <SolidColorBrush x:Key="BgCardHover" Color="#1A2530"/>
+            <SolidColorBrush x:Key="BgRaised" Color="#17212B"/>
+            <SolidColorBrush x:Key="BgInset" Color="#0D131A"/>
+            <SolidColorBrush x:Key="BgControl" Color="#18232D"/>
+            <SolidColorBrush x:Key="BorderColor" Color="#2B3946"/>
+            <SolidColorBrush x:Key="BorderStrong" Color="#425362"/>
 
-            <!-- Health grades, on the same 80% / 60% cuts BatteryReportParser
-                 uses for the status label, so colour and wording always agree. -->
-            <SolidColorBrush x:Key="HealthGood" Color="#10B981"/>
-            <SolidColorBrush x:Key="HealthWarn" Color="#F59E0B"/>
-            <SolidColorBrush x:Key="HealthDanger" Color="#F43F5E"/>
+            <SolidColorBrush x:Key="AccentCyan" Color="#55C2E8"/>
+            <SolidColorBrush x:Key="AccentTint" Color="#1E55C2E8"/>
+            <SolidColorBrush x:Key="AccentTintStrong" Color="#3055C2E8"/>
 
-            <SolidColorBrush x:Key="TextMain" Color="#F8FAFC"/>
-            <SolidColorBrush x:Key="TextMuted" Color="#94A3B8"/>
-            <SolidColorBrush x:Key="TextDim" Color="#64748B"/>
+            <SolidColorBrush x:Key="PowerDischarge" Color="#FB7185"/>
+            <SolidColorBrush x:Key="PowerCharge" Color="#34D399"/>
+            <SolidColorBrush x:Key="PowerGpu" Color="#60A5FA"/>
+            <SolidColorBrush x:Key="PowerNeutral" Color="#FBBF24"/>
 
-            <!-- Rounded Primary Button Style -->
+            <SolidColorBrush x:Key="HealthGood" Color="#34D399"/>
+            <SolidColorBrush x:Key="HealthWarn" Color="#FBBF24"/>
+            <SolidColorBrush x:Key="HealthDanger" Color="#FB7185"/>
+
+            <SolidColorBrush x:Key="TextMain" Color="#F3F6F8"/>
+            <SolidColorBrush x:Key="TextMuted" Color="#A9B6C1"/>
+            <SolidColorBrush x:Key="TextDim" Color="#82919E"/>
+
+            <Style x:Key="KeyboardFocusStyle">
+                <Setter Property="Control.Template">
+                    <Setter.Value>
+                        <ControlTemplate>
+                            <Border BorderBrush="{StaticResource AccentCyan}"
+                                    BorderThickness="2"
+                                    CornerRadius="7"
+                                    Margin="-3"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="PanelCardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource BgCard}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="10"/>
+                <Setter Property="SnapsToDevicePixels" Value="True"/>
+            </Style>
+
+            <Style x:Key="MetricCardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource BgRaised}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="10"/>
+                <Setter Property="Padding" Value="12,10"/>
+                <Setter Property="SnapsToDevicePixels" Value="True"/>
+            </Style>
+
+            <Style x:Key="DataRowStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource BgInset}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="Padding" Value="10,7"/>
+                <Setter Property="SnapsToDevicePixels" Value="True"/>
+            </Style>
+
+            <Style x:Key="DataSurfaceStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource BgInset}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="SnapsToDevicePixels" Value="True"/>
+            </Style>
+
+            <Style x:Key="StatusPillStyle" TargetType="Border">
+                <Setter Property="CornerRadius" Value="999"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="9,3"/>
+            </Style>
+
             <Style x:Key="PrimaryButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="#38BDF8"/>
-                <Setter Property="Foreground" Value="#090D16"/>
-                <Setter Property="FontSize" Value="12"/>
-                <Setter Property="FontWeight" Value="Bold"/>
-                <Setter Property="Padding" Value="11,5"/>
-                <Setter Property="Cursor" Value="Hand"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border Background="{TemplateBinding Background}"
-                                    CornerRadius="6"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#60A5FA"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <!-- Secondary Button Style -->
-            <Style x:Key="SecondaryButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="#1E293B"/>
-                <Setter Property="Foreground" Value="#F8FAFC"/>
+                <Setter Property="Background" Value="{StaticResource AccentCyan}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Foreground" Value="#081117"/>
                 <Setter Property="FontSize" Value="12"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Padding" Value="11,5"/>
+                <Setter Property="MinHeight" Value="32"/>
+                <Setter Property="Padding" Value="12,5"/>
                 <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusStyle}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border Background="{TemplateBinding Background}"
-                                    BorderBrush="#334155" BorderThickness="1"
+                            <Border x:Name="ButtonChrome"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="6"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    Padding="{TemplateBinding Padding}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#334155"/>
+                                    <Setter TargetName="ButtonChrome" Property="Background" Value="#78D2EF"/>
+                                    <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#A6E2F4"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="ButtonChrome" Property="Background" Value="#3EA9CF"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.45"/>
+                                    <Setter Property="Cursor" Value="Arrow"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -96,67 +132,146 @@
                 </Setter>
             </Style>
 
-            <!-- Global High-Contrast TabItem Style -->
+            <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource BgControl}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderStrong}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="ButtonChrome"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6"
+                                    Padding="{TemplateBinding Padding}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ButtonChrome" Property="Background" Value="{StaticResource BgCardHover}"/>
+                                    <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="ButtonChrome" Property="Background" Value="{StaticResource BgInset}"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.45"/>
+                                    <Setter Property="Cursor" Value="Arrow"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="CheckBox">
+                <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusStyle}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="CheckBox">
+                            <Grid Background="Transparent">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="CheckBoxChrome" Width="18" Height="18"
+                                        Background="{StaticResource BgInset}"
+                                        BorderBrush="{StaticResource BorderStrong}"
+                                        BorderThickness="1" CornerRadius="4"
+                                        VerticalAlignment="Center">
+                                    <TextBlock x:Name="CheckGlyph" Text="✓" Visibility="Collapsed"
+                                               Foreground="#081117" FontSize="13" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ContentPresenter Grid.Column="1" Margin="7,0,0,0"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True"/>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="CheckBoxChrome" Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="CheckBoxChrome" Property="Background" Value="{StaticResource AccentCyan}"/>
+                                    <Setter TargetName="CheckBoxChrome" Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
+                                    <Setter TargetName="CheckGlyph" Property="Visibility" Value="Visible"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.45"/>
+                                    <Setter Property="Cursor" Value="Arrow"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <Style TargetType="TabItem">
-                <Setter Property="Foreground" Value="#94A3B8"/>
-                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                <Setter Property="FontSize" Value="11"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Padding" Value="10,6"/>
-                <Setter Property="Margin" Value="0,0,5,0"/>
+                <Setter Property="Padding" Value="10,8"/>
+                <Setter Property="Margin" Value="0,0,2,0"/>
                 <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusStyle}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="TabItem">
-                            <Border x:Name="Border" 
-                                    Background="#1A2438" 
-                                    BorderBrush="#334155" 
-                                    BorderThickness="1" 
-                                    CornerRadius="8,8,0,0" 
-                                    Padding="{TemplateBinding Padding}" 
+                            <Border x:Name="TabChrome"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="0,0,0,2"
+                                    CornerRadius="6,6,0,0"
+                                    Padding="{TemplateBinding Padding}"
                                     Margin="{TemplateBinding Margin}">
-                                <ContentPresenter x:Name="ContentSite"
-                                                  VerticalAlignment="Center"
+                                <ContentPresenter VerticalAlignment="Center"
                                                   HorizontalAlignment="Center"
                                                   ContentSource="Header"
                                                   RecognizesAccessKey="True"/>
                             </Border>
                             <ControlTemplate.Triggers>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="Border" Property="Background" Value="#38BDF8"/>
-                                    <Setter TargetName="Border" Property="BorderBrush" Value="#38BDF8"/>
-                                    <Setter Property="Foreground" Value="#090D16"/>
-                                    <Setter Property="FontWeight" Value="Bold"/>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="TabChrome" Property="Background" Value="{StaticResource BgCardHover}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
                                 </Trigger>
-                                <MultiTrigger>
-                                    <MultiTrigger.Conditions>
-                                        <Condition Property="IsSelected" Value="False"/>
-                                        <Condition Property="IsMouseOver" Value="True"/>
-                                    </MultiTrigger.Conditions>
-                                    <Setter TargetName="Border" Property="Background" Value="#2D3B55"/>
-                                    <Setter Property="Foreground" Value="#F8FAFC"/>
-                                </MultiTrigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="TabChrome" Property="Background" Value="{StaticResource AccentTint}"/>
+                                    <Setter TargetName="TabChrome" Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.45"/>
+                                </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
             </Style>
 
-            <!-- Global High-Contrast ListView Header & Item Style -->
             <Style TargetType="GridViewColumnHeader">
-                <Setter Property="Background" Value="#1E293B"/>
-                <Setter Property="Foreground" Value="#38BDF8"/>
-                <Setter Property="FontWeight" Value="Bold"/>
-                <Setter Property="FontSize" Value="12"/>
-                <Setter Property="Padding" Value="8,5"/>
+                <Setter Property="Background" Value="{StaticResource BgControl}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Padding" Value="9,7"/>
                 <Setter Property="HorizontalContentAlignment" Value="Left"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="GridViewColumnHeader">
-                            <Border Background="{TemplateBinding Background}" 
-                                    BorderBrush="#334155" 
-                                    BorderThickness="0,0,1,1" 
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{StaticResource BorderColor}"
+                                    BorderThickness="0,0,1,1"
                                     Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" 
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalAlignment="Center"/>
                             </Border>
                         </ControlTemplate>
@@ -165,26 +280,32 @@
             </Style>
 
             <Style TargetType="ListViewItem">
-                <Setter Property="Foreground" Value="#F8FAFC"/>
+                <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
                 <Setter Property="FontSize" Value="12"/>
-                <Setter Property="Padding" Value="6,4"/>
+                <Setter Property="Padding" Value="8,6"/>
                 <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusStyle}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ListViewItem">
-                            <Border x:Name="Bd" 
-                                    Background="{TemplateBinding Background}" 
-                                    BorderBrush="#10FFFFFF" 
-                                    BorderThickness="0,0,0,1" 
+                            <Border x:Name="RowChrome"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{StaticResource BorderColor}"
+                                    BorderThickness="0,0,0,1"
                                     Padding="{TemplateBinding Padding}">
                                 <GridViewRowPresenter Columns="{TemplateBinding GridView.ColumnCollection}"/>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#15FFFFFF"/>
+                                    <Setter TargetName="RowChrome" Property="Background" Value="{StaticResource BgCardHover}"/>
                                 </Trigger>
                                 <Trigger Property="IsSelected" Value="True">
-                                    <Setter TargetName="Bd" Property="Background" Value="#2038BDF8"/>
+                                    <Setter TargetName="RowChrome" Property="Background" Value="{StaticResource AccentTintStrong}"/>
+                                    <Setter TargetName="RowChrome" Property="BorderBrush" Value="{StaticResource AccentCyan}"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.45"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -192,6 +313,29 @@
                 </Setter>
             </Style>
 
+            <Style TargetType="ProgressBar">
+                <Setter Property="Height" Value="8"/>
+                <Setter Property="Background" Value="{StaticResource BgDark}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ProgressBar">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4" ClipToBounds="True">
+                                <Grid x:Name="PART_Track">
+                                    <Border x:Name="PART_Indicator"
+                                            Background="{TemplateBinding Foreground}"
+                                            CornerRadius="3"
+                                            HorizontalAlignment="Left"/>
+                                </Grid>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
