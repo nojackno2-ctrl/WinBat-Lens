@@ -1430,3 +1430,11 @@ Verified on a live AMD iGPU + NVIDIA RTX 3060 dGPU laptop.
 - **No automated tests.** Every verification in this file is a manual measurement;
   the parser (`BatteryReportParser`) in particular is regex-heavy and would
   benefit from unit tests over the two saved sample reports.
+
+## 2026-08-13 installed software update verification
+
+- Silently updated the current-user installation with `dist\WinBatLens_v1.1.7_Setup_x64.exe`; the elevated installer returned exit code `0` and did not request a reboot.
+- Installed executable: `%LOCALAPPDATA%\Programs\WinBat Lens\WinBatLens.exe`; FileVersion `1.1.7.0`, ProductVersion `1.1.7+6c4d5b22e196ca3f17333d35f141184bbab706a9`, SHA-256 `D1477D4783758F820A6535E793B3E9F8890B3CA544C9A57F826DCBFC9772F4E7`. It is byte-for-byte identical to the current publish output.
+- Verified the registered version, install location, uninstall command, project/issues/update URLs, and the Start Menu launch/uninstall shortcuts. Removed the stale duplicate English uninstall shortcut; the current localized uninstall shortcut remains valid.
+- Launched the installed build with `--background`; PID `2196` reported `Responding=True`. This verifies launch and process responsiveness, not every hardware reading or UI state.
+- The user's authorization in this milestone covers updating installed software; this handoff entry is not yet committed or pushed.
