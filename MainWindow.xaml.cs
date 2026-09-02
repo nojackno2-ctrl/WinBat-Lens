@@ -12,6 +12,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using System.Windows.Forms;
+using System.Windows.Media.Animation;
 using Microsoft.Win32;
 using WinBatLens.Models;
 using WinBatLens.Services;
@@ -36,6 +37,19 @@ namespace WinBatLens
         private bool _isTrayMode;
         private readonly bool _startInTray = Environment.GetCommandLineArgs()
             .Any(argument => string.Equals(argument, StartupService.BackgroundArgument, StringComparison.OrdinalIgnoreCase));
+        private Storyboard? _energyFlowStoryboard;
+        private Storyboard? _loadingSpinnerStoryboard;
+
+        private enum EnergyFlowDirection
+        {
+            None,
+            Charging,     // Towards battery (Left to Right)
+            Discharging,  // Away from battery (Right to Left)
+            Idle          // AC Idle / Paused
+        }
+
+        private EnergyFlowDirection _currentFlowDirection = EnergyFlowDirection.None;
+        private bool _entranceRevealCompleted = false;
 
         // Re-trimming the working set is not free: it is a blocking gen2
         // collection followed by a page-out, so doing it on a fixed timer meant
@@ -63,11 +77,14 @@ namespace WinBatLens
             new Queue<(double, double, double)>();
         private const int MAX_CHART_POINTS = 60;
 
-        // Written in place on every redraw and handed to the Polylines exactly
+        // Written in place on every redraw and handed to the Polylines and Polygons exactly
         // once — see EnsureChartPointCapacity.
         private readonly PointCollection _dischargePoints = new PointCollection(MAX_CHART_POINTS);
         private readonly PointCollection _chargePoints = new PointCollection(MAX_CHART_POINTS);
         private readonly PointCollection _gpuPoints = new PointCollection(MAX_CHART_POINTS);
+        private readonly PointCollection _dischargeAreaPoints = new PointCollection(MAX_CHART_POINTS + 2);
+        private readonly PointCollection _chargeAreaPoints = new PointCollection(MAX_CHART_POINTS + 2);
+        private readonly PointCollection _gpuAreaPoints = new PointCollection(MAX_CHART_POINTS + 2);
         private double _lastAxisScaleW = -1.0;
         private static readonly SolidColorBrush BrushVoltage = CreateFrozen(MediaColor.FromRgb(0x38, 0xBD, 0xF8));
 
@@ -198,11 +215,22 @@ namespace WinBatLens
             InitSystemTrayIcon();
             InitAutoStartState();
 
+            // Initialize Loading Spinner Storyboard
+            try
+            {
+                _loadingSpinnerStoryboard = TryFindResource("StoryboardLoadingSpinner") as Storyboard;
+            }
+            catch { }
+
             // Windows startup passes --background so the monitor can begin in
             // the tray without briefly showing the dashboard.
             if (_startInTray)
             {
                 HideToTray(showBalloon: false);
+            }
+            else
+            {
+                PlayEntranceRevealIfNeeded();
             }
 
             // Draw Background Gridlines
@@ -211,12 +239,93 @@ namespace WinBatLens
 
             await warmup;
 
-
             // Start live power monitoring timer (1s interval)
             StartLivePowerMonitoring();
 
             // Run initial battery report scan
             await RunBatteryCheckAsync();
+        }
+
+        private void PlayEntranceRevealIfNeeded()
+        {
+            if (_entranceRevealCompleted) return;
+            _entranceRevealCompleted = true;
+
+            if (!SystemParameters.ClientAreaAnimation)
+            {
+                RootLayoutGrid.Opacity = 1.0;
+                EntranceTransform.Y = 0;
+                return;
+            }
+
+            try
+            {
+                var fadeIn = new DoubleAnimation(0.0, 1.0, new Duration(TimeSpan.FromMilliseconds(260)))
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+                var slideUp = new DoubleAnimation(8.0, 0.0, new Duration(TimeSpan.FromMilliseconds(260)))
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                };
+
+                RootLayoutGrid.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                EntranceTransform.BeginAnimation(TranslateTransform.YProperty, slideUp);
+            }
+            catch
+            {
+                RootLayoutGrid.Opacity = 1.0;
+                EntranceTransform.Y = 0;
+            }
+        }
+
+        private void ApplyEnergyFlowAnimation(EnergyFlowDirection targetDirection, SolidColorBrush streamBrush)
+        {
+            RectBatteryFlowParticle.Fill = streamBrush;
+            RectAcFlowParticle.Fill = streamBrush;
+
+            if (targetDirection == _currentFlowDirection) return;
+            _currentFlowDirection = targetDirection;
+
+            // Stop previous storyboard cleanly to prevent leaks
+            try { _energyFlowStoryboard?.Stop(this); } catch { }
+            _energyFlowStoryboard = null;
+
+            if (!SystemParameters.ClientAreaAnimation || !IsVisible)
+            {
+                RectAcFlowParticle.Visibility = Visibility.Collapsed;
+                RectBatteryFlowParticle.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            switch (targetDirection)
+            {
+                case EnergyFlowDirection.Charging:
+                    RectAcFlowParticle.Visibility = Visibility.Visible;
+                    RectBatteryFlowParticle.Visibility = Visibility.Visible;
+                    _energyFlowStoryboard = TryFindResource("StoryboardEnergyFlowCharging") as Storyboard;
+                    try { _energyFlowStoryboard?.Begin(this, isControllable: true); } catch { }
+                    break;
+
+                case EnergyFlowDirection.Discharging:
+                    RectAcFlowParticle.Visibility = Visibility.Collapsed;
+                    RectBatteryFlowParticle.Visibility = Visibility.Visible;
+                    _energyFlowStoryboard = TryFindResource("StoryboardEnergyFlowDischarging") as Storyboard;
+                    try { _energyFlowStoryboard?.Begin(this, isControllable: true); } catch { }
+                    break;
+
+                case EnergyFlowDirection.Idle:
+                    RectAcFlowParticle.Visibility = Visibility.Visible;
+                    RectBatteryFlowParticle.Visibility = Visibility.Collapsed;
+                    _energyFlowStoryboard = TryFindResource("StoryboardEnergyFlowIdle") as Storyboard;
+                    try { _energyFlowStoryboard?.Begin(this, isControllable: true); } catch { }
+                    break;
+
+                default:
+                    RectAcFlowParticle.Visibility = Visibility.Collapsed;
+                    RectBatteryFlowParticle.Visibility = Visibility.Collapsed;
+                    break;
+            }
         }
 
         private void BtnLanguageToggle_Click(object sender, RoutedEventArgs e)
@@ -283,10 +392,19 @@ namespace WinBatLens
             LblHwBatteryTelemetry.Text = LocalizationService.Get("HwBatteryTelemetry");
             LblHwEnergy.Text = LocalizationService.Get("HwEnergy");
             LblHwPowerPlan.Text = LocalizationService.Get("HwPowerPlan");
+            TxtHwTelemetrySource.Text = LocalizationService.Get("HwTelemetrySource");
+            TxtHwPowerPlanState.Text = LocalizationService.Get("HwPowerPlanState");
 
             TxtHistoryLogHeader.Text = LocalizationService.Get("HistoryLogHeader");
             BtnExportPowerCsv.Content = LocalizationService.Get("BtnExportCsv");
             BtnClearPowerHistory.Content = LocalizationService.Get("BtnClearHistory");
+            TxtPowerHistoryEmpty.Text = LocalizationService.Get("PowerHistoryEmpty");
+            TxtVoltageHistoryEmpty.Text = LocalizationService.Get("VoltageHistoryEmpty");
+            TxtDiagnosticsEmpty.Text = LocalizationService.Get("DiagnosticsEmpty");
+            TxtLifeEstimatesEmpty.Text = LocalizationService.Get("LifeEstimatesEmpty");
+            TxtRecentUsageEmpty.Text = LocalizationService.Get("RecentUsageEmpty");
+            TxtLoadingTitle.Text = LocalizationService.Get("LoadingTitle");
+            TxtLoadingDetail.Text = LocalizationService.Get("LoadingDetail");
 
             // System tray menu follows the same language as the window.
             if (_trayItemShow != null) _trayItemShow.Text = LocalizationService.Get("TrayShow");
@@ -579,10 +697,19 @@ namespace WinBatLens
                     TxtYAxis0.Text = "0 W (0%)";
                 }
 
+                int count = _chartHistory.Count;
                 int i = 0;
+                double lastX = 0;
+
+                // Set area baseline start at bottom-left
+                _dischargeAreaPoints[0] = new WpfPoint(0, h);
+                _chargeAreaPoints[0] = new WpfPoint(0, h);
+                _gpuAreaPoints[0] = new WpfPoint(0, h);
+
                 foreach (var item in _chartHistory)
                 {
-                    double x = (i / (double)(MAX_CHART_POINTS - 1)) * w;
+                    double x = count > 1 ? (i / (double)(MAX_CHART_POINTS - 1)) * w : 0;
+                    lastX = x;
 
                     // Y values (0 at bottom, Height at top). Every series uses
                     // maxPowerW so equal wattages always land at equal heights.
@@ -593,15 +720,25 @@ namespace WinBatLens
                     _dischargePoints[i] = new WpfPoint(x, yDischarge);
                     _chargePoints[i] = new WpfPoint(x, yCharge);
                     _gpuPoints[i] = new WpfPoint(x, yGpu);
+
+                    _dischargeAreaPoints[i + 1] = new WpfPoint(x, yDischarge);
+                    _chargeAreaPoints[i + 1] = new WpfPoint(x, yCharge);
+                    _gpuAreaPoints[i + 1] = new WpfPoint(x, yGpu);
+
                     i++;
                 }
+
+                // Set area baseline end at bottom-right
+                _dischargeAreaPoints[count + 1] = new WpfPoint(lastX, h);
+                _chargeAreaPoints[count + 1] = new WpfPoint(lastX, h);
+                _gpuAreaPoints[count + 1] = new WpfPoint(lastX, h);
             }
             catch { }
         }
 
         /// <summary>
-        /// Grows the three shared PointCollections to <paramref name="count"/>
-        /// entries and attaches them to their Polylines the first time round.
+        /// Grows the shared PointCollections to <paramref name="count"/>
+        /// entries and attaches them to their Polylines &amp; Polygons the first time round.
         /// The history only ever grows to <see cref="MAX_CHART_POINTS"/> and
         /// never shrinks, so after the first minute this does nothing at all.
         /// </summary>
@@ -628,11 +765,30 @@ namespace WinBatLens
                 _gpuPoints.RemoveAt(last);
             }
 
+            int areaCount = count + 2;
+            while (_dischargeAreaPoints.Count < areaCount)
+            {
+                _dischargeAreaPoints.Add(default);
+                _chargeAreaPoints.Add(default);
+                _gpuAreaPoints.Add(default);
+            }
+
+            while (_dischargeAreaPoints.Count > areaCount)
+            {
+                int last = _dischargeAreaPoints.Count - 1;
+                _dischargeAreaPoints.RemoveAt(last);
+                _chargeAreaPoints.RemoveAt(last);
+                _gpuAreaPoints.RemoveAt(last);
+            }
+
             if (firstTime)
             {
                 PolylineDischarge.Points = _dischargePoints;
                 PolylineCharge.Points = _chargePoints;
                 PolylineGpu.Points = _gpuPoints;
+                PolygonAreaDischarge.Points = _dischargeAreaPoints;
+                PolygonAreaCharge.Points = _chargeAreaPoints;
+                PolygonAreaGpu.Points = _gpuAreaPoints;
             }
         }
 
@@ -723,14 +879,16 @@ namespace WinBatLens
                 _trayItemShow = new ToolStripMenuItem(LocalizationService.Get("TrayShow"), null, (s, args) => RestoreFromTray());
                 _trayItemShow.Font = new System.Drawing.Font(_trayItemShow.Font, System.Drawing.FontStyle.Bold);
 
-                _trayItemCheck = new ToolStripMenuItem(LocalizationService.Get("TrayCheck"), null, async (s, args) => {
+                _trayItemCheck = new ToolStripMenuItem(LocalizationService.Get("TrayCheck"), null, async (s, args) =>
+                {
                     RestoreFromTray();
                     await RunBatteryCheckAsync();
                 });
 
                 _trayItemAutoStart = new ToolStripMenuItem(LocalizationService.Get("TrayAutoStart"));
                 _trayItemAutoStart.Checked = StartupService.IsAutoStartEnabled();
-                _trayItemAutoStart.Click += (s, args) => {
+                _trayItemAutoStart.Click += (s, args) =>
+                {
                     bool newState = !_trayItemAutoStart!.Checked;
                     if (StartupService.SetAutoStart(newState))
                     {
@@ -811,6 +969,14 @@ namespace WinBatLens
             Volatile.Write(ref _isTrayMode, true);
             this.Hide();
 
+            // Pause animations while hidden to ensure zero CPU/GPU animation overhead in background
+            try
+            {
+                _energyFlowStoryboard?.Pause(this);
+                _loadingSpinnerStoryboard?.Stop(this);
+            }
+            catch { }
+
             // Nothing on screen consumes the sensor sweep any more, and the
             // monitoring loop itself drops to 5 s, so the sensors follow.
             HardwareSensorService.SetIdleMode(true);
@@ -878,6 +1044,14 @@ namespace WinBatLens
             this.Show();
             this.WindowState = WindowState.Normal;
             this.Activate();
+
+            PlayEntranceRevealIfNeeded();
+
+            // Resume animations if enabled in system settings
+            if (SystemParameters.ClientAreaAnimation && _energyFlowStoryboard != null && _currentFlowDirection != EnergyFlowDirection.Idle)
+            {
+                try { _energyFlowStoryboard.Resume(this); } catch { }
+            }
 
             // Activate() alone is at the mercy of the foreground lock: when the
             // request comes from a duplicate launch that was not itself the
@@ -1040,15 +1214,25 @@ namespace WinBatLens
 
                 _hiddenTickCount = 0;
 
+                // Update Hero Battery Vessel & Flow Visuals
+                PbHeroBattery.Value = Math.Clamp(state.BatteryPercent, 0, 100);
+                if (state.BatteryPercent < 20)
+                    PbHeroBattery.Foreground = BrushRose;
+                else if (state.BatteryPercent < 50)
+                    PbHeroBattery.Foreground = BrushAmber;
+                else
+                    PbHeroBattery.Foreground = BrushEmerald;
+
                 // Charge / Discharge Wattage & Status Display
                 bool en = LocalizationService.CurrentLanguage == AppLanguage.English;
+                string statusShortLabel;
+                string statusTooltip;
+                EnergyFlowDirection flowDirection;
+                SolidColorBrush streamBrush;
 
                 if (state.IsChargerDeficit)
                 {
-                    // Plugged in and still draining. The shortfall is painted in
-                    // the discharge colour because that is exactly what it is —
-                    // the machine is spending battery. Green would read as
-                    // "charging", which is the opposite of what is happening.
+                    // Plugged in and still draining. Shortfall painted in discharge colour.
                     TxtLiveDischargeRate.Text = $"-{state.DischargeRateW:F1} W";
                     TxtLiveDischargeRate.Foreground = BrushRose;
 
@@ -1056,15 +1240,26 @@ namespace WinBatLens
                     BadgeLiveAcState.BorderBrush = BrushRose;
                     TxtLiveAcState.Foreground = BrushRose;
 
-                    TxtLiveAcState.Text = en
-                        ? $"🔌⚠️ Charger cannot keep up — battery covering -{state.DischargeRateW:F1}W (measured at the pack)"
-                        : $"🔌⚠️ 外接電源供電不足 — 電池補上 -{state.DischargeRateW:F1}W（電池實測）";
+                    try
+                    {
+                        PathHeroFlowIcon.Data = (Geometry)FindResource("GeoIconBolt");
+                        PathHeroFlowIcon.Fill = BrushRose;
+                        BorderHeroIconGlow.Background = BrushRoseBadge;
+                        BorderHeroIconGlow.BorderBrush = BrushRose;
+                    }
+                    catch { }
+
+                    statusShortLabel = en ? "Deficit (Battery Covering)" : "供電不足 (電池補足)";
+                    statusTooltip = en
+                        ? $"Charger cannot keep up. Battery covering -{state.DischargeRateW:F1}W (measured at the pack)"
+                        : $"外接電源供電不足。電池補上 -{state.DischargeRateW:F1}W（電池實測）";
+
+                    flowDirection = EnergyFlowDirection.Discharging;
+                    streamBrush = BrushRose;
                 }
                 else if (state.IsAcOnline)
                 {
-                    // Charging is a real measurement, so it belongs in the
-                    // headline. There is deliberately no adapter-input figure:
-                    // Windows exposes no API for it.
+                    // Charging is a real measurement, so it belongs in the headline.
                     TxtLiveDischargeRate.Text = state.IsCharging && state.IsChargeRateMeasured
                         ? $"+{state.ChargingRateW:F1} W"
                         : "-- W";
@@ -1076,27 +1271,65 @@ namespace WinBatLens
 
                     if (state.IsCharging && state.IsChargeRateMeasured)
                     {
-                        TxtLiveAcState.Text = en
-                            ? $"🔌 Charging the battery at +{state.ChargingRateW:F1}W (measured at the pack)"
-                            : $"🔌 電池充電中 +{state.ChargingRateW:F1}W（電池實測）";
+                        try
+                        {
+                            PathHeroFlowIcon.Data = (Geometry)FindResource("GeoIconBolt");
+                            PathHeroFlowIcon.Fill = BrushEmerald;
+                            BorderHeroIconGlow.Background = BrushEmeraldBadge;
+                            BorderHeroIconGlow.BorderBrush = BrushEmerald;
+                        }
+                        catch { }
+
+                        statusShortLabel = en ? "Charging (Measured)" : "充電中 (實測)";
+                        statusTooltip = en
+                            ? $"Charging the battery at +{state.ChargingRateW:F1}W (measured at the pack)"
+                            : $"電池充電中 +{state.ChargingRateW:F1}W（電池實測）";
+
+                        flowDirection = EnergyFlowDirection.Charging;
+                        streamBrush = BrushEmerald;
                     }
                     else if (state.IsCharging)
                     {
-                        TxtLiveAcState.Text = en
-                            ? "🔌 Charging — this battery does not report a charge rate"
-                            : "🔌 電池充電中 — 此電池未回報充電功率";
+                        try
+                        {
+                            PathHeroFlowIcon.Data = (Geometry)FindResource("GeoIconBolt");
+                            PathHeroFlowIcon.Fill = BrushEmerald;
+                            BorderHeroIconGlow.Background = BrushEmeraldBadge;
+                            BorderHeroIconGlow.BorderBrush = BrushEmerald;
+                        }
+                        catch { }
+
+                        statusShortLabel = en ? "Charging (Rate Unavailable)" : "充電中 (未回報功率)";
+                        statusTooltip = en
+                            ? "Charging. This battery does not report a charge rate"
+                            : "電池充電中。此電池未回報充電功率";
+
+                        flowDirection = EnergyFlowDirection.Charging;
+                        streamBrush = BrushEmerald;
                     }
                     else
                     {
-                        TxtLiveAcState.Text = en
-                            ? "🔌 On AC, battery idle — no current in or out, so there is nothing to measure"
-                            : "🔌 市電直供中，電池無充放電電流 — 此狀態下沒有可量測的功率";
+                        try
+                        {
+                            PathHeroFlowIcon.Data = (Geometry)FindResource("GeoIconPlug");
+                            PathHeroFlowIcon.Fill = BrushAmber;
+                            BorderHeroIconGlow.Background = BrushAmberBadge;
+                            BorderHeroIconGlow.BorderBrush = BrushAmber;
+                        }
+                        catch { }
+
+                        statusShortLabel = en ? "On AC (Battery Idle)" : "市電直供 (電池待機)";
+                        statusTooltip = en
+                            ? "On AC, battery idle. No current in or out, so there is nothing to measure"
+                            : "市電直供中，電池無充放電電流。此狀態下沒有可量測的功率";
+
+                        flowDirection = EnergyFlowDirection.Idle;
+                        streamBrush = BrushSlate;
                     }
                 }
                 else
                 {
-                    // On battery the pack itself reports the draw, so this is a
-                    // genuine whole-system measurement.
+                    // On battery the pack itself reports the draw.
                     TxtLiveDischargeRate.Text = state.IsDischargeRateMeasured
                         ? $"-{state.DischargeRateW:F1} W"
                         : "-- W";
@@ -1106,51 +1339,75 @@ namespace WinBatLens
                     BadgeLiveAcState.BorderBrush = BrushRose;
                     TxtLiveAcState.Foreground = BrushRose;
 
+                    try
+                    {
+                        PathHeroFlowIcon.Data = (Geometry)FindResource("GeoIconBolt");
+                        PathHeroFlowIcon.Fill = BrushRose;
+                        BorderHeroIconGlow.Background = BrushRoseBadge;
+                        BorderHeroIconGlow.BorderBrush = BrushRose;
+                    }
+                    catch { }
+
                     if (state.IsDischargeRateMeasured)
                     {
-                        TxtLiveAcState.Text = en
-                            ? $"🔋 Battery Discharging (-{state.DischargeRateW:F1}W measured at the pack — whole system)"
-                            : $"🔋 電池放電中 (-{state.DischargeRateW:F1}W 電池實測 — 全系統真實耗電)";
+                        statusShortLabel = en ? "Discharging (Measured)" : "放電中 (全系統實測)";
+                        statusTooltip = en
+                            ? $"Battery Discharging (-{state.DischargeRateW:F1}W measured at the pack, whole system)"
+                            : $"電池放電中 (-{state.DischargeRateW:F1}W 電池實測，為全系統真實耗電)";
                     }
                     else
                     {
-                        TxtLiveAcState.Text = en
-                            ? $"🔋 Battery Discharging (~-{state.DischargeRateW:F1}W estimated)"
-                            : $"🔋 電池放電中 (~-{state.DischargeRateW:F1}W 推估)";
+                        statusShortLabel = en ? "Discharging (Estimated)" : "放電中 (推估)";
+                        statusTooltip = en
+                            ? $"Battery Discharging (~-{state.DischargeRateW:F1}W estimated)"
+                            : $"電池放電中 (~-{state.DischargeRateW:F1}W 推估)";
                     }
+
+                    flowDirection = EnergyFlowDirection.Discharging;
+                    streamBrush = BrushRose;
                 }
 
-                // Windows' verdict on the charger. It carries no wattage,
-                // because Windows exposes none for the adapter — see
-                // PowerSupplyService for everything that was tried — but "is
-                // the supply keeping up" is the question that actually matters
-                // when a laptop is charging over USB-C.
-                switch (state.SupplyCapability)
+                TxtLiveAcState.Text = statusShortLabel;
+                BadgeLiveAcState.ToolTip = statusTooltip;
+                TxtLiveAcState.ToolTip = statusTooltip;
+
+                ApplyEnergyFlowAnimation(flowDirection, streamBrush);
+
+                // Charger Supply Verdict - only display separate line for deficit / inadequate cases
+                if (state.IsChargerDeficit || state.SupplyCapability == PowerSupplyCapability.Inadequate)
                 {
-                    case PowerSupplyCapability.Inadequate:
-                        // Amber, not red: red means power leaving the pack, and
-                        // this line is a warning about the supply, not a rate.
-                        TxtLiveChargerSupply.Text = en
-                            ? "⚠️ Windows reports the external supply as inadequate for this system"
-                            : "⚠️ Windows 判定：外接電源供電能力不足以支撐目前的系統負載";
-                        TxtLiveChargerSupply.Foreground = BrushAmber;
-                        TxtLiveChargerSupply.Visibility = Visibility.Visible;
-                        break;
+                    TxtLiveChargerSupply.Text = en
+                        ? "Windows reports the external supply as inadequate for this system"
+                        : "Windows 判定：外接電源供電能力不足以支撐目前的系統負載";
+                    TxtLiveChargerSupply.Foreground = BrushAmber;
+                    TxtLiveChargerSupply.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    TxtLiveChargerSupply.Visibility = Visibility.Collapsed;
+                }
 
-                    case PowerSupplyCapability.Adequate:
-                        TxtLiveChargerSupply.Text = en
-                            ? "🔌 Windows reports the external supply as adequate. The adapter's own wattage is not exposed by Windows."
-                            : "🔌 Windows 判定：外接電源供電充足（變壓器 / USB-C 充電器本身的瓦數，Windows 並未提供）";
-                        TxtLiveChargerSupply.Foreground = BrushSlate;
-                        TxtLiveChargerSupply.Visibility = Visibility.Visible;
-                        break;
-
-                    default:
-                        // NotPresent means running on battery, and Unknown means
-                        // the API did not answer. Neither says anything worth a
-                        // row, so the line disappears rather than showing filler.
-                        TxtLiveChargerSupply.Visibility = Visibility.Collapsed;
-                        break;
+                // Update AC LED & Schematic State
+                if (state.IsAcOnline)
+                {
+                    if (state.IsChargerDeficit)
+                    {
+                        LedAcPower.Fill = BrushAmber;
+                        TxtSchematicAcState.Text = en ? "Deficit AC" : "供電不足";
+                        TxtSchematicAcState.Foreground = BrushAmber;
+                    }
+                    else
+                    {
+                        LedAcPower.Fill = BrushEmerald;
+                        TxtSchematicAcState.Text = en ? "AC Online" : "市電連接";
+                        TxtSchematicAcState.Foreground = BrushEmerald;
+                    }
+                }
+                else
+                {
+                    LedAcPower.Fill = BrushSlate;
+                    TxtSchematicAcState.Text = en ? "On Battery" : "純電池供電";
+                    TxtSchematicAcState.Foreground = BrushSlate;
                 }
 
                 // Battery Remaining Time & Level. The watt-hour figure is the
@@ -1158,10 +1415,13 @@ namespace WinBatLens
                 // Windows percentage is a rounded integer.
                 TxtLiveRemainingTime.Text = state.EstimatedTimeRemainingText;
 
-                string energyPart = state.IsEnergyMeasured ? $" · {state.BatteryEnergyText}" : string.Empty;
                 TxtLiveBatteryPercent.Text = en
-                    ? $"Current Battery Level: {state.BatteryPercent}%{energyPart}"
-                    : $"目前電池剩餘電量: {state.BatteryPercent}%{energyPart}";
+                    ? $"Battery {state.BatteryPercent}%"
+                    : $"電量 {state.BatteryPercent}%";
+
+                string energyPart = state.IsEnergyMeasured ? state.BatteryEnergyText : string.Empty;
+                string socPart = state.IsEnergyMeasured ? $" · SoC {state.TrueSocPercent:F0}%" : string.Empty;
+                TxtLiveBatteryWh.Text = $"{energyPart}{socPart}";
 
                 // Battery Hardware Telemetry (Voltage / Current). Coloured by
                 // which way the current is flowing: out of the pack is red,
@@ -1209,7 +1469,7 @@ namespace WinBatLens
 
                     TxtHwEnergySub.Text = state.DriverHealthPercent > 0
                         ? (en
-                            ? $"Full charge {state.BatteryCapacityHealthText} — health {state.DriverHealthPercent:F1}%"
+                            ? $"Full charge {state.BatteryCapacityHealthText}, health {state.DriverHealthPercent:F1}%"
                             : $"滿電 {state.BatteryCapacityHealthText}，健康度 {state.DriverHealthPercent:F1}%")
                         : (en ? "Measured by the battery driver" : "電池驅動實測容量");
                 }
@@ -1220,7 +1480,7 @@ namespace WinBatLens
 
                 // The discrete GPU is the only component with a real power
                 // sensor, so it is the only component row left on this page.
-                TxtDgpuName.Text = $"🎮 {state.DgpuName}";
+                TxtDgpuName.Text = state.DgpuName;
                 PbDgpuUsage.Value = state.DgpuUsagePercent;
                 TxtDgpuUsageVal.Text = state.DgpuStatusText;
                 TxtDgpuPowerW.Text = state.IsDgpuPowerMeasured
@@ -1248,22 +1508,22 @@ namespace WinBatLens
                 if (state.IsChargerDeficit)
                 {
                     TxtLivePowerTip.Text = en
-                        ? $"🔌⚠️ Plugged in but still discharging: the charger is short by at least {state.DischargeRateW:F1} W, which the battery is covering.{dgpuPart} Typical of charging over USB-C — a PD charger rated below this machine's draw cannot hold it up. Use a higher-wattage charger, or reduce load, to charge while working."
-                        : $"🔌⚠️ 已接上外接電源，但電池仍在放電：充電器至少差 {state.DischargeRateW:F1} W，缺口由電池補上。{dgpuPart}這是 USB-C 充電最常見的情況 — PD 充電器的瓦數低於本機耗電就撐不住。請改用瓦數更高的充電器，或降低負載才能邊用邊充。";
+                        ? $"Plugged in but still discharging: the charger is short by at least {state.DischargeRateW:F1} W, which the battery is covering.{dgpuPart} This is common with USB-C charging. A PD charger rated below this machine's draw cannot sustain it. Use a higher-wattage charger or reduce load to charge while working."
+                        : $"已接上外接電源，但電池仍在放電：充電器至少差 {state.DischargeRateW:F1} W，缺口由電池補上。{dgpuPart}這是 USB-C 充電常見的情況。PD 充電器的瓦數低於本機耗電就無法維持供電。請改用瓦數更高的充電器，或降低負載才能邊用邊充。";
                 }
                 else if (state.IsAcOnline)
                 {
                     if (state.IsCharging && state.IsChargeRateMeasured)
                     {
                         TxtLivePowerTip.Text = en
-                            ? $"🔌 On AC. Battery charging at {state.ChargingRateW:F1} W (measured at the pack). {state.EstimatedTimeRemainingText}.{dgpuPart}"
-                            : $"🔌 市電供電中，電池充電功率 {state.ChargingRateW:F1} W（電池實測）。{state.EstimatedTimeRemainingText}。{dgpuPart}";
+                            ? $"On AC. Battery charging at {state.ChargingRateW:F1} W (measured at the pack). {state.EstimatedTimeRemainingText}.{dgpuPart}"
+                            : $"市電供電中，電池充電功率 {state.ChargingRateW:F1} W（電池實測）。{state.EstimatedTimeRemainingText}。{dgpuPart}";
                     }
                     else
                     {
                         TxtLivePowerTip.Text = en
-                            ? $"🔌 On AC, no current flowing to or from the battery — there is no measurable system wattage in this state. Adapter input is not exposed by Windows.{dgpuPart}"
-                            : $"🔌 市電直供中，電池無充放電電流，此狀態下沒有可量測的系統功率（變壓器輸入功率 Windows 並未提供）。{dgpuPart}";
+                            ? $"On AC, no current is flowing to or from the battery. There is no measurable system wattage in this state. Adapter input is not exposed by Windows.{dgpuPart}"
+                            : $"市電直供中，電池無充放電電流，此狀態下沒有可量測的系統功率（變壓器輸入功率 Windows 並未提供）。{dgpuPart}";
                     }
                 }
                 else if (state.IsDischargeRateMeasured)
@@ -1271,21 +1531,21 @@ namespace WinBatLens
                     if (state.DischargeRateW > 20.0 || state.DgpuUsagePercent > 40.0)
                     {
                         TxtLivePowerTip.Text = en
-                            ? $"⚠️ High draw: {state.DischargeRateW:F1} W measured at the battery — the whole machine.{dgpuPart} Lowering screen brightness (now {state.ScreenBrightnessPercent}%) extends runtime."
-                            : $"⚠️ 目前放電 {state.DischargeRateW:F1} W（電池實測，為整機真實耗電）。{dgpuPart}建議調低螢幕亮度（目前 {state.ScreenBrightnessPercent}%）以延長續航。";
+                            ? $"High draw: {state.DischargeRateW:F1} W measured at the battery for the whole machine.{dgpuPart} Lowering screen brightness (now {state.ScreenBrightnessPercent}%) extends runtime."
+                            : $"目前放電 {state.DischargeRateW:F1} W（電池實測，為整機真實耗電）。{dgpuPart}建議調低螢幕亮度（目前 {state.ScreenBrightnessPercent}%）以延長續航。";
                     }
                     else
                     {
                         TxtLivePowerTip.Text = en
-                            ? $"💡 On battery: {state.DischargeRateW:F1} W measured at the pack — the whole machine's real draw.{dgpuPart}"
-                            : $"💡 電池供電中，實測放電 {state.DischargeRateW:F1} W（量測自電池，即整機真實耗電）。{dgpuPart}";
+                            ? $"On battery: {state.DischargeRateW:F1} W measured at the pack, the whole machine's real draw.{dgpuPart}"
+                            : $"電池供電中，實測放電 {state.DischargeRateW:F1} W（量測自電池，即整機真實耗電）。{dgpuPart}";
                     }
                 }
                 else
                 {
                     TxtLivePowerTip.Text = en
-                        ? $"💡 On battery. This machine's battery does not report a discharge rate, so no wattage can be shown.{dgpuPart}"
-                        : $"💡 電池供電中。此裝置的電池未回報放電功率，因此無法顯示瓦數。{dgpuPart}";
+                        ? $"On battery. This machine's battery does not report a discharge rate, so no wattage can be shown.{dgpuPart}"
+                        : $"電池供電中。此裝置的電池未回報放電功率，因此無法顯示瓦數。{dgpuPart}";
                 }
             }
             catch (Exception ex)
@@ -1308,12 +1568,12 @@ namespace WinBatLens
                 bool success = RealTimePowerHistoryService.ExportToCsv(saveDialog.FileName);
                 if (success)
                 {
-                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出歷史日誌至:\n{saveDialog.FileName}", 
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出歷史日誌至:\n{saveDialog.FileName}",
                         LocalizationService.CurrentLanguage == AppLanguage.English ? "Export Success" : "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 else
                 {
-                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Export failed due to write permissions." : "匯出失敗，請確認檔案寫入權限。", 
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Export failed due to write permissions." : "匯出失敗，請確認檔案寫入權限。",
                         LocalizationService.CurrentLanguage == AppLanguage.English ? "Error" : "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
@@ -1321,7 +1581,7 @@ namespace WinBatLens
 
         private void BtnClearPowerHistory_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Clear all live power and event history logs?" : "確定要清除所有即時功耗與充放電事件紀錄嗎？", 
+            var result = MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "Clear all live power and event history logs?" : "確定要清除所有即時功耗與充放電事件紀錄嗎？",
                 LocalizationService.CurrentLanguage == AppLanguage.English ? "Confirm Clear" : "確認清除", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result == MessageBoxResult.Yes)
             {
@@ -1355,11 +1615,16 @@ namespace WinBatLens
         private async Task RunBatteryCheckAsync()
         {
             OverlayLoading.Visibility = Visibility.Visible;
+            if (SystemParameters.ClientAreaAnimation && _loadingSpinnerStoryboard != null)
+            {
+                try { _loadingSpinnerStoryboard.Begin(this, isControllable: true); } catch { }
+            }
 
             try
             {
                 var result = await PowerCfgService.GenerateReportAsync();
                 OverlayLoading.Visibility = Visibility.Collapsed;
+                try { _loadingSpinnerStoryboard?.Stop(this); } catch { }
 
                 if (result.Success && !string.IsNullOrWhiteSpace(result.HtmlContent))
                 {
@@ -1381,6 +1646,7 @@ namespace WinBatLens
             catch (Exception ex)
             {
                 OverlayLoading.Visibility = Visibility.Collapsed;
+                try { _loadingSpinnerStoryboard?.Stop(this); } catch { }
                 MessageBox.Show($"發生意外錯誤: {ex.Message}", "錯誤", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -1416,7 +1682,7 @@ namespace WinBatLens
         {
             if (_currentReport == null)
             {
-                MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "No battery report data available to export." : "目前尚無可供匯出的電池資料。", 
+                MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? "No battery report data available to export." : "目前尚無可供匯出的電池資料。",
                     LocalizationService.CurrentLanguage == AppLanguage.English ? "Info" : "提示", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -1434,7 +1700,7 @@ namespace WinBatLens
                 {
                     string json = JsonSerializer.Serialize(_currentReport, new JsonSerializerOptions { WriteIndented = true });
                     File.WriteAllText(saveDialog.FileName, json);
-                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出至:\n{saveDialog.FileName}", 
+                    MessageBox.Show(LocalizationService.CurrentLanguage == AppLanguage.English ? $"Successfully exported to:\n{saveDialog.FileName}" : $"已成功匯出至:\n{saveDialog.FileName}",
                         LocalizationService.CurrentLanguage == AppLanguage.English ? "Export Success" : "匯出成功", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
@@ -1452,7 +1718,7 @@ namespace WinBatLens
 
             bool isEn = LocalizationService.CurrentLanguage == AppLanguage.English;
             string naText = isEn ? "N/A" : "未提供";
-            string dash = "—";
+            string dash = "-";
 
             // Score & Badge
             bool healthMeasured = metrics.HasBattery && metrics.IsHealthMeasured;
@@ -1461,9 +1727,7 @@ namespace WinBatLens
             TxtStatusLabel.Text = metrics.StatusLabel;
             TxtSummary.Text = metrics.SummaryText;
 
-            // Grade the health card by colour. The ring used to be painted a
-            // fixed green and, with a full-circle dash offset, never drew at
-            // all — so a pack at 73.6% looked exactly like one at 100%.
+            // Grade the health card by colour.
             if (healthMeasured)
             {
                 var healthBrush = HealthBrush(metrics.HealthPercent);
@@ -1474,21 +1738,16 @@ namespace WinBatLens
                 BadgeStatus.BorderBrush = healthBrush;
                 TxtStatusLabel.Foreground = healthBrush;
 
-                // Draw the arc as well as colour it. Dash lengths are multiples
-                // of the stroke thickness, so the 84px circle measures
-                // (π × 84) / 8 ≈ 33 dash units; a dash of that times the health
-                // fraction followed by a gap too long to ever repeat leaves
-                // exactly one arc. The ellipse is rotated -90° in XAML so the
-                // arc starts at the top.
-                const double ringUnits = Math.PI * 84.0 / 8.0;
+                // Draw the arc as well as colour it.
+                // Circle diameter is 102px, stroke 9px: (π × 102) / 9 ≈ 35.6 dash units
+                const double ringUnits = Math.PI * 102.0 / 9.0;
                 double fraction = Math.Clamp(metrics.HealthPercent / 100.0, 0.0, 1.0);
                 RingHealthProgress.StrokeDashArray = new DoubleCollection { ringUnits * fraction, 1000 };
                 RingHealthProgress.Visibility = Visibility.Visible;
             }
             else
             {
-                // No battery: no grade to show, so the ring goes away rather
-                // than sitting there in a colour that means something.
+                // No battery: no grade to show, so the ring goes away
                 RingHealthProgress.Visibility = Visibility.Collapsed;
                 TxtHealthPercent.Foreground = BrushSlate;
                 TxtHealthPercentSign.Foreground = BrushSlate;
@@ -1497,7 +1756,7 @@ namespace WinBatLens
                 TxtStatusLabel.Foreground = BrushSlate;
             }
 
-            // Specs Grid
+            // Specs Grid & Visual Capacity Degradation Diagram
             TxtSpecName.Text = specs.Name;
             TxtSpecMfg.Text = specs.Manufacturer;
             TxtSpecChem.Text = specs.Chemistry;
@@ -1508,9 +1767,25 @@ namespace WinBatLens
                 ? (isEn ? $"{specs.CycleCount.Value} cycles" : $"{specs.CycleCount.Value} 次")
                 : naText;
 
-            // The manufacture date exists only when the battery driver supplied
-            // one, so the row appears and disappears with it rather than
-            // occupying the card with a permanent "N/A".
+            // Visual Dual-Bar Segmentation (Full Capacity + Hatched Loss Zone)
+            if (specs.DesignCapacity > 0 && specs.FullChargeCapacity > 0)
+            {
+                double healthRatio = Math.Clamp((double)specs.FullChargeCapacity / specs.DesignCapacity, 0.05, 1.0);
+                double lossRatio = Math.Clamp(1.0 - healthRatio, 0.0, 0.95);
+                ColVisualFullCap.Width = new GridLength(healthRatio, GridUnitType.Star);
+                ColVisualLossCap.Width = new GridLength(Math.Max(0.001, lossRatio), GridUnitType.Star);
+                BarVisualLossZone.Visibility = lossRatio > 0.01 ? Visibility.Visible : Visibility.Collapsed;
+                BarVisualFullCharge.Background = HealthBrush(metrics.HealthPercent);
+            }
+            else
+            {
+                ColVisualFullCap.Width = new GridLength(1, GridUnitType.Star);
+                ColVisualLossCap.Width = new GridLength(0, GridUnitType.Star);
+                BarVisualLossZone.Visibility = Visibility.Collapsed;
+                BarVisualFullCharge.Background = BrushSlate;
+            }
+
+            // The manufacture date exists only when the battery driver supplied one
             if (specs.ManufactureDate.HasValue)
             {
                 string age = specs.AgeYears.HasValue
@@ -1523,12 +1798,13 @@ namespace WinBatLens
             }
             else
             {
+                TxtSpecMade.Text = naText;
                 RowSpecMade.Visibility = Visibility.Collapsed;
                 SepSpecMade.Visibility = Visibility.Collapsed;
             }
 
-            TxtReportTime.Text = string.IsNullOrWhiteSpace(report.SystemInfo.ReportTime) 
-                ? $"{DateTime.Now:yyyy-MM-dd HH:mm}" 
+            TxtReportTime.Text = string.IsNullOrWhiteSpace(report.SystemInfo.ReportTime)
+                ? $"{DateTime.Now:yyyy-MM-dd HH:mm}"
                 : report.SystemInfo.ReportTime;
 
             // Bind Lists

@@ -94,7 +94,7 @@
 
 | 格式 | 檔案名稱 | 說明 |
 | :--- | :--- | :--- |
-| **🚀 安裝版** | `WinBatLens_v1.1.7_Setup_x64.exe` | Inno Setup 安裝程式，支援開機啟動設定與乾淨解除安裝。 |
+| **🚀 安裝版** | `WinBatLens_v1.1.7_Setup_x64.exe` | Inno Setup 安裝程式；固定建立開始功能表的啟動／解除安裝捷徑，可自行釘選到開始或工作列。桌面捷徑與開機啟動為預設不勾選的選用項目。 |
 | **📦 免安裝單檔版** | `WinBatLens_v1.1.7_Portable_x64.exe` | 單一可執行檔（Single-File），免安裝、隨開即用。 |
 | **📁 免安裝壓縮包** | `WinBatLens_v1.1.7_Portable_x64.zip` | 包含可執行檔、README 與授權說明的 ZIP 封裝包。 |
 

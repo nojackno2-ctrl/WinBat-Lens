@@ -1,5 +1,166 @@
 # Project State & Handoff
 
+## 2026-08-31 Dynamic Visual & Graphic-Driven UI Redesign (complete, uncommitted)
+
+- **User Feedback & Objective:** The user reported that the interface was plain/dull, heavily text-dominated, and lacked graphical diagrams and dynamic animation effects. The objective was to transform the dashboard into an interactive visual cockpit featuring native dynamic energy flow schematics, a 3D glass battery vessel with liquid shimmer, a 120px precision cybernetic dual-ring health gauge, a visual capacity degradation/loss chart, and an oscilloscope waveform surface with glowing area gradient fills.
+- **Architectural & Safety Constraints:**
+  - Strict telemetry integrity: zero fabricated CPU/RAM wattages, maintaining 100% truthful hardware IOCTL & dGPU telemetry.
+  - 100% native WPF vector geometries, storyboards, and gradient brushes — zero external raster assets or heavyweight dependencies.
+  - Background & power efficiency: Storyboards pause during system tray minimization and resume cleanly on window restore. All animations respect `SystemParameters.ClientAreaAnimation`.
+  - Localization safety: All bindings and bilingual support (Traditional Chinese & English) fully maintained.
+- **Key Enhancements Implemented:**
+  - `App.xaml`:
+    - Added high-tech vector geometries (`GeoSchematicAdapter`, `GeoSchematicChip`, `GeoSchematicBatteryVessel`, `GeoSchematicGpuDie`, `GeoSchematicMotherboard`, `GeoSparkleCharging`).
+    - Added engineering diagonal hatch pattern brush `LossHatchBrush` for visual battery capacity loss / wear zone.
+    - Added oscilloscope translucent area gradient fills (`WaveformDischargeAreaGradient`, `WaveformChargeAreaGradient`, `WaveformGpuAreaGradient`).
+  - `MainWindow.xaml`:
+    - **Hero Power Architecture Schematic:** Replaced plain card with a 3-node dynamic power schematic: AC Adapter node with live LED status -> animated particle conduit -> Power Management Hub chip (live wattage readout) -> animated particle conduits -> 3D Glass Battery Vessel with fluid shimmer & Discrete GPU die load card.
+    - **Cybernetic Dual-Ring Health Meter:** Upgraded health gauge to a 120px circular instrument with an outer calibration tick ring and glowing health arc.
+    - **Visual Battery Capacity Degradation Tank:** Dual horizontal bars showing Design Capacity vs Full Charge Capacity alongside a hatched red wear/loss zone.
+    - **4 Quick Spec Visual Badges:** 2x2 grid displaying Manufacturer, Battery Chemistry, Cycle count, and Pack Age.
+    - **Oscilloscope Waveform Surface:** Added translucent neon area gradient fills beneath the live 60s discharge, charge, and GPU polylines.
+  - `MainWindow.xaml.cs`:
+    - Updated `ApplyEnergyFlowAnimation` to drive multi-strand AC and Battery particle streams for Charging, Discharging, and On AC Idle modes.
+    - Updated `RedrawWaveformChart` and `EnsureChartPointCapacity` to compute closed polygon point collections for the oscilloscope area gradients.
+    - Updated `DisplayReport` to compute capacity wear ratios and set the visual degradation dual-bar proportions and cybernetic arc dash lengths.
+    - Updated `UpdateLivePowerUI` with AC adapter LED states, battery vessel Wh telemetry, and dGPU load states.
+- **Verification:**
+  - `dotnet build WinBatLens.sln -c Debug` passed with 0 warnings, 0 errors.
+  - `dotnet test tests\WinBatLens.Tests\WinBatLens.Tests.csproj -c Debug --no-build` passed all 22/22 unit tests.
+
+## 2026-08-30 Graphic-Driven Dark Instrument Dashboard UI Redesign & Responsive Header Polish Pass (complete, uncommitted)
+
+- **Objective:** Redesign the .NET 10 WPF desktop application UI into a graphic-driven, high-density dark instrument dashboard with dynamic motion, and complete a precision visual polish pass addressing header/tab icon permanence, concise bilingual status telemetry, directional energy streaming, smooth one-time entrance reveal, and responsive compact header action buttons.
+- **Architectural Constraints Preserved:**
+  - Preserved all telemetry boundaries: no fabricated CPU/RAM/screen wattage, strict separation of measured battery driver IOCTL vs dGPU hardware power.
+  - Zero external UI packages, raster graphics, or downloaded assets: 100% native WPF `Path`, `Geometry`, `Storyboard`, `LinearGradientBrush`, and vector resources.
+  - Lifecycle & Background Safety: Storyboards pause/stop on `HideToTray()` and resume on `RestoreFromTray()`; all animations respect `SystemParameters.ClientAreaAnimation`.
+  - All existing `x:Name` references, event handlers, report parsing, 60s live waveform polylines, voltage curves, localization, system tray, and exports preserved.
+- **Key Enhancements Implemented:**
+  - `App.xaml`:
+    - Full dark instrument token system (`BgDark`, `BgCard`, `BgRaised`, `BgInset`, `BorderStrong`, `AccentCyan`, `AccentButtonGradient`, `HeroCardGradient`, etc.).
+    - 17 reusable WPF vector `Geometry` icon resources (`GeoIconBattery`, `GeoIconBolt`, `GeoIconClock`, `GeoIconVolt`, `GeoIconThermometer`, `GeoIconGpu`, `GeoIconShieldCheck`, `GeoIconPlug`, `GeoIconEnergyWh`, `GeoIconChart`, `GeoIconPowerPlan`, `GeoIconFileReport`, `GeoIconRefresh`, `GeoIconExport`, `GeoIconGlobe`, `GeoIconInfo`, `GeoIconCheck`, `GeoIconSparkle`).
+    - Icon-led `ControlTemplate` for `PrimaryButtonStyle`, `SecondaryButtonStyle`, and `TabItem` rendering a vector `Path` bound to `Tag` (`Data="{Binding Path=Tag, RelativeSource={RelativeSource TemplatedParent}}"`) beside localized text, cleanly hiding the icon via Triggers when `Tag` is null.
+    - Reusable `HeaderIconButtonStyle` (secondary) and `HeaderPrimaryIconButtonStyle` (primary) for compact 34x30 fixed-size icon-only buttons with centered 15px vector glyphs, clear interactive states (hover, pressed, disabled, keyboard focus), and automatic `ToolTip` bound to localized `Button.Content` (`ToolTip="{Binding RelativeSource={RelativeSource Self}, Path=Content}"`) for UI Automation and accessibility.
+  - `MainWindow.xaml`:
+    - Top Header Bar: Applied `HeaderIconButtonStyle` and `HeaderPrimaryIconButtonStyle` to `BtnOpenReport` (`GeoIconFileReport`), `BtnGenerateReport` (`GeoIconRefresh`), and `BtnExportData` (`GeoIconExport`), preventing English text overflow clipping while preserving full accessibility and text visibility for `BtnLanguageToggle` and `ChkAutoStart`.
+    - Tab Actions: Assigned vector geometries to `BtnExportPowerCsv`, `BtnClearPowerHistory`, `BtnClearVoltageHistory`, and all 6 `TabItem` headers (`GeoIconBolt`, `GeoIconFileReport`, `GeoIconVolt`, `GeoIconShieldCheck`, `GeoIconClock`, `GeoIconChart`), ensuring icon-led visual identity persists even across runtime `ApplyLocalization` updates.
+    - Left Panel: High-contrast circular Health Score Gauge with radial glow backdrop, styled battery specs card with loss highlight, and capacity degradation history.
+    - Right Panel (Tab 1): Dominant Hero Energy Command Center (large live wattage with status glow, dynamic battery vessel with fill & directional energy stream), companion metric tiles (estimated runtime with clock vector, electrical telemetry with volt/temp vector), 60s Waveform Card with coordinate overlay and multi-series legend, and icon-led Hardware Real-Time Breakdown rows (Battery IOCTL, Wh capacity, Power scheme, dGPU with custom glowing load bar).
+    - Energy Stream Storyboards: Added bidirectional storyboards (`StoryboardEnergyFlowCharging` animating left-to-right into battery, `StoryboardEnergyFlowDischarging` animating right-to-left away from battery).
+    - Loading Overlay: Vector radar/ring spinner with smooth rotating gradient and pulse icon.
+    - Root Entrance Transform: Added `TranslateTransform x:Name="EntranceTransform"` on `RootLayoutGrid` for smooth window entrance reveal.
+  - `MainWindow.xaml.cs`:
+    - Concise Status Pill & Full Tooltip: Replaced long sentence copy with short bilingual state labels (`供電不足 (電池補足)` / `Deficit (Battery Covering)`, `充電中 (實測)` / `Charging (Measured)`, `充電中 (未回報功率)` / `Charging (Rate Unavailable)`, `市電直供 (電池待機)` / `On AC (Battery Idle)`, `放電中 (全系統實測)` / `Discharging (Measured)`, `放電中 (推估)` / `Discharging (Estimated)`). Preserved complete honest descriptions in `BadgeLiveAcState.ToolTip` and `TxtLiveAcState.ToolTip`.
+    - Dedicated Charger Verdict: Reserved separate `TxtLiveChargerSupply` warning line exclusively for deficit / inadequate charger conditions.
+    - State-Transition-Based Directional Flow Animation: `ApplyEnergyFlowAnimation(...)` caches direction and triggers storyboard changes only on state change; pauses/stops on tray minimize and respects `SystemParameters.ClientAreaAnimation`.
+    - One-Time Entrance Reveal: `PlayEntranceRevealIfNeeded()` executes a non-blocking opacity & slide-up reveal on first visible presentation, correctly skipping `--background` startup until restored by user.
+- **Verification & Quality Checks:**
+  - `git diff --check` passed with 0 trailing whitespace or blank line issues.
+  - Solution build `dotnet build WinBatLens.sln -c Debug` succeeded with 0 warnings and 0 errors.
+  - xUnit unit tests `dotnet test tests\WinBatLens.Tests\WinBatLens.Tests.csproj -c Debug --no-build` passed 22/22 (including OptimizationContractTests and InstallerContractTests).
+  - Working tree contains uncommitted changes exclusively to `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs`, and `AI_HANDOFF.md`.
+- **Remaining Visual/Manual Validation Needs:**
+  - Live window render inspection across display scaling (100%, 125%, 150%) at minimum size (980x620) and standard size (1200x780).
+  - Manual verification of tray minimize/restore animation pause/resume under physical AC connect/disconnect transitions.
+
+## 2026-08-13 GitHub upload (complete)
+
+- User authorized uploading the complete current verified worktree, including the WPF redesign and installer-experience hardening. Scope is this repository only.
+- Remote audit after `fetch --prune --tags` found local `main` and `origin/main` identical with no other pre-existing branches. Initial source commit `66b6498` was pushed to `agent/ui-installer-experience`; Draft PR #10 targets `main`: https://github.com/nojackno2-ctrl/WinBat-Lens/pull/10
+- GitHub connector PR creation returned `403 Resource not accessible by integration`; the authenticated host `gh pr create` fallback succeeded. A final handoff-only commit records the completed remote state on the same PR branch.
+- This authorization does not include a GitHub Release, tag, installer execution, or installed-application update.
+
+## 2026-08-13 installer experience hardening (complete, uncommitted)
+
+- Scope is limited to `installer/WinBatLens.iss` and a new installer contract test; the concurrent uncommitted WPF redesign remains preserved and untouched.
+- Start Menu application/uninstall shortcuts are now always created with a stable AppUserModelID and `{app}` working directory. Desktop and Windows-startup choices now default unchecked, and upgrades continue to restore previous task choices.
+- Added GitHub support/update metadata, installed README registration, setup/uninstall logging, explicit uninstall identity/version fields, narrowed Restart Manager filtering from every executable to `WinBatLens.exe`, and matching README guidance for manual Start/Taskbar pinning.
+- First test compile failed only because the new standalone contract test omitted the repository's explicit `using Xunit`; the import was added before the successful rerun. No product or installer failure was observed in that attempt.
+- Verification after correction: tests passed 22/22 with no warnings; changed-file `dotnet format --verify-no-changes --no-restore` and `git diff --check` passed; .NET 10 self-contained publish, portable packaging, and Inno Setup 6.7.3 compilation succeeded. Final installer: `dist/WinBatLens_v1.1.7_Setup_x64.exe`, 80,174,427 bytes, SHA-256 `9918D06B8EB4B43B94FD635E789A80B2AFC7ED30EF47B9AFB66631BE4CB10DBC`, file version 1.1.7. The full-solution format check still reports pre-existing whitespace in unrelated files, so only the new test was used as the scoped format gate. Inno's existing, documented admin/HKCU startup warning remains expected.
+- No installer was executed, no installed application was updated, and no commit/push/release was performed.
+
+## 2026-08-13 UI redesign baseline and design audit
+
+- Scope is a preserve-mode redesign of the active WPF application. The legacy
+  Electron prototype under `src/` is not part of the shipped .NET build and is
+  not being treated as the product UI.
+- Baseline before edits: clean `main` at `6c4d5b2`, tracking `origin/main`, with
+  no uncommitted diff. `AGENTS.md`, this handoff, the latest five commits,
+  `App.xaml`, `MainWindow.xaml`, localization wiring, and the relevant code-behind
+  state transitions were reviewed.
+- Design read: dense Windows battery and hardware monitoring for laptop users,
+  with a precise, quiet, instrument-like dark UI. Native WPF remains the only UI
+  system and no dependency will be added.
+- Dials: `DESIGN_VARIANCE 4`, `MOTION_INTENSITY 2`, `VISUAL_DENSITY 8`.
+  Redesign mode is `Redesign - Preserve / targeted evolution`.
+- Preserve: all six information areas, control names and event handlers, report
+  and history data, measured-versus-unavailable telemetry boundaries, the shared
+  physical watt scale, and semantic power colours. The historical compact-layout
+  constraint remains: recover space from padding and chrome before reducing type.
+- Retire: scattered one-off colours, emoji-dependent labels, weak or missing
+  keyboard focus/disabled/pressed states, inconsistent radii and nested-card
+  contrast, and blank data surfaces with no empty-state explanation.
+- Planned design system: one cyan interaction accent; graphite neutral surfaces;
+  red/green/blue/amber reserved only for real telemetry and health semantics;
+  Segoe UI Variable/Segoe UI with tabular numerals for measurements; 10 px cards,
+  6 px controls, and pill radii only for semantic status badges.
+- No hardware/UI runtime result is claimed yet. Release build, tests, formatting,
+  `git diff --check`, XAML parsing/build validation, and safe visual QA remain to
+  be completed. No commit, push, release, deployment, or installed-app update is
+  authorized.
+
+### Implementation milestone
+
+- `App.xaml` now defines one graphite instrument-dark token system, one cyan
+  interaction accent, shared card/data-row/status shapes, and complete hover,
+  pressed, keyboard-focus, selected, and disabled states for buttons, tabs,
+  checkboxes, list rows, headers, and progress bars.
+- `MainWindow.xaml` keeps the existing 1200x780 compact architecture and six
+  information areas, but replaces scattered one-off surfaces with the shared
+  system, gives the primary measured-power card slightly more weight, uses
+  tabular numerals on live measurements and axes, and adds contextual empty
+  states plus a focused report-loading surface.
+- Emoji-dependent product labels were removed from the window and bilingual
+  localization. Runtime dGPU/tip text follows the same rule. Visible range text
+  now uses regular hyphens instead of typographic dash separators.
+- New bilingual strings cover hardware-source labels, empty states, and loading
+  states. Existing names, handlers, bindings, report content, history data, and
+  measured/unavailable telemetry decisions remain intact.
+- Validation has started; no build, test, render, or live hardware result is
+  claimed at this milestone.
+
+### Final validation
+
+- The first Release solution build with the repository's normal self-contained
+  settings and `--no-restore` failed before compilation with `NETSDK1112` because
+  this local restore state lacks the .NET 10 `win-x64` runtime packs. No product
+  or XAML error was reported. To validate source without downloading anything,
+  the build was rerun with `SelfContained=false` and an empty
+  `RuntimeIdentifier`; it passed with 0 warnings and 0 errors.
+- Release tests passed 20/20. Changed-file `dotnet format
+  --verify-no-changes` passed for `MainWindow.xaml.cs` and
+  `Services/LocalizationService.cs` after applying its whitespace fixes.
+- Both XAML files parse as XML, WPF XAML compilation passed as part of the
+  Release build, `git diff --check` passed, and scans found no emoji in the
+  redesigned window/runtime/localization labels and no em/en dash in visible
+  C# strings.
+- No live UI screenshot or hardware smoke test was performed. An installed
+  monitor may already own the single-instance mutex, so launching this build
+  could foreground the old installed UI and produce false evidence or disturb
+  ongoing monitoring. Visual QA is therefore limited to source audit plus
+  successful WPF compilation; live layout, focus appearance, and min-size
+  behaviour remain unverified.
+- Final working tree intentionally contains only `App.xaml`,
+  `MainWindow.xaml`, `MainWindow.xaml.cs`, `Services/LocalizationService.cs`,
+  and this handoff. No commit, push, release, deployment, or installed-app
+  update was performed.
+
+## 2026-08-12 v1.1.7 publication and installed update
+
+- Published GitHub Release `v1.1.7` from `66e4f3f147fad925841a09528f8a73f9cd2d0cf6`; branch CI and tag Release succeeded. Downloaded server digests: portable EXE `352B0A73...BC9497`, ZIP `3FB557F0...82D17`, Setup `1CD18AEC...B16AA`.
+- Updated the installation from `1.1.5` to `1.1.7`; installed product version is `1.1.7+66e4f3f147fad925841a09528f8a73f9cd2d0cf6`, and the process remained responsive.
+
 ## 2026-08-12 v1.1.7 optimization baseline
 
 - Baseline was inspected before edits: clean `main` at `a76b7e3`, tracking `origin/main`, with no uncommitted diff. `AGENTS.md`, this handoff, and the latest eight commits were reviewed.
@@ -1333,3 +1494,11 @@ Verified on a live AMD iGPU + NVIDIA RTX 3060 dGPU laptop.
 - **No automated tests.** Every verification in this file is a manual measurement;
   the parser (`BatteryReportParser`) in particular is regex-heavy and would
   benefit from unit tests over the two saved sample reports.
+
+## 2026-08-13 installed software update verification
+
+- Silently updated the current-user installation with `dist\WinBatLens_v1.1.7_Setup_x64.exe`; the elevated installer returned exit code `0` and did not request a reboot.
+- Installed executable: `%LOCALAPPDATA%\Programs\WinBat Lens\WinBatLens.exe`; FileVersion `1.1.7.0`, ProductVersion `1.1.7+6c4d5b22e196ca3f17333d35f141184bbab706a9`, SHA-256 `D1477D4783758F820A6535E793B3E9F8890B3CA544C9A57F826DCBFC9772F4E7`. It is byte-for-byte identical to the current publish output.
+- Verified the registered version, install location, uninstall command, project/issues/update URLs, and the Start Menu launch/uninstall shortcuts. Removed the stale duplicate English uninstall shortcut; the current localized uninstall shortcut remains valid.
+- Launched the installed build with `--background`; PID `2196` reported `Responding=True`. This verifies launch and process responsiveness, not every hardware reading or UI state.
+- The user's authorization in this milestone covers updating installed software; this handoff entry is not yet committed or pushed.
