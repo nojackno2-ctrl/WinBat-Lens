@@ -1,5 +1,36 @@
 # Project State & Handoff
 
+## 2026-10-05 Codex: automatic local commit policy
+
+- User authorized automatic local commits without further confirmation; AGENTS.md now records the standing policy. Push/release/history changes require separate authorization.
+- Evidence: inspected branch, git status, git diff, and git log; reviewed collaboration rules and handoff. The initial working tree was clean; this task changes collaboration documentation only.
+- Verification: full staged git diff --cached --check passed; automatic commit wording and remaining authorization limits were checked. Documentation-only work; no build/runtime validation was needed.
+- Status: automatic commit policy established; this record accompanies the authorized local snapshot. No build/test or runtime behavior is claimed by this snapshot task.
+
+## 2026-09-03 Post-Install Startup Failure Fix & Installer Cache Purge Hardening (complete, uncommitted)
+
+- **Issue Reported:** User reported that the program failed to launch after installation (`程式安裝後無法啟動`).
+- **Root Cause Analysis:**
+  - In Windows Application Event Log, `.NET Runtime` Event ID 1023 reported:
+    `Failed to load System.Private.CoreLib.dll (error code 0x80131018)`
+    `Path: C:\Users\nojac\AppData\Local\Programs\WinBat Lens\System.Private.CoreLib.dll`
+    `Failed to create CoreCLR, HRESULT: 0x80131018`.
+  - Inspection of the .NET single-file runtime extraction cache (`%TEMP%\.net\WinBatLens\CDXkHh8AtjH7\`) revealed that `System.Private.CoreLib.dll` was corrupted (filled with all `0x00` zero bytes), likely caused by an interrupted previous extraction, disk cleanup, or antivirus locking.
+  - Because .NET AppHost trusts existing files in `%TEMP%\.net\<app>\<bundle_id>\` matching expected file length without checking PE integrity, it refused to re-extract and attempted to load the zeroed file, triggering `COR_E_BADIMAGEFORMAT` (HRESULT `0x80131018`) and terminating silently before any WPF code or window could initialize.
+- **Immediate Resolution:**
+  - Purged the corrupted cache directory (`%TEMP%\.net\WinBatLens\CDXkHh8AtjH7\`).
+  - Executed `C:\Users\nojac\AppData\Local\Programs\WinBat Lens\WinBatLens.exe`; verified that clean extraction succeeded, the battery report generated properly, and the application started up responsive and healthy.
+- **Permanent Hardening Implemented:**
+  - `installer/WinBatLens.iss`:
+    - Added `[InstallDelete]` and `[UninstallDelete]` directives targeting `{localappdata}\Temp\.net\{#MyAppName}` to automatically wipe any stale or corrupted extraction cache upon setup or uninstall.
+    - Added Pascal script procedure `CleanDotNetTempCache()` invoked in `PrepareToInstall` and `InitializeUninstall` using `DelTree` on `{localappdata}\Temp\.net\{#MyAppName}`.
+  - `tests/WinBatLens.Tests/InstallerContractTests.cs`:
+    - Added regression contract test `InstallerPurgesDotNetTempExtractionCache` to guarantee the installer always maintains cache cleanup directives.
+- **Verification:**
+  - Inno Setup 6.7.3 compilation completed successfully with 0 errors (`dist\WinBatLens_v1.1.8_Setup_x64.exe`).
+  - Unit tests `dotnet test tests\WinBatLens.Tests\WinBatLens.Tests.csproj -c Release` passed all 23/23 tests.
+  - `dotnet format tests\WinBatLens.Tests\WinBatLens.Tests.csproj --verify-no-changes` and `git diff --check` passed cleanly.
+
 ## 2026-08-31 Dynamic Visual & Graphic-Driven UI Redesign (complete, uncommitted)
 
 - **User Feedback & Objective:** The user reported that the interface was plain/dull, heavily text-dominated, and lacked graphical diagrams and dynamic animation effects. The objective was to transform the dashboard into an interactive visual cockpit featuring native dynamic energy flow schematics, a 3D glass battery vessel with liquid shimmer, a 120px precision cybernetic dual-ring health gauge, a visual capacity degradation/loss chart, and an oscilloscope waveform surface with glowing area gradient fills.

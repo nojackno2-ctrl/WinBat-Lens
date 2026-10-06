@@ -52,6 +52,14 @@ public sealed class InstallerContractTests
         Assert.DoesNotContain(script.Lines, line => line.StartsWith("Name: \"startmenuicon\";", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void InstallerPurgesDotNetTempExtractionCache()
+    {
+        var script = ReadInstallerScript();
+        Assert.Contains("Type: filesandordirs; Name: \"{localappdata}\\Temp\\.net\\{#MyAppName}\"", script.Lines, StringComparer.Ordinal);
+        Assert.Contains("CleanDotNetTempCache()", script.Content, StringComparison.Ordinal);
+    }
+
     private static (string Content, string[] Lines) ReadInstallerScript()
     {
         var repositoryRoot = FindRepositoryRoot();

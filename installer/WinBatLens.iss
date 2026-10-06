@@ -103,6 +103,14 @@ english.StartupOptions=Startup options:
 ; with their own account, which is the normal UAC-consent path.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "WinBatLens"; ValueData: """{app}\{#MyAppExeName}"" --background"; Tasks: autostart; Flags: uninsdeletevalue
 
+[InstallDelete]
+; Purge any stale or corrupted .NET single-file extraction cache for WinBat Lens
+Type: filesandordirs; Name: "{localappdata}\Temp\.net\{#MyAppName}"
+
+[UninstallDelete]
+; Purge leftover .NET single-file extraction cache upon uninstallation
+Type: filesandordirs; Name: "{localappdata}\Temp\.net\{#MyAppName}"
+
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
@@ -159,6 +167,17 @@ begin
   end;
 end;
 
+procedure CleanDotNetTempCache();
+var
+  CachePath: String;
+begin
+  CachePath := ExpandConstant('{localappdata}\Temp\.net\{#MyAppName}');
+  if DirExists(CachePath) then
+  begin
+    DelTree(CachePath, True, True, True);
+  end;
+end;
+
 function InitializeSetup(): Boolean;
 begin
   StopRunningApp();
@@ -170,11 +189,13 @@ begin
   { Last chance before files are overwritten: the user can have launched the
     app from its tray icon while the wizard was still open. }
   StopRunningApp();
+  CleanDotNetTempCache();
   Result := '';
 end;
 
 function InitializeUninstall(): Boolean;
 begin
   StopRunningApp();
+  CleanDotNetTempCache();
   Result := True;
 end;
