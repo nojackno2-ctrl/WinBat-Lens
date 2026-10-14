@@ -1,28 +1,22 @@
-## Visual Studio Build & Temporary Files
+## Rust build output
+target/
+
+## Editor / IDE files
 .vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+## Leftovers from the .NET builds (v1.x), in case an old checkout is reused
 bin/
 obj/
-*.user
-*.userosv
-*.suo
-*.userprefs
-*.pidb
-WinBatLens.slnx
 
-## Test & Report Temp Files
+## Test & report temp files
 *.html
 *.json
 *.log
 
-## Prototype / Web files
-node_modules/
-package.json
-package-lock.json
-src/
-start-winbat-lens.bat
-
-## Published self-contained build artifacts (do not track - ~71MB each)
-publish/
+## Release artifacts
 dist/
 installer/Output/
-

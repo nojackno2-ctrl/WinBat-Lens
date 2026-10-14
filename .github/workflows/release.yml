@@ -47,10 +47,8 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_TAG=$tag"
           Write-Host "Publishing $tag"
 
-      - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
+      - name: Set up Rust (stable, MSVC)
+        uses: dtolnay/rust-toolchain@stable
 
       # build-release.ps1 skips the installer with a warning when ISCC.exe is
       # absent, which would silently publish a release missing its Setup.exe.
@@ -63,19 +61,19 @@ jobs:
       - name: Verify tag matches project version
         shell: pwsh
         run: |
-          # WinBatLens.csproj is the only place the version is written now:
+          # Cargo.toml is the only place the version is written:
           # build-release.ps1 reads it from there and passes it to Inno Setup,
           # so the tag is the one thing left that can disagree with the build.
           $tag = $env:RELEASE_TAG
-          $csproj = New-Object System.Xml.XmlDocument
-          $csproj.Load((Join-Path $PWD 'WinBatLens.csproj'))
-          $node = $csproj.SelectSingleNode('/Project/PropertyGroup/Version')
-          if (-not $node) { throw "Could not read <Version> from WinBatLens.csproj" }
-          $csprojVersion = $node.InnerText.Trim()
+          $metadata = cargo metadata --no-deps --format-version 1 --locked | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "cargo metadata failed" }
+          $package = $metadata.packages | Where-Object { $_.name -eq 'winbat-lens' }
+          if (-not $package) { throw "Could not find the winbat-lens package in Cargo.toml" }
+          $cargoVersion = $package.version
 
-          Write-Host "tag=$tag csproj=$csprojVersion"
+          Write-Host "tag=$tag cargo=$cargoVersion"
 
-          if ($tag -ne "v$csprojVersion") { throw "Tag $tag does not match WinBatLens.csproj version $csprojVersion" }
+          if ($tag -ne "v$cargoVersion") { throw "Tag $tag does not match Cargo.toml version $cargoVersion" }
 
       # Publishing the same version twice would either fail late or quietly
       # replace what people have already downloaded.

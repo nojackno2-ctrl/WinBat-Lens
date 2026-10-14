@@ -1,5 +1,39 @@
 # Project State & Handoff
 
+## 2026-10-14 Antigravity: automatic commit and push to GitHub policy
+
+- User authorized automatic local commits and automatic push to GitHub for all projects; AGENTS.md now records the standing policy. A Git post-commit hook has been installed in `.git/hooks/post-commit` to automatically push the current branch to `origin` upon commit. Destructive operations (force-push, release, merge, rebase, reset, branch deletion) still require separate authorization.
+- Evidence: inspected branches, git remotes, and status across all repositories. Verified hook execution on Windows Git. Pushed existing unpushed commits where applicable.
+- Verification: git status clean, post-commit hook configured and tested, collaboration rules updated.
+- Status: auto-push policy established and active.
+
+## 2026-10-12 Claude: full rewrite from C#/WPF to Rust (v2.0.0, committed locally, NOT released)
+
+- **Request:** `/goal 程式改寫成Rust語言`. User chose, when asked: install rustup via winget (approved), GUI framework **egui / eframe**, and **remove** the C#/WPF sources once the Rust version builds and tests.
+- **Result:** the application is now a single Cargo binary crate (`winbat-lens`, binary `WinBatLens.exe`, version 2.0.0, ~8,200 lines of Rust). All C#/WPF sources, the `.sln`/`.csproj` and the xUnit project were removed from the tree (they remain in git history at `d0cd93d`). Untracked, git-ignored .NET build output (`bin/`, `obj/`, `tests/WinBatLens.Tests/{bin,obj}`) was left on disk untouched; it is safe to delete by hand.
+- **Module map:** see the table in `README.md` ("架構與核心模組"). Key design points:
+  - `realtime::compose_state` is a pure function from raw readings to `RealTimePowerState`; all the "never fabricate a number" rules live there and in `ui/present.rs`, both unit-tested without hardware.
+  - Sensors run on a `monitor` thread (1 s visible / 5 s hidden). The tray owns its own thread and hidden window (`tray.rs`, raw `Shell_NotifyIconW` + GDI-drawn icon), so it keeps working while the main window is hidden and not repainting.
+  - Hide-to-tray uses eframe 0.36's `App::logic` (called even while hidden). Exit goes through `Lifecycle::request_exit`, which also arms a 2 s watchdog that cleans up and exits if the hidden window never answers.
+  - LibreHardwareMonitor is gone. dGPU watts come from NVML loaded from System32 only (`gpu::NvmlPowerSensor`); GPU utilisation from PDH `\GPU Engine(*)\Utilization Percentage`; CPU load from `GetSystemTimes`; brightness and the voltage fallback from WMI (`wmi` crate).
+- **Cross-version contracts preserved (and pinned by `src/contract_tests.rs`):** mutex/event names `WinBatLens_SingleInstance_Mutex` / `_Activate_Event` / `_Exit_Event`; HKCU Run value `WinBatLens` with `--background`; EXE name `WinBatLens.exe`; `%LOCALAPPDATA%\WinBatLens\battery-voltage-history.json` format (a unit test reads a .NET-written file); PascalCase JSON export.
+- **Deliberate behaviour changes vs v1.1.8:** desktops (no battery) show "市電直供 (無電池)" instead of "充電中"; unmeasured voltage/brightness are no longer written into history rows or tips as if measured; "放電中 (推估)" became "未回報功率"; machines without a dGPU show the iGPU utilisation row; history event types lost their colour emoji.
+- **Known regression:** dGPU power is NVIDIA-only. AMD/Intel discrete cards (previously partly covered via LibreHardwareMonitor/ADL) show utilisation but `-- W`.
+- **Tooling updated:** `build-release.ps1` (version from `Cargo.toml`, `cargo build --release --locked`, checks the EXE's version resource), `installer/WinBatLens.iss` (packages `target\release\WinBatLens.exe`; the `%TEMP%\.net` purge is kept to clean up after v1.x), `.github/workflows/ci.yml` (fmt, clippy `-D warnings`, test, release build) and `release.yml` (Rust toolchain, tag checked against `cargo metadata`). `.github/release-notes/v2.0.0.md` is written and carries the `<!-- prerelease -->` marker.
+- **Verified on the development machine (a desktop: no battery, RTX 4080 + UHD 770, Windows 11 26300):**
+  - `cargo fmt --all -- --check`, `cargo clippy --all-targets --locked -- -D warnings`: clean.
+  - `cargo test --locked`: 71/71 passed (three consecutive runs). Includes headless layout + tessellation of every tab for four simulated power scenarios in both languages, plus the no-battery and no-data states.
+  - Real sensors, via an earlier debug build: sampler init 280 ms, ~1 ms per sample; NVML read 17.7 W; DXGI enumerated both adapters; `powercfg` ran in ~210 ms and its real report parsed (system info, 10 life-estimate rows, 10 recent-usage rows, "無電池裝置").
+  - Real window, via two earlier debug builds: the dashboard rendered correctly with Chinese system fonts at 150% scaling (screenshots inspected), before and after the no-battery fix.
+  - Lifecycle, driven from PowerShell against a running debug build: `WM_CLOSE` hides to tray (process alive, window hidden); a second launch exits by itself and brings the first to the front; minimise hides; the named activate event restores; the named exit event sent while hidden ends the process in ~320 ms and the mutex is gone afterwards.
+- **NOT verified — do not assume these work:**
+  - **Release build and everything downstream of it.** Midway through the session Windows **Smart App Control** (enforced on this machine, CodeIntegrity event 3077/3118) started blocking freshly built unsigned executables: first `target\debug\WinBatLens.exe`, then a separate integration-test binary, then third-party crates' compiled build scripts under `target\release\build\` (os error 4551). `cargo build --release` therefore cannot complete here, so the optimised EXE, its size/memory/CPU figures, `build-release.ps1`, and the Inno Setup compile are all untested. No security setting was changed or bypassed; CI on GitHub (not yet run, nothing was pushed) is the first place the release build will actually execute.
+  - **Any battery hardware path.** The machine has no battery, so the battery IOCTL reads (rate, voltage, capacity, temperature, manufacture date), charger-deficit detection, time-to-full and the voltage-history recorder have only been exercised through unit tests on synthetic readings. Struct layouts are asserted against the documented sizes, nothing more.
+  - **Interactive UI on the final code.** The last successful window launch predates the final small changes (flow colour for no-battery, clippy refactors in `tray.rs`/`widgets.rs`, splitting `App::ui` into `App::dashboard`). Never observed in a real window: tabs 2–6, the language toggle, file dialogs (open report, export JSON/CSV), message boxes, the loading overlay, the tray icon's rendered glyph, the tray context menu, the first-hide balloon, `--background` start, the cross-version replace prompt, and the debug-only `WINBAT_LENS_DEMO` scenarios.
+  - Idle CPU/memory of the Rust build (only a debug build was sampled: 34 MB working set after hide; 0.34 s CPU over 10 s hidden, which is higher than expected and worth re-measuring on a release build).
+- **Suggested next steps:** run CI (needs a push, not authorised yet); try the release EXE on a laptop with a battery and walk the unverified list above; decide whether dGPU power for AMD/Intel should come back; decide whether v2.0.0 should stay marked pre-release.
+- **Not done / not authorised:** no push, no tag, no GitHub Release, no installer run, nothing installed except the Rust toolchain (`winget install Rustlang.Rustup`, user-approved).
+
 ## 2026-10-05 Codex: automatic local commit policy
 
 - User authorized automatic local commits without further confirmation; AGENTS.md now records the standing policy. Push/release/history changes require separate authorization.

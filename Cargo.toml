@@ -1,0 +1,64 @@
+[package]
+name = "winbat-lens"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Windows 電池健康度視覺化儀表板與 powercfg /batteryreport 解析工具"
+authors = ["WinBat Lens Team"]
+license = "MIT"
+repository = "https://github.com/nojackno2-ctrl/WinBat-Lens"
+build = "build.rs"
+
+# The installer, the Run-key auto-start entry and the single-instance handover
+# all look for this exact file name; it is a cross-version contract.
+[[bin]]
+name = "WinBatLens"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.36", default-features = false, features = ["glow", "default_fonts"] }
+egui_extras = { version = "0.36", default-features = false }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+rfd = { version = "0.17", default-features = false }
+wmi = "0.18"
+raw-window-handle = "0.6"
+
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Power",
+    "Win32_System_Threading",
+    "Win32_System_Performance",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_SystemInformation",
+    "Win32_System_WinRT",
+    "Win32_System_Com",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+    "System_Power",
+]
+
+[build-dependencies]
+winresource = "0.1"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "unwind"

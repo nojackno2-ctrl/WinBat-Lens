@@ -5,15 +5,16 @@
 #define MyAppExeName "WinBatLens.exe"
 #define MyAppId "{{D2B3F0E1-8E4B-4D2A-9A2C-5F1B3E7A902A}"
 #define MyAppUserModelId "nojackno2.WinBatLens"
-#define MyPublishExe "..\bin\Release\net10.0-windows\win-x64\publish\WinBatLens.exe"
+#define MyPublishExe "..\target\release\WinBatLens.exe"
 
 ; Named kernel objects the running app owns. Both are part of a cross-version
-; contract with Services/SingleInstanceService.cs and must never carry the
-; version number: this installer has to recognise and stop an OLD build.
+; contract with src/single_instance.rs and must never carry the version number:
+; this installer has to recognise and stop an OLD build, including the .NET
+; builds (v1.x) that used the same names.
 #define MyAppMutex "WinBatLens_SingleInstance_Mutex"
 #define MyAppExitEvent "WinBatLens_Exit_Event"
 
-; The release number lives in WinBatLens.csproj and nowhere else.
+; The release number lives in Cargo.toml and nowhere else.
 ; build-release.ps1 reads it from there and passes it in as /DMyAppVersion=.
 ; The fallback for a hand-run ISCC reads it back off the published EXE, which
 ; [Files] requires to exist anyway — so the number stamped on the installer can
@@ -104,11 +105,13 @@ english.StartupOptions=Startup options:
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "WinBatLens"; ValueData: """{app}\{#MyAppExeName}"" --background"; Tasks: autostart; Flags: uninsdeletevalue
 
 [InstallDelete]
-; Purge any stale or corrupted .NET single-file extraction cache for WinBat Lens
+; The Rust build (v2.0.0+) is a native EXE and extracts nothing. This removes
+; the single-file extraction cache the .NET builds (v1.x) left behind, so an
+; upgrade does not strand stale runtime files in %TEMP%.
 Type: filesandordirs; Name: "{localappdata}\Temp\.net\{#MyAppName}"
 
 [UninstallDelete]
-; Purge leftover .NET single-file extraction cache upon uninstallation
+; Same v1.x leftover, in case the upgrade path never ran on this profile.
 Type: filesandordirs; Name: "{localappdata}\Temp\.net\{#MyAppName}"
 
 [Run]
@@ -131,7 +134,7 @@ function CloseHandle(hObject: LongWord): LongWord;
 
   Neither of the stock mechanisms can do this on their own, because the app
   deliberately refuses WM_CLOSE and hides to the tray instead (see
-  MainWindow_Closing): the AppMutex prompt asks the user to close the app, but
+  App::logic in src/ui/mod.rs): the AppMutex prompt asks the user to close the app, but
   clicking the window's X only hides it and the mutex stays held; and the
   Restart Manager behind CloseApplications gets its graceful close refused, so
   it resorts to terminating the process, which strands the notification-area

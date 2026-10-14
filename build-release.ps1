@@ -6,25 +6,27 @@ param(
 )
 
 # WinBat Lens 自動化發布與打包腳本 (Powershell)
-# 包含 .NET 獨立單一執行檔發布、便攜版 ZIP 打包、Inno Setup 安裝檔編譯與數位簽署驗證
+# 包含 Rust 原生單一執行檔建置、便攜版 ZIP 打包、Inno Setup 安裝檔編譯與數位簽署驗證
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = $PSScriptRoot
 Set-Location $ProjectRoot
 
-# Single source of truth for the release number: WinBatLens.csproj. This script
-# and installer\WinBatLens.iss both take it from there, so bumping a version is
-# one edit instead of three that can silently drift apart.
-$CsprojPath = Join-Path $ProjectRoot "WinBatLens.csproj"
-# XmlDocument.Load rather than [xml](Get-Content ...): Get-Content hands back an
-# array of lines, and casting that to [xml] fails outright. Load also honours
-# the file's real encoding, which matters because <Title> holds Chinese text.
-$Csproj = New-Object System.Xml.XmlDocument
-$Csproj.Load($CsprojPath)
-$VersionNode = $Csproj.SelectSingleNode('/Project/PropertyGroup/Version')
-if (-not $VersionNode) { throw "Could not read <Version> from $CsprojPath." }
-$Version = $VersionNode.InnerText.Trim()
+# Single source of truth for the release number: Cargo.toml. This script and
+# installer\WinBatLens.iss both take it from there (build.rs stamps the same
+# number into the EXE), so bumping a version is one edit instead of three that
+# can silently drift apart.
+$ManifestPath = Join-Path $ProjectRoot "Cargo.toml"
+# Only the [package] table's version counts; dependency tables further down
+# carry `version = ` lines of their own.
+$Version = $null
+$InPackageTable = $false
+foreach ($line in [System.IO.File]::ReadAllLines($ManifestPath, [System.Text.Encoding]::UTF8)) {
+    if ($line -match '^\s*\[(.+)\]\s*$') { $InPackageTable = ($Matches[1] -eq 'package'); continue }
+    if ($InPackageTable -and $line -match '^\s*version\s*=\s*"([^"]+)"') { $Version = $Matches[1]; break }
+}
+if (-not $Version) { throw "Could not read the package version from $ManifestPath." }
 
 $DistDir = Join-Path $ProjectRoot "dist"
 $PortableDirName = "WinBatLens_v$Version`_Portable_x64"
@@ -44,22 +46,31 @@ if (Test-Path $DistDir) {
 }
 New-Item -ItemType Directory -Path $DistDir -Force | Out-Null
 
-# 2. Dotnet Publish Single-File Self-Contained Release
-Write-Host "[2/5] Publishing .NET 10 WPF Single-File Executable..." -ForegroundColor Yellow
-# Packaging flags (single-file, self-contained, ReadyToRun, compression) all
-# live in WinBatLens.csproj so this script and a plain `dotnet publish` agree.
-$PublishDir = Join-Path $ProjectRoot "bin\Release\net10.0-windows\win-x64\publish"
-$PublishExePath = Join-Path $PublishDir "WinBatLens.exe"
-if (Test-Path -LiteralPath $PublishDir) {
-    Remove-Item -LiteralPath $PublishDir -Recurse -Force
+# 2. Cargo release build: one native, statically linked EXE with no runtime
+#    to install or extract.
+Write-Host "[2/5] Building the Rust release executable..." -ForegroundColor Yellow
+# Optimisation flags (LTO, single codegen unit, stripping) all live in
+# Cargo.toml's [profile.release] so this script and a plain
+# `cargo build --release` agree. --locked refuses to build against dependency
+# versions other than the ones recorded in Cargo.lock.
+$PublishExePath = Join-Path $ProjectRoot "target\release\WinBatLens.exe"
+if (Test-Path -LiteralPath $PublishExePath) {
+    Remove-Item -LiteralPath $PublishExePath -Force
 }
-dotnet publish WinBatLens.csproj -c Release
+cargo build --release --locked
 if ($LASTEXITCODE -ne 0) {
-    throw "dotnet publish failed with exit code $LASTEXITCODE."
+    throw "cargo build failed with exit code $LASTEXITCODE."
 }
 
 if (-not (Test-Path $PublishExePath)) {
-    throw "Publish failed: $PublishExePath does not exist!"
+    throw "Build failed: $PublishExePath does not exist!"
+}
+
+# The EXE's version resource must carry the number this script is about to put
+# in every artifact name; a mismatch means build.rs and Cargo.toml disagree.
+$ExeVersion = (Get-Item -LiteralPath $PublishExePath).VersionInfo.ProductVersion
+if ($ExeVersion -notlike "$Version*") {
+    throw "Built EXE reports version '$ExeVersion' but Cargo.toml says '$Version'."
 }
 
 # 3. Create Portable Single Executable & Portable ZIP

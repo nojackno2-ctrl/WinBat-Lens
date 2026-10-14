@@ -9,37 +9,42 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build-test:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
+      - name: Set up Rust (stable, MSVC)
+        uses: dtolnay/rust-toolchain@stable
         with:
-          dotnet-version: 10.0.x
+          components: rustfmt, clippy
 
-      - name: Restore
-        run: dotnet restore WinBatLens.sln
+      - name: Cache cargo registry and build output
+        uses: Swatinem/rust-cache@v2
 
-      - name: Build Release
-        run: dotnet build WinBatLens.sln -c Release --no-restore --nologo -warnaserror
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint (warnings are errors)
+        run: cargo clippy --all-targets --locked -- -D warnings
 
       - name: Run tests
-        run: dotnet test tests/WinBatLens.Tests/WinBatLens.Tests.csproj -c Release --no-restore --nologo --logger "trx;LogFileName=test-results.trx"
+        run: cargo test --locked
 
-      - name: Publish single-file smoke artifact
-        run: dotnet publish WinBatLens.csproj -c Release --no-restore --nologo -p:PublishReadyToRun=false
+      - name: Build release executable
+        run: cargo build --release --locked
 
-      - name: Upload test results
-        if: always()
+      - name: Upload release executable
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: "**/TestResults/*.trx"
-          if-no-files-found: ignore
+          name: WinBatLens-exe
+          path: target/release/WinBatLens.exe
+          if-no-files-found: error
