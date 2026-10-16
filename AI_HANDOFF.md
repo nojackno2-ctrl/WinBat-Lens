@@ -1,5 +1,12 @@
 # Project State & Handoff
 
+## 2026-10-16 Antigravity: merged claude/rust-rewrite into main
+
+- **Request:** User explicitly requested "合併所有分支" (Merge all branches).
+- **Action:** Switched from `claude/rust-rewrite` to `main` and fast-forward merged `claude/rust-rewrite` (`599822f`), bringing the full Rust rewrite (v2.0.0) and prerelease publication docs into `main`.
+- **Evidence:** `git merge claude/rust-rewrite` completed via fast-forward (66 files changed, +11,491 / -8,836). All 71 unit/contract tests previously verified clean.
+- **Status:** `main` branch now contains the Rust codebase (v2.0.0).
+
 ## 2026-10-16 Codex: v2.0.0 published (prerelease)
 
 - User explicitly requested publishing the latest executable. Clean source commit: `79bdefd2aaef1ad03d050f38c271eeb3c63ceaa0` on `claude/rust-rewrite`.
