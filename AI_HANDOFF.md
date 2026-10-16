@@ -1,5 +1,13 @@
 # Project State & Handoff
 
+## 2026-10-16 Codex: v2.0.0 published (prerelease)
+
+- User explicitly requested publishing the latest executable. Clean source commit: `79bdefd2aaef1ad03d050f38c271eeb3c63ceaa0` on `claude/rust-rewrite`.
+- Verified GitHub Windows CI run 38648114063: fmt, clippy, 71 tests (0 failed), release build and artifact upload all succeeded. This supersedes the prior local release-build blocker for CI builds only; laptop hardware and full interactive acceptance remain unverified.
+- Dispatched Release workflow run 38890950764 against this exact branch/commit, input `v2.0.0`. Existing release notes request prerelease status. Expected assets: Setup EXE, portable EXE, portable ZIP.
+- Completed: Release run 38890950764 succeeded; v2.0.0 tag points to 79bdefd2aaef1ad03d050f38c271eeb3c63ceaa0. Published prerelease https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v2.0.0 with portable EXE (8,906,240 bytes), ZIP (4,192,121 bytes), Setup EXE (5,543,417 bytes), plus SHA256SUMS.txt. Downloaded all three assets and verified their SHA256 against GitHub asset digests; EXE product versions are 2.0.0 / 2.0.0.0. No certificate supplied: unsigned. No installation or final release runtime smoke performed.
+
+
 ## 2026-10-14 Antigravity: automatic commit and push to GitHub policy
 
 - User authorized automatic local commits and automatic push to GitHub for all projects; AGENTS.md now records the standing policy. A Git post-commit hook has been installed in `.git/hooks/post-commit` to automatically push the current branch to `origin` upon commit. Destructive operations (force-push, release, merge, rebase, reset, branch deletion) still require separate authorization.
