@@ -1,5 +1,13 @@
 # Project State & Handoff
 
+## 2026-10-17 Codex: repository-wide Rust / branches / release audit
+
+- User authorized checking Rust feasibility, merging all branches, deleting unused branches and publishing latest executables. Current Rust application is already on main; no rewrite needed for this audit.
+- Verified `git merge-base --is-ancestor claude/rust-rewrite main` exit 0. Created and verified complete Git bundle `D:/Github/release-audit-2026-10-17/WinBat-Lens-before-cleanup.bundle`; deleted merged local and remote `claude/rust-rewrite` using normal push-delete and `git branch -d`. `git ls-remote --heads origin` now reports main only.
+- Current main `1ab204d` differs from release `v2.0.0` (`79bdefd`) only in AI_HANDOFF.md. Exact-main CI run 38893335791 succeeded (fmt, clippy, tests, release build); no executable changes require another version.
+- Downloaded all four published assets into `D:/Github/release-audit-2026-10-17/WinBat-Lens`; every SHA256 matched GitHub asset digest. Portable EXE: 8906240 bytes, SHA256 2e9c036e77470322e277f9337255e0f3b7a856d971a452a076753c80198acf82. Setup EXE: 5543417 bytes, SHA256 dc36484d2dc4b7b5b11e7cb3f9547fb8f6d357cd42a606c8f741e5eb3b7b63f2.
+- Latest Rust download remains https://github.com/nojackno2-ctrl/WinBat-Lens/releases/tag/v2.0.0 (published prerelease). Retained prerelease status and existing immutable assets; AMD/Intel dGPU wattage and laptop/interactive acceptance limits from the rewrite still apply. No installation/runtime acceptance claimed.
+
 ## 2026-10-16 Antigravity: merged claude/rust-rewrite into main
 
 - **Request:** User explicitly requested "合併所有分支" (Merge all branches).
