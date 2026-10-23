@@ -1,5 +1,18 @@
 # Project State & Handoff
 
+## 2026-10-23 Codex：修正開機背景視窗無法關閉（已驗證）
+
+- 目標：修正使用者回報的「開機自動啟動視窗無法關閉」；開始時 `main` 工作目錄乾淨。
+- 已重現：`cargo build --locked` 後以 `target/debug/WinBatLens.exe --background` 啟動，仍出現空白主視窗；透過 `computer-use` 傳送 `Alt+F4` 後視窗依然存在，行程仍回應。
+- 根因證據：eframe 0.36.2 的 `EpiIntegration::post_rendering` 首幀強制 `set_visible(true)`，而 `Shared.hidden` 在背景啟動時已是 true；`hide_to_tray` 因此提前返回，關閉事件又被 `CancelClose` 攔截。
+- 修正：隱藏指令不再被內部旗標略過，首幀後以原生可見性確認隱藏結果；隱藏時停止動畫，托盤失敗時保留可操作視窗。
+- 驗證：依序 `cargo check --locked`、`cargo test --locked`（75/75）、`cargo build --locked` 通過（MSVC），`cargo clippy --all-targets --locked -- -D warnings` 通過。首輪 4 項新測試因未清除 egui 字型紋理更新而失敗，補上與既有測試一致的 `textures_delta.clear()` 後全數通過。
+- GUI 已驗證：修正版 Debug 以 `--background` 啟動後未出現在可見視窗清單；具名啟用事件可還原正常儀表板；實際點選右上角 × 後視窗消失，行程持續回應，並可再次還原。
+- 追加驗證：Debug 還原後 `Alt+F4` 可隱藏；再次啟動同一 EXE 時新行程自行退出並還原原視窗；具名退出事件可正常結束隱藏中的行程。`cargo build --release --locked` 成功（1 分 43 秒），格式與差異空白檢查通過。
+- Release GUI 已驗證：`--background` 啟動保持隱藏；具名事件可還原；實際點選 × 或最小化後視窗消失，具名退出事件可正常結束隱藏中的行程。測試行程均已退出。
+- 修正版：`target/release/WinBatLens.exe`（8,904,704 bytes），SHA256 `825ee37eea1608b856b410afa4a2ede0bf3754a140327f7024df497a286273e3`。版本號維持 2.0.0，尚未發布新 Release 或安裝程式；沒有變更開機登錄設定或既有安裝，未重開機驗證登入流程或瞬間閃現。
+- 狀態：程式碼與交接紀錄已完成驗證，依既有授權一併提交並同步至 origin/main。
+
 ## 2026-10-17 Codex: repository-wide Rust / branches / release audit
 
 - User authorized checking Rust feasibility, merging all branches, deleting unused branches and publishing latest executables. Current Rust application is already on main; no rewrite needed for this audit.

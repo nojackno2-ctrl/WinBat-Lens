@@ -15,7 +15,7 @@ use eframe::egui::{self, vec2, Align, Layout, RichText, ViewportCommand};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use windows::Win32::System::ProcessStatus::EmptyWorkingSet;
 use windows::Win32::System::Threading::GetCurrentProcess;
-use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, SetForegroundWindow};
 
 use crate::app_info;
 use crate::history::VoltageHistory;
@@ -101,6 +101,8 @@ pub struct App {
     initial_check_started: bool,
     balloon_shown: bool,
     closing: bool,
+    /// 首幀繪製後 eframe 會強制顯示視窗，必須再確認一次隱藏結果。
+    first_window_frame: bool,
     /// 第一次顯示視窗的時間點，用於一次性的淡入。
     revealed_at: Option<f64>,
 }
@@ -193,6 +195,7 @@ impl App {
             initial_check_started: false,
             balloon_shown: false,
             closing: false,
+            first_window_frame: true,
             revealed_at: None,
         }
     }
@@ -206,11 +209,10 @@ impl App {
     }
 
     fn hide_to_tray(&mut self, ctx: &egui::Context) {
-        if self.is_hidden() {
+        ctx.send_viewport_cmd(ViewportCommand::Visible(false));
+        if self.shared.hidden.swap(true, Ordering::SeqCst) {
             return;
         }
-        self.shared.hidden.store(true, Ordering::SeqCst);
-        ctx.send_viewport_cmd(ViewportCommand::Visible(false));
 
         // Only explain the tray behaviour the first time; after that the
         // balloon is just noise on every minimize.
@@ -244,6 +246,49 @@ impl App {
             }
         }
         ctx.request_repaint();
+    }
+
+    /// 可獨立於 eframe::Frame 處理；原生可見性由呼叫端提供，方便重現首幀覆寫。
+    fn window_lifecycle(&mut self, ctx: &egui::Context, tray_available: bool, window_visible: Option<bool>) -> bool {
+        let first_frame = std::mem::take(&mut self.first_window_frame);
+        if self.closing {
+            return false;
+        }
+        if self.shared.exit_requested.load(Ordering::SeqCst) {
+            self.closing = true;
+            self.lifecycle.finalize();
+            ctx.send_viewport_cmd(ViewportCommand::Close);
+            return false;
+        }
+
+        let (close_requested, minimized) =
+            ctx.input(|input| (input.viewport().close_requested(), input.viewport().minimized == Some(true)));
+        if close_requested && !tray_available {
+            // 托盤建立失敗時保留正常關閉路徑，避免留下無法操作的背景程式。
+            self.closing = true;
+            self.lifecycle.finalize();
+            return false;
+        }
+        if tray_available {
+            if close_requested {
+                ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+            }
+            if close_requested || (minimized && !self.is_hidden()) {
+                self.hide_to_tray(ctx);
+            }
+        }
+
+        if self.shared.show_requested.swap(false, Ordering::SeqCst) || (!tray_available && self.is_hidden()) {
+            self.restore_from_tray(ctx);
+        }
+
+        // egui 的 visible() 只表示是否需要繪圖；最小化或遮蔽不代表已從工作列隱藏。
+        // 首幀即使原生視窗尚未顯示，也需等 eframe 的強制顯示完成後重試。
+        if tray_available && self.is_hidden() && (first_frame || window_visible != Some(false)) {
+            ctx.send_viewport_cmd(ViewportCommand::Visible(false));
+            ctx.request_repaint_after(Duration::from_millis(50));
+        }
+        true
     }
 
     fn start_check(&mut self, ctx: &egui::Context) {
@@ -647,31 +692,9 @@ impl App {
 
 impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if self.closing {
+        let window_visible = self.owner().map(|hwnd| unsafe { IsWindowVisible(hwnd).as_bool() });
+        if !self.window_lifecycle(ctx, self.tray.is_some(), window_visible) {
             return;
-        }
-
-        // A real exit: stop everything and let the window close.
-        if self.shared.exit_requested.load(Ordering::SeqCst) {
-            self.closing = true;
-            self.lifecycle.finalize();
-            ctx.send_viewport_cmd(ViewportCommand::Close);
-            return;
-        }
-
-        // Closing or minimising the window only sends it to the tray; the
-        // monitor keeps running. Exit is on the tray menu.
-        let (close_requested, minimized) =
-            ctx.input(|input| (input.viewport().close_requested(), input.viewport().minimized == Some(true)));
-        if close_requested {
-            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
-        }
-        if close_requested || (minimized && !self.is_hidden()) {
-            self.hide_to_tray(ctx);
-        }
-
-        if self.shared.show_requested.swap(false, Ordering::SeqCst) {
-            self.restore_from_tray(ctx);
         }
         if self.shared.auto_start_changed.swap(false, Ordering::SeqCst) {
             self.auto_start = startup::is_auto_start_enabled();
@@ -709,6 +732,9 @@ impl eframe::App for App {
 impl App {
     /// The whole window: header, battery panel, tabs and the loading overlay.
     fn dashboard(&mut self, ui: &mut egui::Ui) {
+        if self.is_hidden() {
+            return;
+        }
         let ctx = ui.ctx().clone();
         let shared = self.shared.clone();
 
@@ -857,8 +883,128 @@ mod tests {
             initial_check_started: true,
             balloon_shown: false,
             closing: false,
+            first_window_frame: true,
             revealed_at: None,
         }
+    }
+
+    /// 以真實 egui 輸入執行生命週期，原生可見性則模擬 Windows 的觀察結果。
+    fn lifecycle_frame(
+        ctx: &egui::Context,
+        app: &mut App,
+        tray_available: bool,
+        window_visible: Option<bool>,
+        minimized: Option<bool>,
+        occluded: Option<bool>,
+        close: bool,
+    ) -> egui::ViewportOutput {
+        let mut input = egui::RawInput::default();
+        let viewport = input.viewports.get_mut(&egui::ViewportId::ROOT).expect("根視窗輸入");
+        viewport.minimized = minimized;
+        viewport.occluded = occluded;
+        if close {
+            viewport.events.push(egui::ViewportEvent::Close);
+        }
+        let mut output = ctx.run_ui(input, |ui| {
+            if app.window_lifecycle(ui.ctx(), tray_available, window_visible) {
+                app.dashboard(ui);
+            }
+        });
+        // 無繪圖後端的測試需明確處理字型紋理，避免 egui 在釋放時拒絕未套用的更新。
+        output.textures_delta.clear();
+        output.viewport_output.get(&egui::ViewportId::ROOT).expect("根視窗輸出").clone()
+    }
+
+    #[test]
+    fn background_start_retries_past_first_frame_until_native_window_is_hidden() {
+        let ctx = egui::Context::default();
+        let mut app = test_app();
+        app.shared.hidden.store(true, Ordering::SeqCst);
+
+        // 首幀尚未顯示不能當作完成；eframe 會在這一幀繪製後強制顯示。
+        let first = lifecycle_frame(&ctx, &mut app, true, Some(false), Some(false), Some(false), false);
+        assert!(first.commands.contains(&ViewportCommand::Visible(false)));
+        assert!(first.repaint_delay <= Duration::from_millis(50));
+
+        for (minimized, occluded) in
+            [(Some(false), Some(false)), (Some(true), None), (Some(false), Some(true)), (None, None)]
+        {
+            let retry = lifecycle_frame(&ctx, &mut app, true, Some(true), minimized, occluded, false);
+            assert!(retry.commands.contains(&ViewportCommand::Visible(false)));
+            assert!(retry.repaint_delay <= Duration::from_millis(50));
+        }
+        let unknown = lifecycle_frame(&ctx, &mut app, true, None, None, None, false);
+        assert!(unknown.commands.contains(&ViewportCommand::Visible(false)));
+
+        // 消耗 egui 先前排定的重繪後，不得因隱藏狀態或儀表板動畫持續重繪。
+        for _ in 0..4 {
+            let hidden = lifecycle_frame(&ctx, &mut app, true, Some(false), Some(false), None, false);
+            assert!(!hidden.commands.contains(&ViewportCommand::Visible(false)));
+        }
+        let idle = lifecycle_frame(&ctx, &mut app, true, Some(false), Some(false), None, false);
+        assert_eq!(idle.repaint_delay, Duration::MAX);
+        assert!(app.revealed_at.is_none());
+    }
+
+    #[test]
+    fn close_hides_even_when_shared_state_already_says_hidden() {
+        let ctx = egui::Context::default();
+        let mut app = test_app();
+        app.shared.hidden.store(true, Ordering::SeqCst);
+        app.first_window_frame = false;
+
+        for visible in [Some(true), Some(false)] {
+            let output = lifecycle_frame(&ctx, &mut app, true, visible, Some(false), None, true);
+            assert!(output.commands.contains(&ViewportCommand::CancelClose));
+            assert!(output.commands.contains(&ViewportCommand::Visible(false)));
+            assert!(app.is_hidden());
+            assert!(!app.closing);
+        }
+    }
+
+    #[test]
+    fn restore_cancels_hide_retry_and_next_close_hides_again() {
+        let ctx = egui::Context::default();
+        let mut app = test_app();
+        app.shared.hidden.store(true, Ordering::SeqCst);
+        app.shared.show_requested.store(true, Ordering::SeqCst);
+
+        let restored = lifecycle_frame(&ctx, &mut app, true, Some(false), Some(true), None, false);
+        assert!(!app.is_hidden());
+        assert!(restored.commands.contains(&ViewportCommand::Visible(true)));
+        assert!(restored.commands.contains(&ViewportCommand::Minimized(false)));
+        assert!(restored.commands.contains(&ViewportCommand::Focus));
+        assert!(!restored.commands.contains(&ViewportCommand::Visible(false)));
+
+        let closed = lifecycle_frame(&ctx, &mut app, true, Some(true), Some(false), None, true);
+        assert!(closed.commands.contains(&ViewportCommand::CancelClose));
+        assert!(closed.commands.contains(&ViewportCommand::Visible(false)));
+        assert!(app.is_hidden());
+        assert!(!app.closing);
+    }
+
+    #[test]
+    fn minimizing_with_tray_hides_but_without_tray_remains_accessible() {
+        let ctx = egui::Context::default();
+        let mut app = test_app();
+        let minimized = lifecycle_frame(&ctx, &mut app, true, Some(true), Some(true), None, false);
+        assert!(minimized.commands.contains(&ViewportCommand::Visible(false)));
+        assert!(app.is_hidden());
+
+        let mut app = test_app();
+        app.shared.hidden.store(true, Ordering::SeqCst);
+        let fallback = lifecycle_frame(&ctx, &mut app, false, Some(false), Some(false), None, false);
+        assert!(fallback.commands.contains(&ViewportCommand::Visible(true)));
+        assert!(!app.is_hidden());
+        let minimized = lifecycle_frame(&ctx, &mut app, false, Some(true), Some(true), None, false);
+        assert!(!minimized.commands.contains(&ViewportCommand::Visible(false)));
+        assert!(!app.is_hidden());
+
+        let closed = lifecycle_frame(&ctx, &mut app, false, Some(true), Some(false), None, true);
+        assert!(!closed.commands.contains(&ViewportCommand::CancelClose));
+        assert!(!closed.commands.contains(&ViewportCommand::Visible(false)));
+        assert!(app.closing);
+        assert!(app.lifecycle.finalized.load(Ordering::SeqCst));
     }
 
     /// Lays out and tessellates every tab a few frames in a row.
