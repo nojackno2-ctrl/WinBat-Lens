@@ -1,5 +1,11 @@
 # Project State & Handoff
 
+## 2026-10-23 Claude：發布 v2.0.1（預發行版）
+
+- 使用者要求「發布執行檔」。版本由 2.0.0 升為 2.0.1（`Cargo.toml`／`Cargo.lock`／README 徽章與示意圖），內容為 `854ae6f` 的背景啟動視窗修正。
+- 新增 `.github/release-notes/v2.0.1.md`，帶 `<!-- prerelease -->`，與 v2.0.0 一致維持預發行（筆電實機與重開機登入流程未驗收）。README 過時的「v2.0.0 尚未發行」說明已改為目前狀態。
+- 本機驗證：`cargo fmt --check` 通過、`cargo test --locked` 75/75 通過。發行建置交由 GitHub Actions Release workflow（本機 Smart App Control 會擋未簽章的新建置）。
+
 ## 2026-10-23 Codex：修正開機背景視窗無法關閉（已驗證）
 
 - 目標：修正使用者回報的「開機自動啟動視窗無法關閉」；開始時 `main` 工作目錄乾淨。

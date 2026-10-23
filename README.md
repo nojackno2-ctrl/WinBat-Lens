@@ -5,7 +5,7 @@
 ![Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64)-0078D6?logo=windows&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-stable%20(MSVC)-B7410E?logo=rust&logoColor=white)
 ![UI](https://img.shields.io/badge/UI-egui%20%2F%20eframe-blue)
-![Version](https://img.shields.io/badge/Source-v2.0.0-brightgreen)
+![Version](https://img.shields.io/badge/Source-v2.0.1-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 **專為 Windows 筆電與行動裝置設計的電池健康度診斷、即時充放電功耗與硬體分析儀表板**
@@ -64,7 +64,7 @@
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ WinBat Lens  v2.0.0          [開機自動啟動] [English] [開啟報告] [匯出] [檢測] │
+│ WinBat Lens  v2.0.1          [開機自動啟動] [English] [開啟報告] [匯出] [檢測] │
 ├───────────────────────┬────────────────────────────────────────────────────┤
 │ 電池健康度（環形儀表） │ [功耗分佈] [歷史紀錄] [電壓紀錄] [診斷] [續航] [使用] │
 │ 電池規格 / 容量衰退條 │  市電 ──●──●──▶ [ +48.0 W ] ──●──●──▶ 電池 72%       │
@@ -94,7 +94,7 @@
 | **📁 免安裝壓縮包** | `WinBatLens_v<版本>_Portable_x64.zip` | 包含可執行檔、README 與授權說明。 |
 
 > [!NOTE]
-> Rust 重寫版（v2.0.0）目前在原始碼中；在它正式發行之前，Releases 頁面上的檔案仍是 .NET 版（v1.x）。想先試用可依下方「開發與建置」自行編譯。
+> Rust 重寫版（v2.x）目前以**預發行版**發布；Releases 頁面上標為 Latest 的正式版仍是 .NET 版（v1.1.8）。
 
 > [!NOTE]
 > **Windows SmartScreen / 智慧型應用程式控制**：
